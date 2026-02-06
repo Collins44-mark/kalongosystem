@@ -3,15 +3,15 @@
   "version": "1.0.0",
   "description": "SaaS Hotel Management System - Backend",
   "scripts": {
-    "build": "nest build",
-    "start": "nest start",
-    "start:dev": "nest start --watch",
-    "start:debug": "nest start --debug --watch",
+    "build": "npx nest build",
+    "start": "npx nest start",
+    "start:dev": "npx nest start --watch",
+    "start:debug": "npx nest start --debug --watch",
     "start:prod": "node dist/main",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
-    "prisma:migrate:prod": "prisma migrate deploy",
-    "prisma:studio": "prisma studio"
+    "prisma:generate": "npx prisma generate",
+    "prisma:migrate": "npx prisma migrate dev",
+    "prisma:migrate:prod": "npx prisma migrate deploy",
+    "prisma:studio": "npx prisma studio"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",
