@@ -1,99 +1,130 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api, auth } from '@/lib/api';
-import { RoleGuard } from '@/components/RoleGuard';
-
-function ExportButton({ format, label }: { format: 'excel' | 'csv'; label: string }) {
-  const base = process.env.NEXT_PUBLIC_API_URL || '';
-  const path = format === 'excel' ? '/api/reports/export/excel/' : '/api/reports/export/csv/';
-  const handleClick = async () => {
-    const token = auth.getToken();
-    const res = await fetch(base + path, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-    if (!res.ok) return;
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = format === 'excel' ? 'kalongo_report.xlsx' : 'charges.csv';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-  return (
-    <button type="button" onClick={handleClick} className={format === 'excel' ? 'btn-primary' : 'btn-secondary'}>
-      {label}
-    </button>
-  );
-}
+import { useAuth } from '@/store/auth';
+import { api } from '@/lib/api';
 
 type DashboardData = {
-  total_sales: number;
-  sales_today: number;
-  sales_this_month: number;
-  total_expenses: number;
-  total_salaries: number;
-  net_profit: number;
-  net_profit_this_month: number;
-  sales_per_sector: { sector: string; label: string; total: number }[];
+  roomSummary: { total: number; occupied: number; vacant: number; reserved: number; underMaintenance: number };
+  financeSummary: { totalRevenue: number; totalExpenses: number; netProfit: number };
+  inventoryAlerts: {
+    lowStock: { id: string; name: string; quantity: number; minQuantity: number; severity: string }[];
+    totalValueAtRisk: number;
+  };
+  salesBySector: { bar: number; restaurant: number; hotel: number; total: number };
+  period: string;
 };
 
-export default function DashboardPage() {
+export default function OverviewPage() {
+  const { token } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
+  const [period, setPeriod] = useState<'today' | 'week' | 'month'>('today');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api
-      .get<DashboardData>('/api/reports/dashboard/')
+    if (!token) return;
+    api<DashboardData>(`/overview?period=${period}`, { token })
       .then(setData)
-      .catch((e: { detail?: string }) => setError(e.detail || 'Failed to load'))
+      .catch(() => setData(null))
       .finally(() => setLoading(false));
-  }, []);
+  }, [token, period]);
 
-  if (loading) return <div className="text-slate-500">Loading dashboard…</div>;
-  if (error) return <div className="text-red-600">{error}</div>;
-  if (!data) return null;
-
-  const formatMoney = (n: number) => new Intl.NumberFormat('en-TZ', { style: 'decimal', maximumFractionDigits: 0 }).format(n) + ' TZS';
+  if (loading) return <div className="text-slate-500">Loading...</div>;
+  if (!data) return <div className="text-red-600">Failed to load overview</div>;
 
   return (
-    <RoleGuard permission="view_reports" fallback={<p className="text-slate-500">You do not have access to reports.</p>}>
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800 mb-8">Manager Dashboard</h1>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="card">
-            <p className="text-slate-500 text-sm">Sales today</p>
-            <p className="text-2xl font-bold text-slate-800 mt-1">{formatMoney(data.sales_today)}</p>
-          </div>
-          <div className="card">
-            <p className="text-slate-500 text-sm">Sales this month</p>
-            <p className="text-2xl font-bold text-slate-800 mt-1">{formatMoney(data.sales_this_month)}</p>
-          </div>
-          <div className="card">
-            <p className="text-slate-500 text-sm">Total expenses</p>
-            <p className="text-2xl font-bold text-slate-800 mt-1">{formatMoney(data.total_expenses)}</p>
-          </div>
-          <div className="card">
-            <p className="text-slate-500 text-sm">Net profit (this month)</p>
-            <p className="text-2xl font-bold text-slate-800 mt-1">{formatMoney(data.net_profit_this_month)}</p>
-          </div>
-        </div>
-        <div className="card">
-          <h2 className="font-semibold text-slate-800 mb-4">Sales per sector</h2>
-          <div className="flex flex-wrap gap-4">
-            {data.sales_per_sector.map((s) => (
-              <div key={s.sector} className="px-4 py-2 bg-slate-100 rounded-lg">
-                <span className="text-slate-600">{s.label}</span>
-                <span className="ml-2 font-medium">{formatMoney(s.total)}</span>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-xl font-semibold">Overview</h1>
+        <select
+          value={period}
+          onChange={(e) => setPeriod(e.target.value as typeof period)}
+          className="px-3 py-1 border rounded text-sm"
+        >
+          <option value="today">Today</option>
+          <option value="week">This Week</option>
+          <option value="month">This Month</option>
+        </select>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <Card title="Total Rooms" value={data.roomSummary.total} />
+        <Card title="Occupied" value={data.roomSummary.occupied} />
+        <Card title="Vacant" value={data.roomSummary.vacant} />
+        <Card title="Reserved" value={data.roomSummary.reserved} />
+        <Card title="Under Maintenance" value={data.roomSummary.underMaintenance} />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card title="Total Revenue" value={data.financeSummary.totalRevenue} format="currency" />
+        <Card title="Total Expenses" value={data.financeSummary.totalExpenses} format="currency" />
+        <Card
+          title="Net Profit"
+          value={data.financeSummary.netProfit}
+          format="currency"
+          color={data.financeSummary.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}
+        />
+      </div>
+
+      {data.inventoryAlerts.lowStock.length > 0 && (
+        <div className="bg-white rounded-lg border p-4">
+          <h2 className="font-medium mb-2">Inventory Alerts</h2>
+          <div className="space-y-1">
+            {data.inventoryAlerts.lowStock.map((item) => (
+              <div
+                key={item.id}
+                className={`text-sm ${item.severity === 'RED' ? 'text-red-600' : 'text-amber-600'}`}
+              >
+                {item.name}: {item.quantity} (min: {item.minQuantity})
               </div>
             ))}
           </div>
+          <p className="mt-2 text-sm text-slate-600">
+            Value at risk: {formatCurrency(data.inventoryAlerts.totalValueAtRisk)}
+          </p>
         </div>
-        <div className="mt-6 flex gap-4">
-          <ExportButton format="excel" label="Export Excel" />
-          <ExportButton format="csv" label="Export CSV" />
+      )}
+
+      <div className="bg-white rounded-lg border p-4">
+        <h2 className="font-medium mb-2">Sales by Sector</h2>
+        <div className="grid grid-cols-3 gap-4 text-sm">
+          <div>Bar: {formatCurrency(data.salesBySector.bar)}</div>
+          <div>Restaurant: {formatCurrency(data.salesBySector.restaurant)}</div>
+          <div>Hotel: {formatCurrency(data.salesBySector.hotel)}</div>
+        </div>
+        <div className="mt-2 font-medium">
+          Total: {formatCurrency(data.salesBySector.total)}
         </div>
       </div>
-    </RoleGuard>
+    </div>
   );
+}
+
+function Card({
+  title,
+  value,
+  format,
+  color,
+}: {
+  title: string;
+  value: number;
+  format?: 'currency';
+  color?: string;
+}) {
+  return (
+    <div className="bg-white rounded-lg border p-4">
+      <div className="text-sm text-slate-500">{title}</div>
+      <div className={`text-xl font-semibold ${color || ''}`}>
+        {format === 'currency' ? formatCurrency(value) : value}
+      </div>
+    </div>
+  );
+}
+
+function formatCurrency(n: number) {
+  return new Intl.NumberFormat('en-TZ', {
+    style: 'currency',
+    currency: 'TZS',
+    maximumFractionDigits: 0,
+  }).format(n);
 }

@@ -1,98 +1,58 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
-import { RoleGuard } from '@/components/RoleGuard';
 
-type Maintenance = { id: number; room: number; room_number: string; description: string; priority: string; status: string; created_at: string };
-type Housekeeping = { id: number; room: number | null; description: string; status: string; created_at: string };
+type Room = { id: string; roomNumber: string; status: string; category: { name: string } };
 
 export default function HousekeepingPage() {
-  const [maintenance, setMaintenance] = useState<Maintenance[]>([]);
-  const [housekeeping, setHousekeeping] = useState<Housekeeping[]>([]);
+  const { token } = useAuth();
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newDesc, setNewDesc] = useState('');
-  const [newRoomId, setNewRoomId] = useState<string>('');
-  const [rooms, setRooms] = useState<{ id: number; number: string }[]>([]);
 
   useEffect(() => {
-    Promise.all([
-      api.get<Maintenance[] | { results: Maintenance[] }>('/api/maintenance/').then((r) => Array.isArray(r) ? r : (r.results || [])),
-      api.get<Housekeeping[] | { results: Housekeeping[] }>('/api/housekeeping/').then((r) => Array.isArray(r) ? r : (r.results || [])),
-      api.get<{ id: number; number: string }[] | { results: { id: number; number: string }[] }>('/api/rooms/').then((r) => Array.isArray(r) ? r : (r.results || [])),
-    ]).then(([m, h, r]) => {
-      setMaintenance(m);
-      setHousekeeping(h);
-      setRooms(r);
-    }).finally(() => setLoading(false));
-  }, []);
+    if (!token) return;
+    api<Room[]>('/housekeeping/rooms', { token }).then(setRooms).finally(() => setLoading(false));
+  }, [token]);
 
-  const addHousekeeping = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newDesc.trim()) return;
+  async function updateStatus(roomId: string, status: string) {
     try {
-      await api.post('/api/housekeeping/', { description: newDesc.trim(), room: newRoomId ? Number(newRoomId) : null });
-      const list = await api.get<Housekeeping[] | { results: Housekeeping[] }>('/api/housekeeping/');
-      setHousekeeping(Array.isArray(list) ? list : (list.results || []));
-      setNewDesc('');
-      setNewRoomId('');
+      await api(`/housekeeping/rooms/${roomId}/status`, {
+        method: 'PUT',
+        token,
+        body: JSON.stringify({ status }),
+      });
+      setRooms((prev) => prev.map((r) => (r.id === roomId ? { ...r, status } : r)));
     } catch (e) {
-      alert((e as { detail?: string }).detail || 'Failed');
+      alert((e as Error).message);
     }
-  };
+  }
 
-  if (loading) return <div className="text-slate-500">Loading…</div>;
+  if (loading) return <div>Loading...</div>;
 
   return (
-    <RoleGuard permission="view_housekeeping" fallback={<p className="text-slate-500">No access.</p>}>
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800 mb-8">Housekeeping & Maintenance</h1>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="card">
-            <h2 className="font-semibold text-slate-800 mb-4">Maintenance requests</h2>
-            <ul className="space-y-3">
-              {maintenance.map((m) => (
-                <li key={m.id} className="flex justify-between items-start p-3 bg-slate-50 rounded-lg">
-                  <div>
-                    <p className="font-medium text-slate-800">Room {m.room_number}</p>
-                    <p className="text-sm text-slate-600">{m.description}</p>
-                    <p className="text-xs text-slate-500">{m.priority} · {m.status}</p>
-                  </div>
-                  <span className="text-xs text-slate-500">{new Date(m.created_at).toLocaleDateString()}</span>
-                </li>
-              ))}
-            </ul>
-            {maintenance.length === 0 && <p className="text-slate-500 text-sm">No maintenance requests.</p>}
+    <div>
+      <h1 className="text-xl font-semibold mb-4">Housekeeping</h1>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {rooms.map((r) => (
+          <div key={r.id} className="bg-white border rounded p-4">
+            <div className="font-medium">{r.roomNumber}</div>
+            <div className="text-sm text-slate-600">{r.category.name}</div>
+            <div className="text-xs mb-2">{r.status}</div>
+            <select
+              value={r.status}
+              onChange={(e) => updateStatus(r.id, e.target.value)}
+              className="w-full text-sm px-2 py-1 border rounded"
+            >
+              <option value="VACANT">Vacant</option>
+              <option value="OCCUPIED">Occupied</option>
+              <option value="RESERVED">Reserved</option>
+              <option value="UNDER_MAINTENANCE">Under Maintenance</option>
+            </select>
           </div>
-          <div className="card">
-            <h2 className="font-semibold text-slate-800 mb-4">Housekeeping / supply requests</h2>
-            <form onSubmit={addHousekeeping} className="flex gap-2 mb-4">
-              <select value={newRoomId} onChange={(e) => setNewRoomId(e.target.value)} className="input flex-1 max-w-[120px]">
-                <option value="">—</option>
-                {rooms.map((r) => (
-                  <option key={r.id} value={r.id}>{r.number}</option>
-                ))}
-              </select>
-              <input
-                type="text"
-                placeholder="Description"
-                value={newDesc}
-                onChange={(e) => setNewDesc(e.target.value)}
-                className="input flex-1"
-              />
-              <button type="submit" className="btn-primary">Add</button>
-            </form>
-            <ul className="space-y-2">
-              {housekeeping.map((h) => (
-                <li key={h.id} className="text-sm p-2 bg-slate-50 rounded">
-                  {h.room ? `Room ${h.room}` : '—'} · {h.description} · {h.status}
-                </li>
-              ))}
-            </ul>
-            {housekeeping.length === 0 && <p className="text-slate-500 text-sm">No requests.</p>}
-          </div>
-        </div>
+        ))}
       </div>
-    </RoleGuard>
+    </div>
   );
 }

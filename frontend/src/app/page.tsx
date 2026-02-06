@@ -1,21 +1,44 @@
-import Link from 'next/link';
+'use client';
 
-export default function Home() {
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useAuth } from '@/store/auth';
+
+export default function HomePage() {
+  const router = useRouter();
+  const { token, user } = useAuth();
+
+  useEffect(() => {
+    if (token && user) {
+      router.replace('/dashboard');
+    }
+  }, [token, user, router]);
+
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-8 bg-slate-50">
-      <div className="text-center max-w-md">
-        <h1 className="text-3xl font-bold text-slate-800 mb-2">Kalongo Hotel</h1>
-        <p className="text-slate-600 mb-8">Hotel Management & Financial Control System</p>
-        <Link
-          href="/login"
-          className="inline-block btn-primary"
-        >
-          Sign in
-        </Link>
-        <p className="mt-6 text-sm text-slate-500">
-          Front Office · Back Office · POS · Reports
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-teal-50 to-slate-100">
+      <div className="text-center max-w-md px-4">
+        <h1 className="text-3xl font-bold text-teal-800 mb-2">
+          HMS
+        </h1>
+        <p className="text-slate-600 mb-8">
+          Hotel Management System — Tanzania
         </p>
+        <div className="flex gap-4 justify-center">
+          <Link
+            href="/login"
+            className="px-6 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700"
+          >
+            Login
+          </Link>
+          <Link
+            href="/signup"
+            className="px-6 py-2 border border-teal-600 text-teal-600 rounded-lg hover:bg-teal-50"
+          >
+            Sign Up
+          </Link>
+        </div>
       </div>
-    </main>
+    </div>
   );
 }

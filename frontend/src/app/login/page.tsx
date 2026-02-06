@@ -3,72 +3,96 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { login, type ApiError } from '@/lib/api';
+import { useAuth } from '@/store/auth';
+import { api } from '@/lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [username, setUsername] = useState('');
+  const setAuth = useAuth((s) => s.setAuth);
+  const [businessId, setBusinessId] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
+    setError('');
     setLoading(true);
     try {
-      await login(username, password);
-      router.push('/dashboard');
-      router.refresh();
+      const res = await api<{ accessToken: string; user: unknown }>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({
+          businessId: businessId.trim().toUpperCase(),
+          email: email.trim(),
+          password,
+        }),
+      });
+      setAuth(res.accessToken, res.user as Parameters<typeof setAuth>[1]);
+      router.replace('/dashboard');
     } catch (err: unknown) {
-      const apiErr = err as ApiError;
-      setError(apiErr.detail || 'Login failed');
+      setError((err as Error).message || 'Login failed');
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-4 bg-slate-100">
-      <div className="card w-full max-w-md">
-        <h1 className="text-2xl font-bold text-slate-800 mb-1">Kalongo Hotel</h1>
-        <p className="text-slate-600 text-sm mb-8">Sign in to continue</p>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
-              {error}
-            </div>
-          )}
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-sm p-6 bg-white rounded-lg shadow-md"
+      >
+        <h1 className="text-xl font-semibold mb-4">Login</h1>
+        {error && (
+          <div className="mb-4 p-2 text-sm text-red-600 bg-red-50 rounded">
+            {error}
+          </div>
+        )}
+        <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Username</label>
+            <label className="block text-sm text-slate-600 mb-1">Business ID</label>
             <input
               type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="input"
+              value={businessId}
+              onChange={(e) => setBusinessId(e.target.value)}
+              className="w-full px-3 py-2 border rounded"
+              placeholder="HMS-12345"
               required
-              autoComplete="username"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
+            <label className="block text-sm text-slate-600 mb-1">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-3 py-2 border rounded"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-slate-600 mb-1">Password</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="input"
+              className="w-full px-3 py-2 border rounded"
               required
-              autoComplete="current-password"
             />
           </div>
-          <button type="submit" disabled={loading} className="btn-primary w-full">
-            {loading ? 'Signing in…' : 'Sign in'}
-          </button>
-        </form>
-        <p className="mt-6 text-center text-sm text-slate-500">
-          <Link href="/" className="text-primary-600 hover:underline">Back to home</Link>
+        </div>
+        <button
+          type="submit"
+          disabled={loading}
+          className="mt-6 w-full py-2 bg-teal-600 text-white rounded hover:bg-teal-700 disabled:opacity-50"
+        >
+          {loading ? 'Logging in...' : 'Login'}
+        </button>
+        <p className="mt-4 text-center text-sm text-slate-500">
+          No account? <Link href="/signup" className="text-teal-600">Sign up</Link>
         </p>
-      </div>
-    </main>
+      </form>
+    </div>
   );
 }

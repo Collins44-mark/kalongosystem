@@ -1,0 +1,364 @@
+// SaaS Hotel Management System - Prisma Schema
+// Multi-tenant: business_id + branch_id isolation
+// All tables include audit fields
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== CORE ENTITIES ====================
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // User can belong to multiple businesses
+  businessUsers BusinessUser[]
+
+  @@map("users")
+}
+
+model BusinessUser {
+  id         String   @id @default(cuid())
+  userId     String
+  businessId String
+  role       String   // ADMIN, FRONT_OFFICE, BAR, RESTAURANT, KITCHEN, HOUSEKEEPING, FINANCE
+  branchId   String?  @default("main")
+  createdAt  DateTime @default(now())
+  createdBy  String?
+  updatedAt  DateTime @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, businessId])
+  @@map("business_users")
+}
+
+model Business {
+  id           String   @id @default(cuid())
+  businessId   String   @unique // e.g. HMS-49281 - unique tenant identifier
+  businessType String   // HOTEL, LODGE, BAR, RESTAURANT, TRANSPORT
+  name         String
+  location     String?
+  phone        String?
+  createdAt    DateTime @default(now())
+  createdBy    String?
+  updatedAt    DateTime @updatedAt
+
+  businessUsers     BusinessUser[]
+  subscription      Subscription?
+  roomCategories    RoomCategory[]
+  rooms             Room[]
+  bookings          Booking[]
+  barItems          BarItem[]
+  barOrders         BarOrder[]
+  restaurantItems   RestaurantItem[]
+  restaurantOrders  RestaurantOrder[]
+  inventoryItems    InventoryItem[]
+  inventoryRestocks InventoryRestock[]
+  maintenanceRequests MaintenanceRequest[]
+  expenses          Expense[]
+  workers           Worker[]
+  payrollRecords    PayrollRecord[]
+
+  @@map("businesses")
+}
+
+model Subscription {
+  id               String   @id @default(cuid())
+  businessId       String   @unique
+  plan             String   // FRONT_OFFICE_ONLY, FRONT_AND_BACK
+  status           String   @default("TRIAL") // TRIAL, ACTIVE, EXPIRED
+  trialEndsAt      DateTime
+  currentPeriodEnd DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+// ==================== HOTEL MODULE ====================
+
+model RoomCategory {
+  id          String   @id @default(cuid())
+  businessId  String
+  branchId    String   @default("main")
+  name        String
+  pricePerNight Decimal @db.Decimal(12, 2)
+  description String?
+  createdAt   DateTime @default(now())
+  createdBy   String?
+  updatedAt   DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  rooms    Room[]
+
+  @@map("room_categories")
+}
+
+model Room {
+  id            String   @id @default(cuid())
+  businessId    String
+  branchId      String   @default("main")
+  categoryId    String
+  roomNumber    String
+  status        String   @default("VACANT") // VACANT, OCCUPIED, RESERVED, UNDER_MAINTENANCE
+  createdAt     DateTime @default(now())
+  createdBy     String?
+  updatedAt     DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category RoomCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  bookings Booking[]
+
+  @@unique([businessId, branchId, roomNumber])
+  @@map("rooms")
+}
+
+model Booking {
+  id          String    @id @default(cuid())
+  businessId  String
+  branchId    String    @default("main")
+  roomId      String
+  guestName   String
+  guestPhone  String?
+  checkIn     DateTime
+  checkOut    DateTime
+  nights      Int
+  totalAmount Decimal   @db.Decimal(12, 2)
+  status      String    @default("CONFIRMED") // CONFIRMED, CHECKED_IN, CHECKED_OUT, CANCELLED
+  folioNumber String?
+  createdAt   DateTime  @default(now())
+  createdBy   String?
+  updatedAt   DateTime  @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  room     Room     @relation(fields: [roomId], references: [id], onDelete: Restrict)
+
+  @@map("bookings")
+}
+
+// ==================== BAR MODULE ====================
+
+model BarItem {
+  id            String   @id @default(cuid())
+  businessId    String
+  branchId      String   @default("main")
+  name          String
+  price         Decimal  @db.Decimal(12, 2)
+  inventoryItemId String?
+  createdAt     DateTime @default(now())
+  createdBy     String?
+  updatedAt     DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  orders   BarOrderItem[]
+
+  @@map("bar_items")
+}
+
+model BarOrder {
+  id            String   @id @default(cuid())
+  businessId    String
+  branchId      String   @default("main")
+  orderNumber   String
+  paymentMethod String   // CASH, MOBILE_MONEY, BANK
+  totalAmount   Decimal  @db.Decimal(12, 2)
+  createdById   String
+  createdAt     DateTime @default(now())
+
+  business Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  items    BarOrderItem[]
+
+  @@map("bar_orders")
+}
+
+model BarOrderItem {
+  id         String  @id @default(cuid())
+  orderId    String
+  barItemId  String
+  quantity   Int
+  unitPrice  Decimal @db.Decimal(12, 2)
+  totalPrice Decimal @db.Decimal(12, 2)
+  createdAt  DateTime @default(now())
+
+  order   BarOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  barItem BarItem  @relation(fields: [barItemId], references: [id], onDelete: Restrict)
+
+  @@map("bar_order_items")
+}
+
+// ==================== RESTAURANT MODULE ====================
+
+model RestaurantItem {
+  id            String   @id @default(cuid())
+  businessId    String
+  branchId      String   @default("main")
+  name          String
+  price         Decimal  @db.Decimal(12, 2)
+  inventoryItemId String?
+  createdAt     DateTime @default(now())
+  createdBy     String?
+  updatedAt     DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  orders   RestaurantOrderItem[]
+
+  @@map("restaurant_items")
+}
+
+model RestaurantOrder {
+  id            String   @id @default(cuid())
+  businessId    String
+  branchId      String   @default("main")
+  orderNumber   String
+  paymentMethod String
+  totalAmount   Decimal  @db.Decimal(12, 2)
+  createdById   String
+  createdAt     DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  items    RestaurantOrderItem[]
+
+  @@map("restaurant_orders")
+}
+
+model RestaurantOrderItem {
+  id               String  @id @default(cuid())
+  orderId          String
+  restaurantItemId String
+  quantity         Int
+  unitPrice        Decimal @db.Decimal(12, 2)
+  totalPrice       Decimal @db.Decimal(12, 2)
+  createdAt        DateTime @default(now())
+
+  order          RestaurantOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  restaurantItem RestaurantItem   @relation(fields: [restaurantItemId], references: [id], onDelete: Restrict)
+
+  @@map("restaurant_order_items")
+}
+
+// ==================== INVENTORY MODULE ====================
+
+model InventoryItem {
+  id          String   @id @default(cuid())
+  businessId  String
+  branchId    String   @default("main")
+  name        String
+  quantity    Int      @default(0)
+  minQuantity Int      @default(5)
+  unitPrice   Decimal  @db.Decimal(12, 2) @default(0)
+  createdAt   DateTime @default(now())
+  createdBy   String?
+  updatedAt   DateTime @updatedAt
+
+  business Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  restocks InventoryRestock[]
+
+  @@map("inventory_items")
+}
+
+model InventoryRestock {
+  id              String   @id @default(cuid())
+  businessId      String
+  branchId        String   @default("main")
+  inventoryItemId String
+  quantityAdded   Int
+  oldQuantity     Int
+  newQuantity     Int
+  createdAt       DateTime @default(now())
+  createdBy       String
+
+  business      Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+
+  @@map("inventory_restocks")
+}
+
+// ==================== HOUSEKEEPING & MAINTENANCE ====================
+
+model MaintenanceRequest {
+  id          String   @id @default(cuid())
+  businessId  String
+  branchId    String   @default("main")
+  roomId      String?
+  description String
+  type        String
+  status      String   @default("PENDING")
+  amount      Decimal? @db.Decimal(12, 2)
+  createdAt   DateTime @default(now())
+  createdBy   String?
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@map("maintenance_requests")
+}
+
+// ==================== FINANCE MODULE ====================
+
+model Expense {
+  id          String   @id @default(cuid())
+  businessId  String
+  branchId    String   @default("main")
+  category    String
+  amount      Decimal  @db.Decimal(12, 2)
+  description String?
+  expenseDate DateTime
+  createdAt   DateTime @default(now())
+  createdBy   String?
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@map("expenses")
+}
+
+// ==================== WORKERS & PAYROLL ====================
+
+model Worker {
+  id            String   @id @default(cuid())
+  businessId    String
+  branchId      String   @default("main")
+  name          String
+  sector        String
+  role          String
+  monthlySalary Decimal  @db.Decimal(12, 2)
+  createdAt     DateTime @default(now())
+  createdBy     String?
+  updatedAt     DateTime @updatedAt
+
+  business Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  payroll  PayrollRecord[]
+
+  @@map("workers")
+}
+
+model PayrollRecord {
+  id          String   @id @default(cuid())
+  businessId  String
+  branchId    String   @default("main")
+  workerId    String
+  month       Int
+  year        Int
+  amount      Decimal  @db.Decimal(12, 2)
+  status      String   @default("PENDING")
+  paidAt      DateTime?
+  createdAt   DateTime @default(now())
+  createdBy   String?
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  worker   Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@map("payroll_records")
+}
