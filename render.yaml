@@ -1,8 +1,10 @@
+# render.yaml must be at repo root for Render to detect it
 services:
   - type: web
     name: hms-backend
     runtime: node
     region: oregon
+    rootDir: backend
     buildCommand: npm install && npx prisma generate && npx prisma migrate deploy && npm run build
     startCommand: npm run start:prod
     envVars:
