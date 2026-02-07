@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 
-type Room = { id: string; roomNumber: string; status: string; category: { name: string; pricePerNight: string } };
+type Room = { id: string; roomNumber: string; status: string; category: { id: string; name: string; pricePerNight: string } };
 type Category = { id: string; name: string; pricePerNight: string };
 type Booking = {
   id: string;
