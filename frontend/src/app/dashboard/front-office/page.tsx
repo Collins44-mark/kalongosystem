@@ -89,10 +89,9 @@ export default function FrontOfficePage() {
     { id: 'new', label: 'New Booking' },
   ];
   const staffTabs = [
-    { id: 'rooms', label: 'Room Availability' },
-    { id: 'new', label: 'New Booking' },
+    { id: 'bookings', label: 'Bookings' },
+    { id: 'history', label: 'Booking History' },
     { id: 'folios', label: 'Active Folios' },
-    { id: 'bookings', label: "Today's Bookings" },
   ];
   const tabs = isManager ? managerTabs : staffTabs;
 
@@ -171,7 +170,7 @@ export default function FrontOfficePage() {
   if (loading) return <div className="text-slate-500">Loading...</div>;
 
   const activeFolios = bookings.filter((b) => b.status === 'CHECKED_IN');
-  const historyBookings = isManager ? bookings.filter((b) => b.status === 'CHECKED_OUT' || b.status === 'CANCELLED') : [];
+  const historyBookings = bookings.filter((b) => b.status === 'CHECKED_OUT' || b.status === 'CANCELLED');
   const activeBookings = bookings.filter((b) => ['CONFIRMED', 'CHECKED_IN', 'RESERVED'].includes(b.status));
 
   return (
@@ -184,7 +183,7 @@ export default function FrontOfficePage() {
         <p className="text-xs sm:text-sm text-slate-500 mb-2">Operational view — today&apos;s tasks only</p>
       )}
 
-      {isManager && (activeTab === 'bookings' || activeTab === 'history') && (
+      {(activeTab === 'bookings' || activeTab === 'history') && (
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
           <p className="text-sm text-slate-500">
             {activeTab === 'bookings' ? 'Active bookings' : 'Booking history'} — {bookingFilter === 'today' ? 'Today' : bookingFilter === 'week' ? 'This Week' : bookingFilter === 'month' ? 'This Month' : bookingDateFrom && bookingDateTo ? `${bookingDateFrom} to ${bookingDateTo}` : 'Select dates'}
@@ -257,7 +256,7 @@ export default function FrontOfficePage() {
 
       {activeTab === 'bookings' && (
         <BookingList
-          bookings={isManager ? activeBookings : bookings}
+          bookings={activeBookings}
           token={token!}
           isManager={isManager}
           rooms={rooms}
@@ -539,7 +538,11 @@ function RoomSetup({
   }
 
   async function deleteCategory(categoryId: string) {
-    if (!confirm('Delete this category? You must delete all rooms in it first.')) return;
+    const roomsInCategory = rooms.filter((r) => r.category.id === categoryId);
+    if (roomsInCategory.length > 0) {
+      alert('You must delete all rooms in this category first.');
+      return;
+    }
     try {
       await api(`/hotel/categories/${categoryId}`, { method: 'DELETE', token });
       onAction();
@@ -744,17 +747,7 @@ function RoomSetup({
                         {r.roomName && <div className="text-xs text-slate-600">{r.roomName}</div>}
                         <div className="text-xs text-slate-500 mt-0.5">{r.status}</div>
                       </div>
-                      <div className="flex items-center justify-between mt-2">
-                        <div className="flex gap-1">
-                          {(r.status === 'VACANT' || r.status === 'UNDER_MAINTENANCE') && (
-                            <button
-                              onClick={() => setRoomStatus(r.id, r.status === 'VACANT' ? 'UNDER_MAINTENANCE' : 'VACANT')}
-                              className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 hover:bg-amber-200"
-                            >
-                              {r.status === 'VACANT' ? 'Maintenance' : 'Available'}
-                            </button>
-                          )}
-                        </div>
+                      <div className="flex items-center justify-end mt-2">
                         <div className="relative">
                           <button
                             type="button"
@@ -767,8 +760,13 @@ function RoomSetup({
                           {openMenu === `room-${r.id}` && (
                             <>
                               <div className="fixed inset-0 z-10" onClick={() => setOpenMenu(null)} aria-hidden />
-                              <div className="absolute right-0 top-full mt-0.5 py-1 bg-white border rounded-lg shadow-lg z-20 min-w-[100px]">
+                              <div className="absolute right-0 top-full mt-0.5 py-1 bg-white border rounded-lg shadow-lg z-20 min-w-[120px]">
                                 <button onClick={() => { editRoom(r); setOpenMenu(null); }} className="block w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">Edit</button>
+                                {(r.status === 'VACANT' || r.status === 'UNDER_MAINTENANCE') && (
+                                  <button onClick={() => { setRoomStatus(r.id, r.status === 'VACANT' ? 'UNDER_MAINTENANCE' : 'VACANT'); setOpenMenu(null); }} className="block w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">
+                                    {r.status === 'VACANT' ? 'Set maintenance' : 'Set available'}
+                                  </button>
+                                )}
                                 <button onClick={() => { deleteRoom(r.id); setOpenMenu(null); }} className="block w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">Delete</button>
                               </div>
                             </>
@@ -1246,9 +1244,13 @@ function NewBookingForm({
   const [checkOut, setCheckOut] = useState('');
   const [currency, setCurrency] = useState('TZS');
   const [paymentMode, setPaymentMode] = useState('');
+  const [totalOverride, setTotalOverride] = useState<string>('');
   const [loading, setLoading] = useState(false);
 
   const category = categories.find((c) => c.id === categoryId);
+  useEffect(() => {
+    setTotalOverride('');
+  }, [roomId, checkIn, checkOut]);
   const availableRooms = categoryId
     ? rooms.filter((r) => r.category.id === categoryId && r.status === 'VACANT')
     : [];
@@ -1257,7 +1259,8 @@ function NewBookingForm({
     ? Math.max(0, Math.ceil((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / (1000 * 60 * 60 * 24)))
     : 0;
   const pricePerNight = room ? parseFloat(room.category.pricePerNight) : category ? parseFloat(category.pricePerNight) : 0;
-  const totalTzs = nights * pricePerNight;
+  const calculatedTotal = nights * pricePerNight;
+  const totalTzs = totalOverride ? parseFloat(totalOverride.replace(/[^\d.]/g, '')) || calculatedTotal : calculatedTotal;
   const curr = CURRENCIES.find((c) => c.code === currency) || CURRENCIES[0];
   const totalDisplay = totalTzs / curr.rate;
 
@@ -1276,6 +1279,7 @@ function NewBookingForm({
           checkIn,
           checkOut,
           nights,
+          totalAmount: totalTzs,
           currency,
           paymentMode: paymentMode || undefined,
         }),
@@ -1348,10 +1352,21 @@ function NewBookingForm({
           </select>
         </div>
       </div>
-      <div className="p-3 sm:p-4 bg-slate-50 rounded-lg text-sm">
+      <div className="p-3 sm:p-4 bg-slate-50 rounded-lg text-sm space-y-2">
         <div>Nights: {nights}</div>
-        <div>Price/night: {formatCurrency(pricePerNight, 'TZS')} <span className="text-slate-500">(read-only)</span></div>
-        <div className="font-medium mt-1">Total: {formatCurrency(totalDisplay, currency)}</div>
+        <div>Price/night: {formatCurrency(pricePerNight, 'TZS')}</div>
+        <div>
+          <label className="block text-sm mb-1">Total amount (TZS)</label>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={totalOverride || (calculatedTotal ? String(Math.round(calculatedTotal)) : '')}
+            onChange={(e) => setTotalOverride(e.target.value.replace(/[^\d.]/g, ''))}
+            placeholder={calculatedTotal ? String(Math.round(calculatedTotal)) : '0'}
+            className="w-full px-3 py-2 border rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
+        </div>
+        <div className="font-medium">Display: {formatCurrency(totalDisplay, currency)}</div>
       </div>
       <button type="submit" disabled={loading} className="px-4 py-3 bg-teal-600 text-white rounded touch-manipulation min-h-[44px] w-full sm:w-auto">
         Create Booking

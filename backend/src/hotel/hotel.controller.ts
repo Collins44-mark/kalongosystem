@@ -60,6 +60,10 @@ class CreateBookingDto {
   @IsNumber()
   @Min(1)
   nights: number;
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  totalAmount?: number;
   @IsString()
   @IsOptional()
   currency?: string;

@@ -206,6 +206,7 @@ export class HotelService {
       checkIn: Date;
       checkOut: Date;
       nights: number;
+      totalAmount?: number;
       currency?: string;
       paymentMode?: string;
     },
@@ -217,7 +218,9 @@ export class HotelService {
     });
     if (!room) throw new NotFoundException('Room not found');
 
-    const totalAmount = Number(room.category.pricePerNight) * data.nights;
+    const totalAmount = data.totalAmount != null && data.totalAmount >= 0
+      ? data.totalAmount
+      : Number(room.category.pricePerNight) * data.nights;
     const folioNumber = `FOL-${Date.now()}`;
 
     const booking = await this.prisma.booking.create({
