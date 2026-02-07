@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { BarService } from './bar.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { SubscriptionGuard } from '../common/guards/subscription.guard';
@@ -59,7 +59,7 @@ export class BarController {
     return { orderId: order.id, orderNumber: order.orderNumber, message: 'Order confirmed' };
   }
 
-  /** Admin only: create bar item */
+  /** Manager only: create bar item */
   @Post('items')
   @UseGuards(RolesGuard)
   @Roles('MANAGER')
@@ -69,38 +69,6 @@ export class BarController {
       user.branchId,
       dto,
       user.sub,
-    );
-  }
-
-  /** Admin only: get sales/orders */
-  @Get('orders')
-  @UseGuards(RolesGuard)
-  @Roles('MANAGER')
-  async getOrders(
-    @CurrentUser() user: any,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-  ) {
-    return this.bar.getOrders(
-      user.businessId,
-      user.branchId,
-      from ? new Date(from) : undefined,
-      to ? new Date(to) : undefined,
-    );
-  }
-
-  @Get('sales')
-  @UseGuards(RolesGuard)
-  @Roles('MANAGER')
-  async getSales(
-    @CurrentUser() user: any,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-  ) {
-    return this.bar.getSalesTotal(
-      user.businessId,
-      from ? new Date(from) : undefined,
-      to ? new Date(to) : undefined,
     );
   }
 }

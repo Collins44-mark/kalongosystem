@@ -21,7 +21,7 @@ const SIDEBAR_LINKS: { href: string; label: string; roles: string[] }[] = [
   { href: '/dashboard/finance', label: 'Finance', roles: ['MANAGER', 'FINANCE'] },
   { href: '/dashboard/workers', label: 'Workers', roles: ['MANAGER'] },
   { href: '/dashboard/inventory', label: 'Inventory', roles: ['MANAGER'] },
-  { href: '/dashboard/reports', label: 'Reports', roles: ['MANAGER', 'FINANCE'] },
+  { href: '/dashboard/reports', label: 'Reports', roles: ['MANAGER'] },
   { href: '/dashboard/settings', label: 'Settings', roles: ['MANAGER'] },
 ];
 

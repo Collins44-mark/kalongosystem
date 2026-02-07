@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { RestaurantService } from './restaurant.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { SubscriptionGuard } from '../common/guards/subscription.guard';
@@ -66,37 +66,6 @@ export class RestaurantController {
       user.branchId,
       dto,
       user.sub,
-    );
-  }
-
-  @Get('orders')
-  @UseGuards(RolesGuard)
-  @Roles('MANAGER')
-  async getOrders(
-    @CurrentUser() user: any,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-  ) {
-    return this.restaurant.getOrders(
-      user.businessId,
-      user.branchId,
-      from ? new Date(from) : undefined,
-      to ? new Date(to) : undefined,
-    );
-  }
-
-  @Get('sales')
-  @UseGuards(RolesGuard)
-  @Roles('MANAGER')
-  async getSales(
-    @CurrentUser() user: any,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-  ) {
-    return this.restaurant.getSalesTotal(
-      user.businessId,
-      from ? new Date(from) : undefined,
-      to ? new Date(to) : undefined,
     );
   }
 }

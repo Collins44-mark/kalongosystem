@@ -123,4 +123,119 @@ export class FinanceService {
       expenses,
     };
   }
+
+  /** Revenue sales history by sector - for Finance drill-down (MANAGER only) */
+  async getRevenueSalesHistory(
+    businessId: string,
+    sector: 'bar' | 'restaurant' | 'hotel',
+    from?: Date,
+    to?: Date,
+  ) {
+    const dateFilter: { gte?: Date; lte?: Date } = {};
+    if (from) dateFilter.gte = from;
+    if (to) dateFilter.lte = to;
+
+    if (sector === 'bar') {
+      const where: Record<string, unknown> = { businessId };
+      if (Object.keys(dateFilter).length) where.createdAt = dateFilter;
+      const orders = await this.prisma.barOrder.findMany({
+        where,
+        include: { items: true },
+        orderBy: { createdAt: 'desc' },
+      });
+      const users = await this.prisma.user.findMany({
+        where: { id: { in: [...new Set(orders.map((o) => o.createdById))] } },
+        select: { id: true, email: true },
+      });
+      const userMap = new Map(users.map((u) => [u.id, u.email]));
+      return orders.map((o) => ({
+        id: o.id,
+        date: o.createdAt,
+        orderId: o.orderNumber,
+        amount: Number(o.totalAmount),
+        paymentMode: o.paymentMethod,
+        staff: userMap.get(o.createdById) ?? o.createdById,
+      }));
+    }
+
+    if (sector === 'restaurant') {
+      const where: Record<string, unknown> = { businessId };
+      if (Object.keys(dateFilter).length) where.createdAt = dateFilter;
+      const orders = await this.prisma.restaurantOrder.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+      });
+      const users = await this.prisma.user.findMany({
+        where: { id: { in: [...new Set(orders.map((o) => o.createdById))] } },
+        select: { id: true, email: true },
+      });
+      const userMap = new Map(users.map((u) => [u.id, u.email]));
+      return orders.map((o) => ({
+        id: o.id,
+        date: o.createdAt,
+        orderId: o.orderNumber,
+        amount: Number(o.totalAmount),
+        paymentMode: o.paymentMethod,
+        staff: userMap.get(o.createdById) ?? o.createdById,
+      }));
+    }
+
+    // hotel
+    const where: Record<string, unknown> = { businessId, status: 'CHECKED_OUT' };
+    if (Object.keys(dateFilter).length) where.checkOut = dateFilter;
+    const bookings = await this.prisma.booking.findMany({
+      where,
+      include: { room: { include: { category: true } } },
+      orderBy: { checkOut: 'desc' },
+    });
+    const creatorIds = [...new Set(bookings.map((b) => b.createdBy).filter(Boolean) as string[])];
+    const users = creatorIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: creatorIds } },
+          select: { id: true, email: true },
+        })
+      : [];
+    const userMap = new Map(users.map((u) => [u.id, u.email]));
+    return bookings.map((b) => ({
+      id: b.id,
+      date: b.checkOut,
+      orderId: b.folioNumber ?? b.id,
+      amount: Number(b.totalAmount),
+      paymentMode: '—',
+      staff: (b.createdBy && userMap.get(b.createdBy)) ?? b.createdBy ?? '—',
+    }));
+  }
+
+  /** Expenses by category - for Finance drill-down (MANAGER only) */
+  async getExpensesByCategory(
+    businessId: string,
+    branchId: string,
+    from?: Date,
+    to?: Date,
+  ) {
+    const where: Record<string, unknown> = { businessId, branchId };
+    if (from || to) {
+      where.expenseDate = {};
+      if (from) (where.expenseDate as Record<string, Date>).gte = from;
+      if (to) (where.expenseDate as Record<string, Date>).lte = to;
+    }
+    const expenses = await this.prisma.expense.findMany({
+      where,
+      orderBy: { expenseDate: 'desc' },
+    });
+    const byCategory: Record<string, number> = {};
+    for (const e of expenses) {
+      byCategory[e.category] = (byCategory[e.category] ?? 0) + Number(e.amount);
+    }
+    return {
+      byCategory,
+      expenses: expenses.map((e) => ({
+        id: e.id,
+        category: e.category,
+        amount: Number(e.amount),
+        date: e.expenseDate,
+        notes: e.description ?? null,
+      })),
+    };
+  }
 }
