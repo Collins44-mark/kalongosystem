@@ -264,18 +264,18 @@ export default function FrontOfficePage() {
         />
       )}
 
-      {activeTab === 'history' && isManager && (
+      {activeTab === 'history' && (
         <BookingList
           bookings={historyBookings}
           token={token!}
-          isManager={true}
+          isManager={isManager}
           rooms={rooms}
           onAction={refresh}
-          readOnly
+          readOnly={!isManager}
         />
       )}
 
-      {activeTab === 'new' && (
+      {activeTab === 'new' && isManager && (
         <NewBookingForm
           token={token!}
           categories={categories}
@@ -337,12 +337,12 @@ function RoomAvailability({
   const RoomStatusCard = ({ label, value, variant }: { label: string; value: number; variant: keyof typeof statusByVariant }) => {
     const styles: Record<string, string> = {
       total: 'bg-[#0B3C5D] text-white',
-      occupied: 'border-2 border-green-400 ring-2 ring-green-100 bg-white',
-      vacant: 'border border-slate-200 bg-white',
-      reserved: 'border-2 border-amber-400 ring-2 ring-amber-100 bg-white',
+      occupied: 'border-2 border-amber-400 ring-2 ring-amber-100 bg-white',
+      vacant: 'border-2 border-sky-400 ring-2 ring-sky-100 bg-white',
+      reserved: 'border-2 border-blue-400 ring-2 ring-blue-100 bg-white',
       maintenance: 'border-2 border-red-400 ring-2 ring-red-100 bg-white',
     };
-    const valueColor = variant === 'occupied' ? 'text-green-600' : variant === 'maintenance' ? 'text-red-600' : variant === 'reserved' ? 'text-amber-700' : variant === 'total' ? 'text-white' : 'text-slate-800';
+    const valueColor = variant === 'occupied' ? 'text-amber-700' : variant === 'vacant' ? 'text-sky-700' : variant === 'maintenance' ? 'text-red-600' : variant === 'reserved' ? 'text-blue-700' : variant === 'total' ? 'text-white' : 'text-slate-800';
     return (
       <button
         type="button"
@@ -383,7 +383,7 @@ function RoomAvailability({
                     <div
                       key={r.id}
                       className={`p-3 sm:p-4 rounded-lg border min-h-[80px] flex flex-col justify-between ${
-                        r.status === 'VACANT' ? 'bg-green-50 border-green-200' :
+                        r.status === 'VACANT' ? 'bg-sky-50 border-sky-200' :
                         r.status === 'OCCUPIED' ? 'bg-amber-50 border-amber-200' :
                         r.status === 'RESERVED' ? 'bg-blue-50 border-blue-200' :
                         'bg-slate-50 border-slate-200'
@@ -736,7 +736,7 @@ function RoomSetup({
                     <div
                       key={r.id}
                       className={`p-3 rounded-lg border flex flex-col justify-between min-h-[80px] ${
-                        r.status === 'VACANT' ? 'bg-green-50 border-green-200' :
+                        r.status === 'VACANT' ? 'bg-sky-50 border-sky-200' :
                         r.status === 'OCCUPIED' ? 'bg-amber-50 border-amber-200' :
                         r.status === 'RESERVED' ? 'bg-blue-50 border-blue-200' :
                         'bg-slate-50 border-slate-200'
