@@ -70,5 +70,6 @@ npm run dev
 ## Deploy frontend to Vercel
 
 1. Import the repo in Vercel
-2. Set **Root Directory:** `frontend`
-3. Add env var: `NEXT_PUBLIC_API_URL` = your Render backend URL
+2. **Root Directory:** set to `frontend` (required for monorepo – fixes "No Output Directory named public" error)
+3. **Framework Preset:** Next.js (auto-detected when Root Directory is correct)
+4. Add env var: `NEXT_PUBLIC_API_URL` = your Render backend URL
