@@ -44,8 +44,30 @@ export default function OverviewPage() {
   const [loading, setLoading] = useState(true);
 
   const period = filter === 'bydate' ? 'month' : filter;
-  const effectiveFrom = filter === 'bydate' && dateFrom ? dateFrom : '';
-  const effectiveTo = filter === 'bydate' && dateTo ? dateTo : '';
+
+  const { financeFrom, financeTo } = (() => {
+    const now = new Date();
+    if (filter === 'bydate' && dateFrom && dateTo) {
+      return { financeFrom: dateFrom, financeTo: dateTo };
+    }
+    if (filter === 'today') {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const end = new Date(start);
+      end.setHours(23, 59, 59, 999);
+      return { financeFrom: start.toISOString().slice(0, 10), financeTo: end.toISOString().slice(0, 10) };
+    }
+    if (filter === 'week') {
+      const end = new Date(now);
+      const start = new Date(now);
+      start.setDate(start.getDate() - 7);
+      return { financeFrom: start.toISOString().slice(0, 10), financeTo: end.toISOString().slice(0, 10) };
+    }
+    if (filter === 'month') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { financeFrom: start.toISOString().slice(0, 10), financeTo: now.toISOString().slice(0, 10) };
+    }
+    return { financeFrom: '', financeTo: '' };
+  })();
 
   useEffect(() => {
     if (!token) return;
@@ -60,12 +82,12 @@ export default function OverviewPage() {
   useEffect(() => {
     if (!token) return;
     const params = new URLSearchParams();
-    if (effectiveFrom) params.set('from', effectiveFrom);
-    if (effectiveTo) params.set('to', effectiveTo);
+    if (financeFrom) params.set('from', financeFrom);
+    if (financeTo) params.set('to', financeTo);
     api<FinanceData>(`/finance/dashboard?${params}`, { token })
       .then(setFinance)
       .catch(() => setFinance(EMPTY_FINANCE));
-  }, [token, effectiveFrom, effectiveTo]);
+  }, [token, financeFrom, financeTo]);
 
   if (loading && !data) return <div className="text-slate-500 p-6">Loading...</div>;
   const displayData = data ?? { ...EMPTY_DASHBOARD, period };
@@ -85,15 +107,20 @@ export default function OverviewPage() {
     <div className="space-y-6">
       {/* Header + Filter */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h1 className="text-xl font-semibold text-slate-800">Overview</h1>
+        <div>
+          <h1 className="text-xl font-semibold text-slate-800">Overview</h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            Showing data for: {filter === 'today' ? 'Today' : filter === 'week' ? 'This Week' : filter === 'month' ? 'This Month' : dateFrom && dateTo ? `${dateFrom} to ${dateTo}` : 'Select dates'}
+          </p>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-full bg-slate-100 p-1 gap-0.5">
+          <div className="flex rounded-full bg-slate-100 p-1 gap-0.5 transition-all duration-200">
             {(['today', 'week', 'month'] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  filter === f ? 'bg-white text-teal-600 shadow-sm' : 'text-slate-600 hover:text-slate-800'
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
+                  filter === f ? 'bg-white text-teal-600 shadow-sm ring-1 ring-teal-200' : 'text-slate-600 hover:text-slate-800'
                 }`}
               >
                 {f === 'today' ? 'Today' : f === 'week' ? 'This Week' : 'This Month'}
@@ -101,8 +128,8 @@ export default function OverviewPage() {
             ))}
             <button
               onClick={() => setFilter('bydate')}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
-                filter === 'bydate' ? 'bg-white text-teal-600 shadow-sm' : 'text-slate-600 hover:text-slate-800'
+              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
+                filter === 'bydate' ? 'bg-white text-teal-600 shadow-sm ring-1 ring-teal-200' : 'text-slate-600 hover:text-slate-800'
               }`}
             >
               By Date
@@ -140,10 +167,10 @@ export default function OverviewPage() {
         <RoomCard title="Under Maintenance" value={displayData.roomSummary.underMaintenance} variant="maintenance" />
       </div>
 
-      {/* Sales Summary Container */}
+      {/* Sales Container */}
       <div className="bg-white rounded-xl shadow-md border border-slate-100 overflow-hidden">
         <div className="p-4 border-b border-slate-100">
-          <h2 className="font-semibold text-slate-800">Sales Summary</h2>
+          <h2 className="font-semibold text-slate-800">Sales</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-100">
           <div className="p-5">
@@ -237,10 +264,10 @@ function RoomCard({ title, value, variant }: { title: string; value: number; var
   const styles = {
     occupied: 'border-2 border-green-400 ring-2 ring-green-100 bg-white',
     vacant: 'border border-slate-200 bg-white',
-    reserved: 'border border-slate-300 bg-white',
+    reserved: 'border-2 border-amber-400 ring-2 ring-amber-100 bg-white',
     maintenance: 'border-2 border-red-400 ring-2 ring-red-100 bg-white',
   };
-  const valueColor = variant === 'occupied' ? 'text-green-600' : variant === 'maintenance' ? 'text-red-600' : 'text-slate-800';
+  const valueColor = variant === 'occupied' ? 'text-green-600' : variant === 'maintenance' ? 'text-red-600' : variant === 'reserved' ? 'text-amber-700' : 'text-slate-800';
   return (
     <div className={`rounded-xl p-5 shadow-md min-h-[100px] flex flex-col justify-center ${styles[variant]}`}>
       <div className="text-sm text-slate-500">{title}</div>
