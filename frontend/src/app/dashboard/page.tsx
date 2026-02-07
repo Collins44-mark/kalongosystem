@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
+import { useTranslation } from '@/lib/i18n/context';
 
 type Room = { id: string; roomNumber: string; roomName?: string; status: string; category: { id: string; name: string; pricePerNight: string } };
 
@@ -39,6 +40,7 @@ type FilterOption = 'today' | 'week' | 'month' | 'bydate';
 
 export default function OverviewPage() {
   const { token } = useAuth();
+  const { t } = useTranslation();
   const [data, setData] = useState<DashboardData | null>(null);
   const [finance, setFinance] = useState<FinanceData | null>(null);
   const [filter, setFilter] = useState<FilterOption>('today');
@@ -154,7 +156,7 @@ export default function OverviewPage() {
       .catch(() => setFinance(EMPTY_FINANCE));
   }, [token, financeFrom, financeTo]);
 
-  if (loading && !data) return <div className="text-slate-500 p-6">Loading...</div>;
+  if (loading && !data) return <div className="text-slate-500 p-6">{t('common.loading')}</div>;
   const displayData = data ?? { ...EMPTY_DASHBOARD, period };
   const rooms = displayData.rooms ?? [];
   const roomSummary = (() => {
@@ -186,14 +188,14 @@ export default function OverviewPage() {
       {/* Header + Filter */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-slate-800">Overview</h1>
+          <h1 className="text-xl font-semibold text-slate-800">{t('overview.title')}</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            Showing data for: {filter === 'today' ? 'Today' : filter === 'week' ? 'This Week' : filter === 'month' ? 'This Month' : dateFrom && dateTo ? `${dateFrom} to ${dateTo}` : 'Select dates'}
+            {t('overview.showingData')} {filter === 'today' ? t('overview.today') : filter === 'week' ? t('overview.thisWeek') : filter === 'month' ? t('overview.thisMonth') : dateFrom && dateTo ? `${dateFrom} ${t('common.to')} ${dateTo}` : t('common.selectDates')}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={() => fetchOverview()} className="px-3 py-1.5 text-sm text-teal-600 hover:underline">
-            Refresh
+            {t('common.refresh')}
           </button>
           <div className="flex rounded-full bg-slate-100 p-1 gap-0.5 transition-all duration-200">
             {(['today', 'week', 'month'] as const).map((f) => (
@@ -204,7 +206,7 @@ export default function OverviewPage() {
                   filter === f ? 'bg-white text-teal-600 shadow-sm ring-1 ring-teal-200' : 'text-slate-600 hover:text-slate-800'
                 }`}
               >
-                {f === 'today' ? 'Today' : f === 'week' ? 'This Week' : 'This Month'}
+                {f === 'today' ? t('overview.today') : f === 'week' ? t('overview.thisWeek') : t('overview.thisMonth')}
               </button>
             ))}
             <button
@@ -213,7 +215,7 @@ export default function OverviewPage() {
                 filter === 'bydate' ? 'bg-white text-teal-600 shadow-sm ring-1 ring-teal-200' : 'text-slate-600 hover:text-slate-800'
               }`}
             >
-              By Date
+              {t('overview.byDate')}
             </button>
           </div>
           {filter === 'bydate' && (
@@ -239,31 +241,31 @@ export default function OverviewPage() {
       {/* Room Status Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="rounded-xl p-5 shadow-lg bg-[#0B3C5D] text-white min-h-[100px] flex flex-col justify-center">
-          <div className="text-sm font-medium opacity-90">Total Rooms</div>
+          <div className="text-sm font-medium opacity-90">{t('overview.totalRooms')}</div>
           <div className="text-2xl font-bold mt-0.5">{roomSummary.total}</div>
         </div>
-        <RoomCard title="Occupied" value={roomSummary.occupied} variant="occupied" />
-        <RoomCard title="Vacant" value={roomSummary.vacant} variant="vacant" />
-        <RoomCard title="Reserved" value={roomSummary.reserved} variant="reserved" />
-        <RoomCard title="Under Maintenance" value={roomSummary.underMaintenance} variant="maintenance" />
+        <RoomCard title={t('overview.occupied')} value={roomSummary.occupied} variant="occupied" />
+        <RoomCard title={t('overview.vacant')} value={roomSummary.vacant} variant="vacant" />
+        <RoomCard title={t('overview.reserved')} value={roomSummary.reserved} variant="reserved" />
+        <RoomCard title={t('overview.underMaintenance')} value={roomSummary.underMaintenance} variant="maintenance" />
       </div>
 
       {/* Sales Container */}
       <div className="bg-white rounded-xl shadow-md border border-slate-100 overflow-hidden">
         <div className="p-4 border-b border-slate-100">
-          <h2 className="font-semibold text-slate-800">Sales</h2>
+          <h2 className="font-semibold text-slate-800">{t('overview.sales')}</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-100">
           <div className="p-5">
-            <div className="text-sm text-slate-500">Total Revenue</div>
+            <div className="text-sm text-slate-500">{t('overview.totalRevenue')}</div>
             <div className="text-xl font-bold text-slate-800 mt-1">{formatTzs(financeData.totalRevenue)}</div>
           </div>
           <div className="p-5">
-            <div className="text-sm text-slate-500">Total Expenses</div>
+            <div className="text-sm text-slate-500">{t('overview.totalExpenses')}</div>
             <div className="text-xl font-bold text-slate-800 mt-1">{formatTzs(financeData.totalExpenses)}</div>
           </div>
           <div className="p-5">
-            <div className="text-sm text-slate-500">Net Profit</div>
+            <div className="text-sm text-slate-500">{t('overview.netProfit')}</div>
             <div className={`text-xl font-bold mt-1 ${financeData.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {formatTzs(financeData.netProfit)}
             </div>
@@ -278,8 +280,8 @@ export default function OverviewPage() {
             {lowStockCount}
           </div>
           <div>
-            <h3 className="font-semibold text-slate-800">Inventory Alerts</h3>
-            <p className="text-sm text-slate-500">Items below minimum stock</p>
+            <h3 className="font-semibold text-slate-800">{t('overview.inventoryAlerts')}</h3>
+            <p className="text-sm text-slate-500">{t('overview.itemsBelowMin')}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -291,40 +293,40 @@ export default function OverviewPage() {
               'bg-red-100 text-red-800'
             }`}
           >
-            {health.label}
+            {t(health.labelKey)}
           </div>
-          <span className="text-sm text-slate-500">Business Health</span>
+          <span className="text-sm text-slate-500">{t('overview.businessHealth')}</span>
         </div>
       </div>
 
       {/* Inventory Alerts Detail */}
       {lowStockCount > 0 && (
         <div className="bg-white rounded-xl shadow-md border border-slate-100 p-5">
-          <h3 className="font-semibold text-slate-800 mb-3">Low Stock Items</h3>
+          <h3 className="font-semibold text-slate-800 mb-3">{t('overview.lowStockItems')}</h3>
           <div className="space-y-2">
             {displayData.inventoryAlerts.lowStock.map((item) => (
               <div
                 key={item.id}
                 className={`text-sm py-2 ${item.severity === 'RED' ? 'text-red-600' : 'text-amber-600'}`}
               >
-                {item.name}: {item.quantity} (min: {item.minQuantity})
+                {item.name}: {item.quantity} ({t('common.min')}: {item.minQuantity})
               </div>
             ))}
           </div>
           <p className="mt-3 text-sm text-slate-600">
-            Value at risk: {formatTzs(displayData.inventoryAlerts.totalValueAtRisk)}
+            {t('overview.valueAtRisk')}: {formatTzs(displayData.inventoryAlerts.totalValueAtRisk)}
           </p>
         </div>
       )}
 
       {/* Performance Graph */}
       <div className="bg-white rounded-xl shadow-md border border-slate-100 p-5">
-        <h3 className="font-semibold text-slate-800 mb-4">Performance by Sector</h3>
+        <h3 className="font-semibold text-slate-800 mb-4">{t('overview.performanceBySector')}</h3>
         <div className="space-y-4">
           {(['hotel', 'bar', 'restaurant'] as const).map((sector) => (
             <div key={sector} className="space-y-1">
               <div className="flex justify-between text-sm">
-                <span className="text-slate-600 capitalize">{sector === 'hotel' ? 'Hotel / Rooms' : sector}</span>
+                <span className="text-slate-600 capitalize">{sector === 'hotel' ? t('overview.hotelRooms') : sector}</span>
                 <span className="font-medium text-slate-800">{formatTzs(financeData.bySector[sector])}</span>
               </div>
               <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
@@ -357,13 +359,13 @@ function RoomCard({ title, value, variant }: { title: string; value: number; var
   );
 }
 
-function getHealthStatus(netProfit: number, totalRevenue: number): { label: string; color: string } {
-  if (totalRevenue === 0) return { label: 'Average', color: 'grey' };
+function getHealthStatus(netProfit: number, totalRevenue: number): { labelKey: string; color: string } {
+  if (totalRevenue === 0) return { labelKey: 'overview.average', color: 'grey' };
   const margin = netProfit / totalRevenue;
-  if (margin >= 0.2) return { label: 'Excellent', color: 'green' };
-  if (margin >= 0.05) return { label: 'Good', color: 'lightgreen' };
-  if (margin >= 0) return { label: 'Average', color: 'grey' };
-  return { label: 'Low', color: 'red' };
+  if (margin >= 0.2) return { labelKey: 'overview.excellent', color: 'green' };
+  if (margin >= 0.05) return { labelKey: 'overview.good', color: 'lightgreen' };
+  if (margin >= 0) return { labelKey: 'overview.average', color: 'grey' };
+  return { labelKey: 'overview.low', color: 'red' };
 }
 
 function formatTzs(n: number) {

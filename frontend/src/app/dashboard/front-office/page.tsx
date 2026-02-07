@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
+import { useTranslation } from '@/lib/i18n/context';
 
 type Room = { id: string; roomNumber: string; roomName?: string; status: string; category: { id: string; name: string; pricePerNight: string } };
 type Category = { id: string; name: string; pricePerNight: string };
@@ -38,6 +39,7 @@ const PAYMENT_MODES = [
 
 export default function FrontOfficePage() {
   const { token, user } = useAuth();
+  const { t } = useTranslation();
   const [categories, setCategories] = useState<Category[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -81,17 +83,17 @@ export default function FrontOfficePage() {
   })();
 
   const managerTabs = [
-    { id: 'rooms', label: 'Room Availability' },
-    { id: 'setup', label: 'Room Setup' },
-    { id: 'bookings', label: 'Bookings' },
-    { id: 'history', label: 'Booking History' },
-    { id: 'folios', label: 'Active Folios' },
-    { id: 'new', label: 'New Booking' },
+    { id: 'rooms', labelKey: 'frontOffice.roomAvailability' },
+    { id: 'setup', labelKey: 'frontOffice.roomSetup' },
+    { id: 'bookings', labelKey: 'frontOffice.bookings' },
+    { id: 'history', labelKey: 'frontOffice.bookingHistory' },
+    { id: 'folios', labelKey: 'frontOffice.activeFolios' },
+    { id: 'new', labelKey: 'frontOffice.newBooking' },
   ];
   const staffTabs = [
-    { id: 'bookings', label: 'Bookings' },
-    { id: 'history', label: 'Booking History' },
-    { id: 'folios', label: 'Active Folios' },
+    { id: 'bookings', labelKey: 'frontOffice.bookings' },
+    { id: 'history', labelKey: 'frontOffice.bookingHistory' },
+    { id: 'folios', labelKey: 'frontOffice.activeFolios' },
   ];
   const tabs = isManager ? managerTabs : staffTabs;
 
@@ -168,7 +170,7 @@ export default function FrontOfficePage() {
     });
   }
 
-  if (loading) return <div className="text-slate-500">Loading...</div>;
+  if (loading) return <div className="text-slate-500">{t('common.loading')}</div>;
 
   const activeFolios = bookings.filter((b) => b.status === 'CHECKED_IN');
   const historyBookings = bookings.filter((b) => b.status === 'CHECKED_OUT' || b.status === 'CANCELLED');
@@ -176,18 +178,18 @@ export default function FrontOfficePage() {
 
   return (
     <div className="min-w-0">
-      <h1 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">Front Office</h1>
+      <h1 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">{t('frontOffice.title')}</h1>
       {isManager && (
-        <p className="text-xs sm:text-sm text-slate-500 mb-2">Supervisory view — all features and controls</p>
+        <p className="text-xs sm:text-sm text-slate-500 mb-2">{t('frontOffice.supervisoryView')}</p>
       )}
       {!isManager && (
-        <p className="text-xs sm:text-sm text-slate-500 mb-2">Operational view — today&apos;s tasks only</p>
+        <p className="text-xs sm:text-sm text-slate-500 mb-2">{t('frontOffice.operationalView')}</p>
       )}
 
       {(activeTab === 'bookings' || activeTab === 'history') && (
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
           <p className="text-sm text-slate-500">
-            {activeTab === 'bookings' ? 'Active bookings' : 'Booking history'} — {bookingFilter === 'today' ? 'Today' : bookingFilter === 'week' ? 'This Week' : bookingFilter === 'month' ? 'This Month' : bookingDateFrom && bookingDateTo ? `${bookingDateFrom} to ${bookingDateTo}` : 'Select dates'}
+            {activeTab === 'bookings' ? t('frontOffice.activeBookings') : t('frontOffice.bookingHistoryLabel')} — {bookingFilter === 'today' ? t('overview.today') : bookingFilter === 'week' ? t('overview.thisWeek') : bookingFilter === 'month' ? t('overview.thisMonth') : bookingDateFrom && bookingDateTo ? `${bookingDateFrom} ${t('common.to')} ${bookingDateTo}` : t('common.selectDates')}
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex rounded-full bg-slate-100 p-1 gap-0.5">
@@ -199,7 +201,7 @@ export default function FrontOfficePage() {
                     bookingFilter === f ? 'bg-white text-teal-600 shadow-sm ring-1 ring-teal-200' : 'text-slate-600 hover:text-slate-800'
                   }`}
                 >
-                  {f === 'today' ? 'Today' : f === 'week' ? 'This Week' : 'This Month'}
+                  {f === 'today' ? t('overview.today') : f === 'week' ? t('overview.thisWeek') : t('overview.thisMonth')}
                 </button>
               ))}
               <button
@@ -208,7 +210,7 @@ export default function FrontOfficePage() {
                   bookingFilter === 'bydate' ? 'bg-white text-teal-600 shadow-sm ring-1 ring-teal-200' : 'text-slate-600 hover:text-slate-800'
                 }`}
               >
-                By Date
+                {t('overview.byDate')}
               </button>
             </div>
             {bookingFilter === 'bydate' && (
@@ -218,19 +220,19 @@ export default function FrontOfficePage() {
                 <input type="date" value={bookingDateTo} onChange={(e) => setBookingDateTo(e.target.value)} className="px-3 py-1.5 rounded-full border border-slate-200 text-sm" />
               </div>
             )}
-            <button onClick={refresh} className="px-3 py-1.5 text-sm text-teal-600 hover:underline">Refresh</button>
+            <button onClick={refresh} className="px-3 py-1.5 text-sm text-teal-600 hover:underline">{t('common.refresh')}</button>
           </div>
         </div>
       )}
 
       <div className="flex gap-2 mb-3 sm:mb-4 overflow-x-auto pb-1 -mx-1 scrollbar-thin scrollbar-thumb-slate-300">
-        {tabs.map((t) => (
+        {tabs.map((tab) => (
           <button
-            key={t.id}
-            onClick={() => setActiveTab(t.id)}
-            className={`px-3 sm:px-4 py-2 rounded text-sm whitespace-nowrap touch-manipulation min-h-[44px] sm:min-h-0 flex-shrink-0 ${activeTab === t.id ? 'bg-teal-600 text-white' : 'bg-slate-200'}`}
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-3 sm:px-4 py-2 rounded text-sm whitespace-nowrap touch-manipulation min-h-[44px] sm:min-h-0 flex-shrink-0 ${activeTab === tab.id ? 'bg-teal-600 text-white' : 'bg-slate-200'}`}
           >
-            {t.label}
+            {t(tab.labelKey)}
           </button>
         ))}
       </div>
@@ -242,6 +244,7 @@ export default function FrontOfficePage() {
           roomStatusFilter={roomStatusFilter}
           onFilterChange={setRoomStatusFilter}
           categories={categories}
+          t={t}
         />
       )}
 
@@ -251,6 +254,7 @@ export default function FrontOfficePage() {
           categories={categories}
           rooms={rooms}
           onAction={refresh}
+          t={t}
           onCategoryAdded={(cat) => setCategories((prev) => [...prev, { id: cat.id, name: cat.name, pricePerNight: String(cat.pricePerNight || '0') }])}
         />
       )}
@@ -262,6 +266,7 @@ export default function FrontOfficePage() {
           isManager={isManager}
           rooms={rooms}
           onAction={refresh}
+          t={t}
         />
       )}
 
@@ -273,6 +278,7 @@ export default function FrontOfficePage() {
           rooms={rooms}
           onAction={refresh}
           readOnly={!isManager}
+          t={t}
         />
       )}
 
@@ -281,6 +287,7 @@ export default function FrontOfficePage() {
           token={token!}
           categories={categories}
           rooms={rooms}
+          t={t}
           onDone={() => { setActiveTab(isManager ? 'bookings' : 'bookings'); refresh(); }}
         />
       )}
@@ -292,6 +299,7 @@ export default function FrontOfficePage() {
           isManager={isManager}
           rooms={rooms}
           onAction={refresh}
+          t={t}
         />
       )}
     </div>
@@ -304,12 +312,14 @@ function RoomAvailability({
   roomStatusFilter,
   onFilterChange,
   categories,
+  t,
 }: {
   rooms: Room[];
   isManager: boolean;
   roomStatusFilter: string;
   onFilterChange: (v: string) => void;
   categories: Category[];
+  t: (k: string) => string;
 }) {
   const filteredRooms =
     roomStatusFilter === 'all'
@@ -361,17 +371,17 @@ function RoomAvailability({
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <RoomStatusCard label="Total Rooms" value={total} variant="total" />
-        <RoomStatusCard label="Occupied" value={occupied} variant="occupied" />
-        <RoomStatusCard label="Vacant" value={vacant} variant="vacant" />
-        <RoomStatusCard label="Reserved" value={reserved} variant="reserved" />
-        <RoomStatusCard label="Under Maintenance" value={maintenance} variant="maintenance" />
+        <RoomStatusCard label={t('overview.totalRooms')} value={total} variant="total" />
+        <RoomStatusCard label={t('overview.occupied')} value={occupied} variant="occupied" />
+        <RoomStatusCard label={t('overview.vacant')} value={vacant} variant="vacant" />
+        <RoomStatusCard label={t('overview.reserved')} value={reserved} variant="reserved" />
+        <RoomStatusCard label={t('overview.underMaintenance')} value={maintenance} variant="maintenance" />
       </div>
 
       <div className="bg-white rounded-xl shadow-md border border-slate-100 overflow-hidden">
         <div className="p-4 border-b border-slate-100">
           <h2 className="font-semibold text-slate-800">
-            Rooms {roomStatusFilter !== 'all' ? `— ${roomStatusFilter.replace('_', ' ')}` : ''}
+            {t('overview.rooms')} {roomStatusFilter !== 'all' ? `— ${roomStatusFilter.replace('_', ' ')}` : ''}
           </h2>
         </div>
         <div className="p-4 space-y-6">
@@ -403,7 +413,7 @@ function RoomAvailability({
               </div>
             ))
           ) : (
-            <p className="text-slate-500 text-sm py-4">No rooms match the selected filter.</p>
+            <p className="text-slate-500 text-sm py-4">{t('frontOffice.noRoomsMatch')}</p>
           )}
         </div>
       </div>
@@ -416,12 +426,14 @@ function RoomSetup({
   categories,
   rooms,
   onAction,
+  t,
   onCategoryAdded,
 }: {
   token: string;
   categories: Category[];
   rooms: Room[];
   onAction: () => void;
+  t: (k: string) => string;
   onCategoryAdded?: (cat: { id: string; name: string; pricePerNight?: string | number }) => void;
 }) {
   const [catName, setCatName] = useState('');
@@ -541,7 +553,7 @@ function RoomSetup({
   async function deleteCategory(categoryId: string) {
     const roomsInCategory = rooms.filter((r) => r.category.id === categoryId);
     if (roomsInCategory.length > 0) {
-      alert('You must delete all rooms in this category first.');
+      alert(t('frontOffice.deleteCategoryFirst'));
       return;
     }
     try {
@@ -582,7 +594,7 @@ function RoomSetup({
   }
 
   async function deleteRoom(roomId: string) {
-    if (!confirm('Delete this room? Cannot delete if it has active or upcoming bookings.')) return;
+    if (!confirm(t('frontOffice.deleteRoomConfirm'))) return;
     try {
       await api(`/hotel/rooms/${roomId}`, { method: 'DELETE', token });
       onAction();
@@ -594,20 +606,20 @@ function RoomSetup({
   return (
     <div className="space-y-6">
       <section className="bg-white border rounded-lg p-4 sm:p-5">
-        <h2 className="text-base font-semibold mb-3">Step 1: Create Room Category</h2>
+        <h2 className="text-base font-semibold mb-3">{t('frontOffice.step1Category')}</h2>
         <form onSubmit={createCategory} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div>
-            <label className="block text-sm mb-1">Category name</label>
+            <label className="block text-sm mb-1">{t('frontOffice.categoryName')}</label>
             <input
               value={catName}
               onChange={(e) => setCatName(e.target.value)}
-              placeholder="e.g. Standard, Deluxe"
+              placeholder={t('frontOffice.categoryNamePlaceholder')}
               className="w-full px-3 py-2 border rounded text-base"
               required
             />
           </div>
           <div>
-            <label className="block text-sm mb-1">Price per night</label>
+            <label className="block text-sm mb-1">{t('frontOffice.pricePerNight')}</label>
             <input
               type="text"
               inputMode="decimal"
@@ -619,58 +631,58 @@ function RoomSetup({
           </div>
           <div className="sm:col-span-2 flex justify-end">
             <button type="submit" disabled={loading} className="px-4 py-2 bg-teal-600 text-white rounded touch-manipulation min-h-[44px]">
-              Add Category
+              {t('frontOffice.addCategory')}
             </button>
           </div>
         </form>
       </section>
 
       <section className="bg-white border rounded-lg p-4 sm:p-5">
-        <h2 className="text-base font-semibold mb-3">Step 2: Create Room</h2>
+        <h2 className="text-base font-semibold mb-3">{t('frontOffice.step2Room')}</h2>
         <form onSubmit={createRoom} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 items-end">
           <div>
-            <label className="block text-sm mb-1">Room Category</label>
+            <label className="block text-sm mb-1">{t('frontOffice.roomCategory')}</label>
             <select
               value={roomCatId}
               onChange={(e) => setRoomCatId(e.target.value)}
               className="w-full px-3 py-2 border rounded text-base"
               required
             >
-              <option value="">{categories.length === 0 ? 'Add a category above first' : 'Select category'}</option>
+              <option value="">{categories.length === 0 ? t('frontOffice.addCategoryFirst') : t('frontOffice.selectCategory')}</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
           </div>
           <div>
-            <label className="block text-sm mb-1">Room number</label>
+            <label className="block text-sm mb-1">{t('frontOffice.roomNumber')}</label>
             <input
               value={roomNumber}
               onChange={(e) => setRoomNumber(e.target.value)}
-              placeholder="e.g. 101"
+              placeholder={t('frontOffice.roomNumberPlaceholder')}
               className="w-full px-3 py-2 border rounded text-base"
               required
             />
           </div>
           <div>
-            <label className="block text-sm mb-1">Room name (optional)</label>
+            <label className="block text-sm mb-1">{t('frontOffice.roomNameOptional')}</label>
             <input
               value={roomName}
               onChange={(e) => setRoomName(e.target.value)}
-              placeholder="e.g. Lake View"
+              placeholder={t('frontOffice.roomNamePlaceholder')}
               className="w-full px-3 py-2 border rounded text-base"
             />
           </div>
           <div className="sm:col-span-2 flex justify-end">
             <button type="submit" disabled={loading} className="px-4 py-2 bg-teal-600 text-white rounded touch-manipulation min-h-[44px]">
-              Add Room
+              {t('frontOffice.addRoom')}
             </button>
           </div>
         </form>
       </section>
 
       <section className="bg-white border rounded-lg p-4 sm:p-5">
-        <h2 className="text-base font-semibold mb-3">Your Categories</h2>
+        <h2 className="text-base font-semibold mb-3">{t('frontOffice.yourCategories')}</h2>
         {categories.length > 0 ? (
           <div className="flex flex-wrap gap-2 mb-4">
             {categories.map((c) => (
@@ -690,8 +702,8 @@ function RoomSetup({
                     <>
                       <div className="fixed inset-0 z-10" onClick={() => setOpenMenu(null)} aria-hidden />
                       <div className="absolute right-0 top-full mt-0.5 py-1 bg-white border rounded-lg shadow-lg z-20 min-w-[100px]">
-                        <button onClick={() => { editCategory(c); setOpenMenu(null); }} className="block w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">Edit</button>
-                        <button onClick={() => { deleteCategory(c.id); setOpenMenu(null); }} className="block w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">Delete</button>
+                        <button onClick={() => { editCategory(c); setOpenMenu(null); }} className="block w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">{t('common.edit')}</button>
+                        <button onClick={() => { deleteCategory(c.id); setOpenMenu(null); }} className="block w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">{t('common.delete')}</button>
                       </div>
                     </>
                   )}
@@ -700,12 +712,12 @@ function RoomSetup({
             ))}
           </div>
         ) : (
-          <p className="text-sm text-slate-500 mb-4">No categories yet. Add one above.</p>
+          <p className="text-sm text-slate-500 mb-4">{t('frontOffice.noCategoriesYet')}</p>
         )}
       </section>
 
       <section className="bg-white border rounded-lg p-4 sm:p-5">
-        <h2 className="text-base font-semibold mb-3">Rooms by Category</h2>
+        <h2 className="text-base font-semibold mb-3">{t('frontOffice.roomsByCategory')}</h2>
         {roomsByCategory.length > 0 ? (
           <div className="space-y-6">
             {roomsByCategory.map(({ category, rooms: catRooms }) => (
@@ -725,8 +737,8 @@ function RoomSetup({
                       <>
                         <div className="fixed inset-0 z-10" onClick={() => setOpenMenu(null)} aria-hidden />
                         <div className="absolute right-0 top-full mt-0.5 py-1 bg-white border rounded-lg shadow-lg z-20 min-w-[100px]">
-                          <button onClick={() => { editCategory(category); setOpenMenu(null); }} className="block w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">Edit</button>
-                          <button onClick={() => { deleteCategory(category.id); setOpenMenu(null); }} className="block w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">Delete</button>
+                        <button onClick={() => { editCategory(category); setOpenMenu(null); }} className="block w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">{t('common.edit')}</button>
+                        <button onClick={() => { deleteCategory(category.id); setOpenMenu(null); }} className="block w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">{t('common.delete')}</button>
                         </div>
                       </>
                     )}
@@ -762,13 +774,13 @@ function RoomSetup({
                             <>
                               <div className="fixed inset-0 z-10" onClick={() => setOpenMenu(null)} aria-hidden />
                               <div className="absolute right-0 top-full mt-0.5 py-1 bg-white border rounded-lg shadow-lg z-20 min-w-[120px]">
-                                <button onClick={() => { editRoom(r); setOpenMenu(null); }} className="block w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">Edit</button>
+                                <button onClick={() => { editRoom(r); setOpenMenu(null); }} className="block w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">{t('common.edit')}</button>
                                 {(r.status === 'VACANT' || r.status === 'UNDER_MAINTENANCE') && (
                                   <button onClick={() => { setRoomStatus(r.id, r.status === 'VACANT' ? 'UNDER_MAINTENANCE' : 'VACANT'); setOpenMenu(null); }} className="block w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">
-                                    {r.status === 'VACANT' ? 'Set maintenance' : 'Set available'}
+                                    {r.status === 'VACANT' ? t('frontOffice.setMaintenance') : t('frontOffice.setAvailable')}
                                   </button>
                                 )}
-                                <button onClick={() => { deleteRoom(r.id); setOpenMenu(null); }} className="block w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">Delete</button>
+                                <button onClick={() => { deleteRoom(r.id); setOpenMenu(null); }} className="block w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">{t('common.delete')}</button>
                               </div>
                             </>
                           )}
@@ -781,21 +793,21 @@ function RoomSetup({
             ))}
           </div>
         ) : (
-          <p className="text-slate-500 text-sm py-4">No rooms yet. Add a category above, then create rooms.</p>
+          <p className="text-slate-500 text-sm py-4">{t('frontOffice.noRoomsYet')}</p>
         )}
       </section>
 
       {editingCategory && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white p-5 rounded-lg max-w-sm w-full">
-            <h3 className="font-semibold mb-3">Edit Category</h3>
+            <h3 className="font-semibold mb-3">{t('common.edit')} Category</h3>
             <div className="space-y-3">
               <div>
-                <label className="block text-sm mb-1">Name</label>
+                <label className="block text-sm mb-1">{t('settings.name')}</label>
                 <input value={editCatName} onChange={(e) => setEditCatName(e.target.value)} className="w-full px-3 py-2 border rounded" />
               </div>
               <div>
-                <label className="block text-sm mb-1">Price per night</label>
+                <label className="block text-sm mb-1">{t('frontOffice.pricePerNight')}</label>
                 <input
                   type="text"
                   inputMode="decimal"
@@ -807,8 +819,8 @@ function RoomSetup({
               </div>
             </div>
             <div className="flex gap-2 mt-4">
-              <button onClick={saveCategory} disabled={loading} className="px-4 py-2 bg-teal-600 text-white rounded">Save</button>
-              <button onClick={() => setEditingCategory(null)} className="px-4 py-2 bg-slate-200 rounded">Cancel</button>
+              <button onClick={saveCategory} disabled={loading} className="px-4 py-2 bg-teal-600 text-white rounded">{t('common.save')}</button>
+              <button onClick={() => setEditingCategory(null)} className="px-4 py-2 bg-slate-200 rounded">{t('common.cancel')}</button>
             </div>
           </div>
         </div>
@@ -817,7 +829,7 @@ function RoomSetup({
       {editingRoom && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white p-5 rounded-lg max-w-sm w-full">
-            <h3 className="font-semibold mb-3">Edit Room</h3>
+            <h3 className="font-semibold mb-3">{t('common.edit')} Room</h3>
             <div className="space-y-3">
               <div>
                 <label className="block text-sm mb-1">Category</label>
@@ -828,17 +840,17 @@ function RoomSetup({
                 </select>
               </div>
               <div>
-                <label className="block text-sm mb-1">Room number</label>
+                <label className="block text-sm mb-1">{t('frontOffice.roomNumber')}</label>
                 <input value={editRoomNumber} onChange={(e) => setEditRoomNumber(e.target.value)} className="w-full px-3 py-2 border rounded" />
               </div>
               <div>
-                <label className="block text-sm mb-1">Room name (optional)</label>
-                <input value={editRoomName} onChange={(e) => setEditRoomName(e.target.value)} placeholder="e.g. Lake View" className="w-full px-3 py-2 border rounded" />
+                <label className="block text-sm mb-1">{t('frontOffice.roomNameOptional')}</label>
+                <input value={editRoomName} onChange={(e) => setEditRoomName(e.target.value)} placeholder={t('frontOffice.roomNamePlaceholder')} className="w-full px-3 py-2 border rounded" />
               </div>
             </div>
             <div className="flex gap-2 mt-4">
-              <button onClick={saveRoom} disabled={loading} className="px-4 py-2 bg-teal-600 text-white rounded">Save</button>
-              <button onClick={() => setEditingRoom(null)} className="px-4 py-2 bg-slate-200 rounded">Cancel</button>
+              <button onClick={saveRoom} disabled={loading} className="px-4 py-2 bg-teal-600 text-white rounded">{t('common.save')}</button>
+              <button onClick={() => setEditingRoom(null)} className="px-4 py-2 bg-slate-200 rounded">{t('common.cancel')}</button>
             </div>
           </div>
         </div>
@@ -854,6 +866,7 @@ function BookingList({
   rooms,
   onAction,
   readOnly = false,
+  t,
 }: {
   bookings: Booking[];
   token: string;
@@ -861,6 +874,7 @@ function BookingList({
   rooms: Room[];
   onAction: () => void;
   readOnly?: boolean;
+  t: (k: string) => string;
 }) {
   const vacantRooms = rooms.filter((r) => r.status === 'VACANT');
 
@@ -933,20 +947,20 @@ function BookingList({
             <div className="flex flex-wrap gap-2 sm:gap-2 touch-manipulation">
               {b.status === 'CONFIRMED' && (
                 <button onClick={() => checkIn(b.id)} className="px-3 py-1.5 bg-green-600 text-white rounded text-sm touch-manipulation">
-                  Check-in
+                  {t('frontOffice.checkInBtn')}
                 </button>
               )}
               {b.status === 'CHECKED_IN' && (
                 <>
                   <button onClick={() => checkOut(b.id)} className="px-3 py-1.5 bg-teal-600 text-white rounded text-sm touch-manipulation">
-                    Check-out
+                    {t('frontOffice.checkOutBtn')}
                   </button>
-                  <ExtendStayModal booking={b} token={token} onDone={onAction} />
+                  <ExtendStayModal booking={b} token={token} onDone={onAction} t={t} />
                 </>
               )}
               {isManager && (b.status === 'CONFIRMED' || b.status === 'RESERVED') && (
                 <button onClick={() => cancel(b.id)} className="px-3 py-1.5 bg-red-600 text-white rounded text-sm touch-manipulation">
-                  Cancel
+                  {t('common.cancel')}
                 </button>
               )}
               {isManager && (
@@ -955,11 +969,11 @@ function BookingList({
                   onChange={(e) => { const v = e.target.value; if (v) overrideStatus(b.id, v); e.target.value = ''; }}
                   className="px-2 py-1.5 border rounded text-sm touch-manipulation"
                 >
-                  <option value="">Override status</option>
-                  <option value="CONFIRMED">Confirmed</option>
-                  <option value="CHECKED_IN">Checked In</option>
-                  <option value="CHECKED_OUT">Checked Out</option>
-                  <option value="CANCELLED">Cancelled</option>
+                  <option value="">{t('frontOffice.overrideStatus')}</option>
+                  <option value="CONFIRMED">{t('frontOffice.confirmed')}</option>
+                  <option value="CHECKED_IN">{t('frontOffice.checkedIn')}</option>
+                  <option value="CHECKED_OUT">{t('frontOffice.checkedOut')}</option>
+                  <option value="CANCELLED">{t('frontOffice.cancelled')}</option>
                 </select>
               )}
               {(b.status === 'CONFIRMED' || b.status === 'CHECKED_IN') && vacantRooms.length > 0 && (
@@ -968,7 +982,7 @@ function BookingList({
                   onChange={(e) => { const v = e.target.value; if (v) changeRoom(b.id, v); e.target.value = ''; }}
                   className="px-2 py-1.5 border rounded text-sm touch-manipulation"
                 >
-                  <option value="">Change room</option>
+                  <option value="">{t('frontOffice.changeRoom')}</option>
                   {vacantRooms.filter((r) => r.id !== b.room.id).map((r) => (
                     <option key={r.id} value={r.id}>{r.roomNumber}</option>
                   ))}
@@ -978,12 +992,12 @@ function BookingList({
           )}
         </div>
       ))}
-      {bookings.length === 0 && <p className="text-slate-500">No bookings</p>}
+      {bookings.length === 0 && <p className="text-slate-500">{t('frontOffice.noBookings')}</p>}
     </div>
   );
 }
 
-function ExtendStayModal({ booking, token, onDone }: { booking: Booking; token: string; onDone: () => void }) {
+function ExtendStayModal({ booking, token, onDone, t }: { booking: Booking; token: string; onDone: () => void; t: (k: string) => string }) {
   const [show, setShow] = useState(false);
   const [checkOut, setCheckOut] = useState(booking.checkOut.slice(0, 10));
   const [loading, setLoading] = useState(false);
@@ -1008,16 +1022,16 @@ function ExtendStayModal({ booking, token, onDone }: { booking: Booking; token: 
   return (
     <>
       <button onClick={() => setShow(true)} className="px-3 py-1 bg-amber-600 text-white rounded text-sm">
-        Extend
+        {t('frontOffice.extend')}
       </button>
       {show && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white p-4 rounded max-w-sm w-full">
-            <h3 className="font-medium mb-2">Extend Stay</h3>
+            <h3 className="font-medium mb-2">{t('frontOffice.extendStay')}</h3>
             <input type="date" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="w-full px-3 py-2 border rounded mb-2" />
             <div className="flex gap-2">
-              <button onClick={submit} disabled={loading} className="px-4 py-2 bg-teal-600 text-white rounded">Extend</button>
-              <button onClick={() => setShow(false)} className="px-4 py-2 bg-slate-200 rounded">Cancel</button>
+              <button onClick={submit} disabled={loading} className="px-4 py-2 bg-teal-600 text-white rounded">{t('frontOffice.extend')}</button>
+              <button onClick={() => setShow(false)} className="px-4 py-2 bg-slate-200 rounded">{t('common.cancel')}</button>
             </div>
           </div>
         </div>
@@ -1028,7 +1042,7 @@ function ExtendStayModal({ booking, token, onDone }: { booking: Booking; token: 
 
 type FolioPayment = { id: string; amount: string; paymentMode: string; createdAt: string };
 
-function AddPaymentModal({ booking, token, onDone }: { booking: Booking; token: string; onDone: () => void }) {
+function AddPaymentModal({ booking, token, onDone, t }: { booking: Booking; token: string; onDone: () => void; t: (k: string) => string }) {
   const [show, setShow] = useState(false);
   const [amount, setAmount] = useState('');
   const [paymentMode, setPaymentMode] = useState('CASH');
@@ -1057,12 +1071,12 @@ function AddPaymentModal({ booking, token, onDone }: { booking: Booking; token: 
   return (
     <>
       <button onClick={() => setShow(true)} className="px-3 py-1.5 bg-emerald-600 text-white rounded text-sm touch-manipulation">
-        Add Payment
+        {t('frontOffice.addPayment')}
       </button>
       {show && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white p-4 sm:p-5 rounded-lg max-w-sm w-full">
-            <h3 className="font-medium mb-3">Add Payment — {booking.guestName}</h3>
+            <h3 className="font-medium mb-3">{t('frontOffice.addPayment')} — {booking.guestName}</h3>
             <div className="space-y-3">
               <div>
                 <label className="block text-sm mb-1">Amount</label>
@@ -1089,7 +1103,7 @@ function AddPaymentModal({ booking, token, onDone }: { booking: Booking; token: 
               <button onClick={submit} disabled={loading} className="flex-1 px-4 py-2.5 bg-teal-600 text-white rounded touch-manipulation">
                 Add
               </button>
-              <button onClick={() => setShow(false)} className="px-4 py-2.5 bg-slate-200 rounded touch-manipulation">Cancel</button>
+              <button onClick={() => setShow(false)} className="px-4 py-2.5 bg-slate-200 rounded touch-manipulation">{t('common.cancel')}</button>
             </div>
           </div>
         </div>
@@ -1098,7 +1112,7 @@ function AddPaymentModal({ booking, token, onDone }: { booking: Booking; token: 
   );
 }
 
-function ViewPaymentsModal({ booking, token }: { booking: Booking; token: string }) {
+function ViewPaymentsModal({ booking, token, t }: { booking: Booking; token: string; t: (k: string) => string }) {
   const [show, setShow] = useState(false);
   const [payments, setPayments] = useState<FolioPayment[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1116,16 +1130,16 @@ function ViewPaymentsModal({ booking, token }: { booking: Booking; token: string
   return (
     <>
       <button onClick={() => setShow(true)} className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded text-sm touch-manipulation">
-        View Payments
+        {t('frontOffice.viewPayments')}
       </button>
       {show && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white p-4 sm:p-5 rounded-lg max-w-sm w-full max-h-[80vh] overflow-auto">
-            <h3 className="font-medium mb-3">Payment history — {booking.guestName}</h3>
+            <h3 className="font-medium mb-3">{t('frontOffice.paymentHistory')} — {booking.guestName}</h3>
             {loading ? (
               <p className="text-slate-500">Loading...</p>
             ) : payments.length === 0 ? (
-              <p className="text-slate-500">No payments recorded</p>
+              <p className="text-slate-500">{t('frontOffice.noPayments')}</p>
             ) : (
               <ul className="space-y-2">
                 {payments.map((p) => (
@@ -1136,7 +1150,7 @@ function ViewPaymentsModal({ booking, token }: { booking: Booking; token: string
                 ))}
               </ul>
             )}
-            <button onClick={() => setShow(false)} className="mt-4 w-full px-4 py-2 bg-slate-200 rounded touch-manipulation">Close</button>
+            <button onClick={() => setShow(false)} className="mt-4 w-full px-4 py-2 bg-slate-200 rounded touch-manipulation">{t('common.close')}</button>
           </div>
         </div>
       )}
@@ -1150,12 +1164,14 @@ function FolioList({
   isManager,
   rooms,
   onAction,
+  t,
 }: {
   folios: Booking[];
   token: string;
   isManager: boolean;
   rooms: Room[];
   onAction: () => void;
+  t: (k: string) => string;
 }) {
   const vacantRooms = rooms.filter((r) => r.status === 'VACANT');
 
@@ -1182,7 +1198,7 @@ function FolioList({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-600">Active folios are checked-in bookings. View details and manage stay.</p>
+      <p className="text-sm text-slate-600">{t('frontOffice.activeFoliosDesc')}</p>
       {folios.map((b) => (
         <div key={b.id} className="p-4 sm:p-5 bg-white border rounded-lg">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-3">
@@ -1196,23 +1212,23 @@ function FolioList({
             </div>
             <div className="text-left sm:text-right">
               <div className="font-semibold">{formatTzs(parseFloat(b.totalAmount))}</div>
-              <div className="text-xs text-slate-500">Total charges</div>
+              <div className="text-xs text-slate-500">{t('frontOffice.totalCharges')}</div>
             </div>
           </div>
           <div className="flex flex-wrap gap-2 pt-3 border-t">
             <button onClick={() => checkOut(b.id)} className="px-3 py-1.5 bg-teal-600 text-white rounded text-sm touch-manipulation">
-              Check-out
+              {t('frontOffice.checkOutBtn')}
             </button>
-            <ExtendStayModal booking={b} token={token} onDone={onAction} />
-            <AddPaymentModal booking={b} token={token} onDone={onAction} />
-            {isManager && <ViewPaymentsModal booking={b} token={token} />}
+            <ExtendStayModal booking={b} token={token} onDone={onAction} t={t} />
+            <AddPaymentModal booking={b} token={token} onDone={onAction} t={t} />
+            {isManager && <ViewPaymentsModal booking={b} token={token} t={t} />}
             {vacantRooms.length > 0 && (
               <select
                 value=""
                 onChange={(e) => { const v = e.target.value; if (v) changeRoom(b.id, v); e.target.value = ''; }}
                 className="px-2 py-1.5 border rounded text-sm touch-manipulation"
               >
-                <option value="">Change room</option>
+                <option value="">{t('frontOffice.changeRoom')}</option>
                 {vacantRooms.filter((r) => r.id !== b.room.id).map((r) => (
                   <option key={r.id} value={r.id}>{r.roomNumber}</option>
                 ))}
@@ -1221,7 +1237,7 @@ function FolioList({
           </div>
         </div>
       ))}
-      {folios.length === 0 && <p className="text-slate-500">No active folios</p>}
+      {folios.length === 0 && <p className="text-slate-500">{t('frontOffice.noActiveFolios')}</p>}
     </div>
   );
 }
@@ -1230,11 +1246,13 @@ function NewBookingForm({
   token,
   categories,
   rooms,
+  t,
   onDone,
 }: {
   token: string;
   categories: Category[];
   rooms: Room[];
+  t: (k: string) => string;
   onDone: () => void;
 }) {
   const [categoryId, setCategoryId] = useState('');
@@ -1298,7 +1316,7 @@ function NewBookingForm({
   return (
     <form onSubmit={handleSubmit} className="max-w-lg space-y-4">
       <div>
-        <label className="block text-sm mb-1">Room Category</label>
+        <label className="block text-sm mb-1">{t('frontOffice.roomCategory')}</label>
         <select value={categoryId} onChange={(e) => { setCategoryId(e.target.value); setRoomId(''); }} className="w-full px-3 py-2.5 border rounded text-base" required>
           <option value="">Select category</option>
           {categories.map((c) => (
@@ -1309,30 +1327,30 @@ function NewBookingForm({
       <div>
         <label className="block text-sm mb-1">Room (available only)</label>
         <select value={roomId} onChange={(e) => setRoomId(e.target.value)} className="w-full px-3 py-2.5 border rounded text-base touch-manipulation" required disabled={!categoryId}>
-          <option value="">{categoryId && availableRooms.length === 0 ? 'No vacant rooms in this category' : 'Select room'}</option>
+          <option value="">{categoryId && availableRooms.length === 0 ? t('frontOffice.noVacantRooms') : t('frontOffice.selectRoom')}</option>
           {availableRooms.map((r) => (
             <option key={r.id} value={r.id}>{r.roomNumber}{r.roomName ? ` - ${r.roomName}` : ''} · {r.category.name}</option>
           ))}
         </select>
         {categoryId && availableRooms.length === 0 && (
-          <p className="text-xs text-amber-600 mt-1">All rooms in this category are booked or occupied.</p>
+          <p className="text-xs text-amber-600 mt-1">{t('frontOffice.allRoomsBooked')}</p>
         )}
       </div>
       <div>
-        <label className="block text-sm mb-1">Guest Name</label>
+        <label className="block text-sm mb-1">{t('frontOffice.guestName')}</label>
         <input value={guestName} onChange={(e) => setGuestName(e.target.value)} className="w-full px-3 py-2.5 border rounded text-base" required />
       </div>
       <div>
-        <label className="block text-sm mb-1">Phone / ID (optional)</label>
+        <label className="block text-sm mb-1">{t('frontOffice.phoneOptional')}</label>
         <input value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} className="w-full px-3 py-2.5 border rounded text-base" />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm mb-1">Check-in</label>
+          <label className="block text-sm mb-1">{t('frontOffice.checkIn')}</label>
           <input type="date" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="w-full px-3 py-2.5 border rounded text-base" required />
         </div>
         <div>
-          <label className="block text-sm mb-1">Check-out</label>
+          <label className="block text-sm mb-1">{t('frontOffice.checkOut')}</label>
           <input type="date" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="w-full px-3 py-2.5 border rounded text-base" required />
         </div>
       </div>
@@ -1345,7 +1363,7 @@ function NewBookingForm({
           className="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
         />
         <label htmlFor="checkInImmediately" className="text-sm text-slate-700">
-          Check in immediately — creates as active folio (guest in-house)
+          {t('frontOffice.checkInImmediately')}
         </label>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1368,10 +1386,10 @@ function NewBookingForm({
         </div>
       </div>
       <div className="p-3 sm:p-4 bg-slate-50 rounded-lg text-sm space-y-2">
-        <div>Nights: {nights}</div>
+        <div>{t('frontOffice.nights')}: {nights}</div>
         <div>Price/night: {formatCurrency(pricePerNight, 'TZS')}</div>
         <div>
-          <label className="block text-sm mb-1">Total amount (TZS)</label>
+          <label className="block text-sm mb-1">{t('frontOffice.totalAmount')}</label>
           <input
             type="text"
             inputMode="decimal"
@@ -1381,10 +1399,10 @@ function NewBookingForm({
             className="w-full px-3 py-2 border rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
         </div>
-        <div className="font-medium">Display: {formatCurrency(totalDisplay, currency)}</div>
+        <div className="font-medium">{t('frontOffice.display')}: {formatCurrency(totalDisplay, currency)}</div>
       </div>
       <button type="submit" disabled={loading} className="px-4 py-3 bg-teal-600 text-white rounded touch-manipulation min-h-[44px] w-full sm:w-auto">
-        Create Booking
+        {t('frontOffice.createBooking')}
       </button>
     </form>
   );

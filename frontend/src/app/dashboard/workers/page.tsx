@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
+import { useTranslation } from '@/lib/i18n/context';
 
 type Worker = { id: string; name: string; sector: string; role: string; monthlySalary: string };
 
 export default function WorkersPage() {
   const { token } = useAuth();
+  const { t } = useTranslation();
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -19,19 +21,19 @@ export default function WorkersPage() {
       .finally(() => setLoading(false));
   }, [token]);
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <div>{t('common.loading')}</div>;
 
   return (
     <div>
-      <h1 className="text-xl font-semibold mb-4">Workers</h1>
+      <h1 className="text-xl font-semibold mb-4">{t('workers.title')}</h1>
       <div className="bg-white border rounded overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50">
             <tr>
-              <th className="text-left p-3">Name</th>
-              <th className="text-left p-3">Sector</th>
-              <th className="text-left p-3">Role</th>
-              <th className="text-right p-3">Salary (TZS)</th>
+              <th className="text-left p-3">{t('workers.name')}</th>
+              <th className="text-left p-3">{t('workers.sector')}</th>
+              <th className="text-left p-3">{t('workers.role')}</th>
+              <th className="text-right p-3">{t('workers.salary')}</th>
             </tr>
           </thead>
           <tbody>

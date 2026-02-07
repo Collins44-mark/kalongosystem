@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
+import { useTranslation } from '@/lib/i18n/context';
 
 type Item = { id: string; name: string; quantity: number; minQuantity: number; unitPrice: string };
 
 export default function InventoryPage() {
   const { token } = useAuth();
+  const { t } = useTranslation();
   const [items, setItems] = useState<Item[]>([]);
   const [lowStock, setLowStock] = useState<Item[]>([]);
   const [valueAtRisk, setValueAtRisk] = useState(0);
@@ -28,30 +30,30 @@ export default function InventoryPage() {
       .finally(() => setLoading(false));
   }, [token]);
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <div>{t('common.loading')}</div>;
 
   return (
     <div>
-      <h1 className="text-xl font-semibold mb-4">Inventory</h1>
+      <h1 className="text-xl font-semibold mb-4">{t('inventory.title')}</h1>
       {lowStock.length > 0 && (
         <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded">
-          <h2 className="font-medium text-amber-800">Low Stock Alerts</h2>
+          <h2 className="font-medium text-amber-800">{t('inventory.lowStockAlerts')}</h2>
           <div className="text-sm text-amber-700">
             {lowStock.map((i) => (
-              <div key={i.id}>{i.name}: {i.quantity} (min: {i.minQuantity})</div>
+              <div key={i.id}>{i.name}: {i.quantity} ({t('common.min')}: {i.minQuantity})</div>
             ))}
           </div>
-          <div className="mt-2 text-sm">Value at risk: {formatTzs(valueAtRisk)}</div>
+          <div className="mt-2 text-sm">{t('inventory.valueAtRisk')}: {formatTzs(valueAtRisk)}</div>
         </div>
       )}
       <div className="bg-white border rounded overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50">
             <tr>
-              <th className="text-left p-3">Item</th>
-              <th className="text-right p-3">Qty</th>
-              <th className="text-right p-3">Min</th>
-              <th className="text-right p-3">Unit Price</th>
+              <th className="text-left p-3">{t('inventory.item')}</th>
+              <th className="text-right p-3">{t('inventory.qty')}</th>
+              <th className="text-right p-3">{t('common.min')}</th>
+              <th className="text-right p-3">{t('inventory.unitPrice')}</th>
             </tr>
           </thead>
           <tbody>

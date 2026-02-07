@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
+import { useTranslation } from '@/lib/i18n/context';
 
 type Dashboard = {
   totalRevenue: number;
@@ -19,6 +20,7 @@ type View = 'cards' | 'revenue' | 'revenue-sector' | 'expenses';
 
 export default function FinancePage() {
   const { token, user } = useAuth();
+  const { t } = useTranslation();
   const [data, setData] = useState<Dashboard | null>(null);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -73,14 +75,14 @@ export default function FinancePage() {
   if (!isManager) {
     return (
       <div>
-        <h1 className="text-xl font-semibold mb-4">Finance</h1>
-        <p className="text-slate-600">Only managers can access finance totals and reports.</p>
-        <p className="text-sm text-slate-500 mt-2">You can create expenses if you have Finance role.</p>
+        <h1 className="text-xl font-semibold mb-4">{t('finance.title')}</h1>
+        <p className="text-slate-600">{t('finance.onlyManagers')}</p>
+        <p className="text-sm text-slate-500 mt-2">{t('finance.createExpensesRole')}</p>
       </div>
     );
   }
 
-  if (loading && !data) return <div className="text-slate-500">Loading...</div>;
+  if (loading && !data) return <div className="text-slate-500">{t('common.loading')}</div>;
   const d = data ?? empty;
 
   const params = new URLSearchParams();
@@ -89,14 +91,14 @@ export default function FinancePage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Finance</h1>
+      <h1 className="text-xl font-semibold">{t('finance.title')}</h1>
 
       <div className="flex flex-wrap gap-4 items-center">
         <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="px-3 py-2 border rounded text-sm" />
         <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="px-3 py-2 border rounded text-sm" />
         {(view !== 'cards') && (
           <button onClick={() => setView('cards')} className="px-3 py-1 text-sm text-teal-600 hover:underline">
-            ← Back
+            ← {t('common.back')}
           </button>
         )}
       </div>
@@ -107,18 +109,18 @@ export default function FinancePage() {
             onClick={() => { setView('revenue'); }}
             className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
           >
-            <div className="text-sm text-slate-500">Total Revenue</div>
+            <div className="text-sm text-slate-500">{t('overview.totalRevenue')}</div>
             <div className="text-xl font-semibold">{formatTzs(d.totalRevenue)}</div>
           </button>
           <button
             onClick={() => { setView('expenses'); void loadExpenseDetail(); }}
             className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
           >
-            <div className="text-sm text-slate-500">Total Expenses</div>
+            <div className="text-sm text-slate-500">{t('overview.totalExpenses')}</div>
             <div className="text-xl font-semibold">{formatTzs(d.totalExpenses)}</div>
           </button>
           <div className="bg-white border rounded-lg p-4">
-            <div className="text-sm text-slate-500">Net Profit</div>
+            <div className="text-sm text-slate-500">{t('overview.netProfit')}</div>
             <div className={`text-xl font-semibold ${d.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {formatTzs(d.netProfit)}
             </div>
@@ -128,27 +130,27 @@ export default function FinancePage() {
 
       {view === 'revenue' && (
         <div className="space-y-4">
-          <h2 className="font-medium">Revenue by Sector</h2>
+          <h2 className="font-medium">{t('finance.revenueBySector')}</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <button
               onClick={() => loadRevenueSector('bar')}
               className="bg-white border rounded-lg p-4 text-left hover:border-teal-500"
             >
-              <div className="text-sm text-slate-500">Bar</div>
+              <div className="text-sm text-slate-500">{t('bar.title')}</div>
               <div className="text-lg font-semibold">{formatTzs(d.bySector.bar)}</div>
             </button>
             <button
               onClick={() => loadRevenueSector('restaurant')}
               className="bg-white border rounded-lg p-4 text-left hover:border-teal-500"
             >
-              <div className="text-sm text-slate-500">Restaurant</div>
+              <div className="text-sm text-slate-500">{t('restaurant.title')}</div>
               <div className="text-lg font-semibold">{formatTzs(d.bySector.restaurant)}</div>
             </button>
             <button
               onClick={() => loadRevenueSector('hotel')}
               className="bg-white border rounded-lg p-4 text-left hover:border-teal-500"
             >
-              <div className="text-sm text-slate-500">Hotel / Rooms</div>
+              <div className="text-sm text-slate-500">{t('overview.hotelRooms')}</div>
               <div className="text-lg font-semibold">{formatTzs(d.bySector.hotel)}</div>
             </button>
           </div>
@@ -157,7 +159,7 @@ export default function FinancePage() {
 
       {view === 'revenue-sector' && (
         <div className="space-y-4">
-          <h2 className="font-medium capitalize">{selectedSector} – Revenue Summary</h2>
+          <h2 className="font-medium capitalize">{selectedSector} – {t('finance.revenueSummary')}</h2>
           <p className="text-sm text-slate-600">
             Total: {formatTzs(salesHistory.reduce((s, r) => s + r.amount, 0))}
           </p>
@@ -165,11 +167,11 @@ export default function FinancePage() {
             <table className="w-full text-sm">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="text-left p-3">Date</th>
-                  <th className="text-left p-3">Order ID</th>
-                  <th className="text-right p-3">Amount</th>
-                  <th className="text-left p-3">Payment</th>
-                  <th className="text-left p-3">Staff</th>
+                  <th className="text-left p-3">{t('finance.date')}</th>
+                  <th className="text-left p-3">{t('finance.orderId')}</th>
+                  <th className="text-right p-3">{t('finance.amount')}</th>
+                  <th className="text-left p-3">{t('finance.payment')}</th>
+                  <th className="text-left p-3">{t('finance.staff')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -184,14 +186,14 @@ export default function FinancePage() {
                 ))}
               </tbody>
             </table>
-            {salesHistory.length === 0 && <p className="p-4 text-slate-500">No sales in selected period.</p>}
+            {salesHistory.length === 0 && <p className="p-4 text-slate-500">{t('finance.noSales')}</p>}
           </div>
         </div>
       )}
 
       {view === 'expenses' && expenseDetail && (
         <div className="space-y-4">
-          <h2 className="font-medium">Expenses by Category</h2>
+          <h2 className="font-medium">{t('finance.expensesByCategory')}</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {Object.entries(expenseDetail.byCategory).map(([cat, amt]) => (
               <div key={cat} className="bg-white border rounded p-4">
@@ -200,15 +202,15 @@ export default function FinancePage() {
               </div>
             ))}
           </div>
-          <h3 className="font-medium mt-6">Expense History</h3>
+          <h3 className="font-medium mt-6">{t('finance.expenseHistory')}</h3>
           <div className="bg-white border rounded overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="text-left p-3">Date</th>
-                  <th className="text-left p-3">Category</th>
-                  <th className="text-right p-3">Amount</th>
-                  <th className="text-left p-3">Notes</th>
+                  <th className="text-left p-3">{t('finance.date')}</th>
+                  <th className="text-left p-3">{t('finance.category')}</th>
+                  <th className="text-right p-3">{t('finance.amount')}</th>
+                  <th className="text-left p-3">{t('finance.notes')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -222,24 +224,24 @@ export default function FinancePage() {
                 ))}
               </tbody>
             </table>
-            {expenseDetail.expenses.length === 0 && <p className="p-4 text-slate-500">No expenses in selected period.</p>}
+            {expenseDetail.expenses.length === 0 && <p className="p-4 text-slate-500">{t('finance.noExpenses')}</p>}
           </div>
         </div>
       )}
 
-      {view === 'expenses' && !expenseDetail && <div className="text-slate-500">Loading expenses...</div>}
+      {view === 'expenses' && !expenseDetail && <div className="text-slate-500">{t('finance.loadingExpenses')}</div>}
 
       {(user?.role === 'MANAGER' || user?.role === 'ADMIN' || user?.role === 'FINANCE') && (
         <div className="bg-white border rounded p-4 max-w-md">
-          <h2 className="font-medium mb-2">Record Expense</h2>
-          <CreateExpenseForm token={token} onCreated={() => { setData(null); setView('cards'); setExpenseDetail(null); }} />
+          <h2 className="font-medium mb-2">{t('finance.recordExpense')}</h2>
+          <CreateExpenseForm token={token} t={t} onCreated={() => { setData(null); setView('cards'); setExpenseDetail(null); }} />
         </div>
       )}
     </div>
   );
 }
 
-function CreateExpenseForm({ token, onCreated }: { token: string | null; onCreated: () => void }) {
+function CreateExpenseForm({ token, t, onCreated }: { token: string | null; t: (k: string) => string; onCreated: () => void }) {
   const [category, setCategory] = useState('HOUSEKEEPING');
   const [amount, setAmount] = useState('');
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10));
@@ -260,7 +262,7 @@ function CreateExpenseForm({ token, onCreated }: { token: string | null; onCreat
       });
       setAmount('');
       setNotes('');
-      setMsg('Expense recorded');
+      setMsg(t('finance.expenseRecorded'));
       onCreated();
     } catch (err) {
       setMsg((err as Error).message);
@@ -272,15 +274,15 @@ function CreateExpenseForm({ token, onCreated }: { token: string | null; onCreat
   return (
     <form onSubmit={submit} className="space-y-2">
       <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full px-3 py-2 border rounded text-sm" required>
-        <option value="HOUSEKEEPING">Housekeeping</option>
-        <option value="MAINTENANCE">Maintenance</option>
-        <option value="UTILITIES">Utilities</option>
-        <option value="OTHERS">Others</option>
+        <option value="HOUSEKEEPING">{t('finance.housekeeping')}</option>
+        <option value="MAINTENANCE">{t('finance.maintenance')}</option>
+        <option value="UTILITIES">{t('finance.utilities')}</option>
+        <option value="OTHERS">{t('finance.others')}</option>
       </select>
-      <input type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Amount" className="w-full px-3 py-2 border rounded text-sm" required />
+      <input type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={t('finance.amountPlaceholder')} className="w-full px-3 py-2 border rounded text-sm" required />
       <input type="date" value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} className="w-full px-3 py-2 border rounded text-sm" required />
-      <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (optional)" className="w-full px-3 py-2 border rounded text-sm" />
-      <button type="submit" disabled={loading} className="px-4 py-2 bg-teal-600 text-white rounded text-sm disabled:opacity-50">Record</button>
+      <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t('finance.notesOptional')} className="w-full px-3 py-2 border rounded text-sm" />
+      <button type="submit" disabled={loading} className="px-4 py-2 bg-teal-600 text-white rounded text-sm disabled:opacity-50">{t('finance.record')}</button>
       {msg && <p className="text-sm text-green-600">{msg}</p>}
     </form>
   );

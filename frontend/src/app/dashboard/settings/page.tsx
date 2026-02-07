@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
+import { useTranslation } from '@/lib/i18n/context';
 
 type Subscription = { plan: string; status: string; trialEndsAt: string };
 type MeResponse = { email: string; role: string; business: { id: string; name: string; code: string } };
 
 export default function SettingsPage() {
   const { token, user } = useAuth();
+  const { t } = useTranslation();
   const [sub, setSub] = useState<Subscription | null>(null);
   const [me, setMe] = useState<MeResponse | null>(null);
   const [meLoading, setMeLoading] = useState(true);
@@ -34,10 +36,10 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold mb-4">Settings</h1>
+      <h1 className="text-xl font-semibold mb-4">{t('settings.title')}</h1>
 
       <div className="bg-white border rounded p-4 max-w-md">
-        <h2 className="font-medium mb-2">Business</h2>
+        <h2 className="font-medium mb-2">{t('settings.business')}</h2>
         {meLoading ? (
           <div className="animate-pulse space-y-2">
             <div className="h-4 bg-slate-200 rounded w-2/3" />
@@ -45,35 +47,35 @@ export default function SettingsPage() {
           </div>
         ) : me?.business ? (
           <div className="text-sm space-y-1">
-            <div>Name: {me.business.name}</div>
-            <div>Business ID: {me.business.code}</div>
+            <div>{t('settings.name')}: {me.business.name}</div>
+            <div>{t('settings.businessId')}: {me.business.code}</div>
           </div>
         ) : null}
       </div>
 
       {sub && (
         <div className="bg-white border rounded p-4 max-w-md">
-          <h2 className="font-medium mb-2">Subscription</h2>
+          <h2 className="font-medium mb-2">{t('settings.subscription')}</h2>
           <div className="text-sm space-y-1">
-            <div>Plan: {sub.plan}</div>
-            <div>Status: {sub.status}</div>
-            <div>Trial ends: {new Date(sub.trialEndsAt).toLocaleDateString()}</div>
+            <div>{t('settings.plan')}: {sub.plan}</div>
+            <div>{t('settings.status')}: {sub.status}</div>
+            <div>{t('settings.trialEnds')}: {new Date(sub.trialEndsAt).toLocaleDateString()}</div>
           </div>
         </div>
       )}
 
       {isManager && (
         <div className="bg-white border rounded p-4 max-w-md">
-          <h2 className="font-medium mb-2">Staff Users</h2>
+          <h2 className="font-medium mb-2">{t('settings.staffUsers')}</h2>
           <p className="text-sm text-slate-600 mb-3">
-            Create staff accounts for your team. Coming soon.
+            {t('settings.staffUsersDesc')}
           </p>
           <button
             type="button"
             disabled
             className="px-4 py-2 bg-slate-200 text-slate-500 rounded cursor-not-allowed text-sm"
           >
-            Create Staff User
+            {t('settings.createStaffUser')}
           </button>
         </div>
       )}

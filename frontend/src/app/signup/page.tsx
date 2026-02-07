@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
+import { useTranslation } from '@/lib/i18n/context';
 
 type SignupRes = {
   accessToken: string;
@@ -14,6 +15,7 @@ type SignupRes = {
 export default function SignupPage() {
   const router = useRouter();
   const setAuth = useAuth((s) => s.setAuth);
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [businessName, setBusinessName] = useState('');
@@ -48,7 +50,7 @@ export default function SignupPage() {
         onSubmit={handleSubmit}
         className="w-full max-w-sm p-6 bg-white rounded-lg shadow-md"
       >
-        <h1 className="text-xl font-semibold mb-4">Sign Up</h1>
+        <h1 className="text-xl font-semibold mb-4">{t('auth.signUp')}</h1>
         {error && (
           <div className="mb-4 p-2 text-sm text-red-600 bg-red-50 rounded">
             {error}
@@ -56,18 +58,18 @@ export default function SignupPage() {
         )}
         <div className="space-y-4">
           <div>
-            <label className="block text-sm text-slate-600 mb-1">Business Name</label>
+            <label className="block text-sm text-slate-600 mb-1">{t('auth.businessName')}</label>
             <input
               type="text"
               value={businessName}
               onChange={(e) => setBusinessName(e.target.value)}
               className="w-full px-3 py-2 border rounded"
-              placeholder="e.g. My Hotel"
+              placeholder={t('auth.businessNamePlaceholder')}
               required
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-600 mb-1">Email</label>
+            <label className="block text-sm text-slate-600 mb-1">{t('auth.email')}</label>
             <input
               type="email"
               value={email}
@@ -77,7 +79,7 @@ export default function SignupPage() {
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-600 mb-1">Password (min 6)</label>
+            <label className="block text-sm text-slate-600 mb-1">{t('auth.passwordMin')}</label>
             <input
               type="password"
               value={password}
@@ -93,10 +95,10 @@ export default function SignupPage() {
           disabled={loading}
           className="mt-6 w-full py-2 bg-teal-600 text-white rounded hover:bg-teal-700 disabled:opacity-50"
         >
-          {loading ? 'Creating...' : 'Sign Up'}
+          {loading ? t('auth.creating') : t('auth.signUp')}
         </button>
         <p className="mt-4 text-center text-sm text-slate-500">
-          Have an account? <Link href="/login" className="text-teal-600">Login</Link>
+          {t('auth.haveAccount')} <Link href="/login" className="text-teal-600">{t('auth.loginLink')}</Link>
         </p>
       </form>
     </div>

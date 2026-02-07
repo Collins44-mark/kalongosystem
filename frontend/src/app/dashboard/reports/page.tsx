@@ -3,12 +3,14 @@
 import { useState } from 'react';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
+import { useTranslation } from '@/lib/i18n/context';
 
 type ReportType = 'revenue' | 'expenses' | 'pnl';
 type Sector = 'all' | 'bar' | 'restaurant' | 'hotel';
 
 export default function ReportsPage() {
   const { token, user } = useAuth();
+  const { t } = useTranslation();
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [sector, setSector] = useState<Sector>('all');
@@ -71,46 +73,46 @@ export default function ReportsPage() {
   if (!isManager) {
     return (
       <div>
-        <h1 className="text-xl font-semibold mb-4">Reports</h1>
-        <p className="text-slate-600">Only managers can access reports.</p>
+        <h1 className="text-xl font-semibold mb-4">{t('reports.title')}</h1>
+        <p className="text-slate-600">{t('reports.onlyManagers')}</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Reports</h1>
+      <h1 className="text-xl font-semibold">{t('reports.title')}</h1>
 
       <div className="bg-white border rounded p-4 space-y-4 max-w-2xl">
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm text-slate-600 mb-1">Date from</label>
+            <label className="block text-sm text-slate-600 mb-1">{t('finance.date')} from</label>
             <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-full px-3 py-2 border rounded" />
           </div>
           <div>
-            <label className="block text-sm text-slate-600 mb-1">Date to</label>
+            <label className="block text-sm text-slate-600 mb-1">{t('finance.date')} {t('common.to')}</label>
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-full px-3 py-2 border rounded" />
           </div>
         </div>
         <div>
-          <label className="block text-sm text-slate-600 mb-1">Sector</label>
+          <label className="block text-sm text-slate-600 mb-1">{t('reports.sector')}</label>
           <select value={sector} onChange={(e) => setSector(e.target.value as Sector)} className="w-full px-3 py-2 border rounded">
             <option value="all">All</option>
-            <option value="bar">Bar</option>
-            <option value="restaurant">Restaurant</option>
-            <option value="hotel">Hotel</option>
+            <option value="bar">{t('bar.title')}</option>
+            <option value="restaurant">{t('restaurant.title')}</option>
+            <option value="hotel">{t('overview.hotelRooms')}</option>
           </select>
         </div>
         <div>
           <label className="block text-sm text-slate-600 mb-1">Report type</label>
           <select value={reportType} onChange={(e) => setReportType(e.target.value as ReportType)} className="w-full px-3 py-2 border rounded">
-            <option value="revenue">Revenue</option>
-            <option value="expenses">Expenses</option>
-            <option value="pnl">Full P&L</option>
+            <option value="revenue">{t('reports.revenue')}</option>
+            <option value="expenses">{t('reports.expenses')}</option>
+            <option value="pnl">{t('reports.pnl')}</option>
           </select>
         </div>
         <button onClick={loadReport} disabled={loading} className="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700 disabled:opacity-50">
-          {loading ? 'Loading...' : 'Load Report'}
+          {loading ? t('common.loading') : t('reports.load')}
         </button>
       </div>
 
@@ -118,7 +120,7 @@ export default function ReportsPage() {
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
             <button onClick={exportCsv} className="px-3 py-1 text-sm bg-slate-100 rounded hover:bg-slate-200">
-              Export CSV
+              {t('reports.exportCsv')}
             </button>
             <span className="px-3 py-1 text-sm text-slate-400">PDF, Excel, Email, WhatsApp – coming soon</span>
           </div>

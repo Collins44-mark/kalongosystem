@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
+import { useTranslation } from '@/lib/i18n/context';
 
 type Room = { id: string; roomNumber: string; status: string; category: { name: string } };
 
 export default function HousekeepingPage() {
   const { token } = useAuth();
+  const { t } = useTranslation();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -32,11 +34,11 @@ export default function HousekeepingPage() {
     }
   }
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <div>{t('common.loading')}</div>;
 
   return (
     <div>
-      <h1 className="text-xl font-semibold mb-4">Housekeeping</h1>
+      <h1 className="text-xl font-semibold mb-4">{t('housekeeping.title')}</h1>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {rooms.map((r) => (
           <div key={r.id} className="bg-white border rounded p-4">
@@ -48,10 +50,10 @@ export default function HousekeepingPage() {
               onChange={(e) => updateStatus(r.id, e.target.value)}
               className="w-full text-sm px-2 py-1 border rounded"
             >
-              <option value="VACANT">Vacant</option>
-              <option value="OCCUPIED">Occupied</option>
-              <option value="RESERVED">Reserved</option>
-              <option value="UNDER_MAINTENANCE">Under Maintenance</option>
+              <option value="VACANT">{t('overview.vacant')}</option>
+              <option value="OCCUPIED">{t('overview.occupied')}</option>
+              <option value="RESERVED">{t('overview.reserved')}</option>
+              <option value="UNDER_MAINTENANCE">{t('overview.underMaintenance')}</option>
             </select>
           </div>
         ))}

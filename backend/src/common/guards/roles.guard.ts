@@ -28,8 +28,9 @@ export class RolesGuard implements CanActivate {
     }
 
     const { user } = context.switchToHttp().getRequest();
-    const rawRole = (user?.role || '').toUpperCase();
-    const role = rawRole === 'ADMIN' ? 'MANAGER' : rawRole;
+    const rawRole = (user?.role || '').toString().trim().toUpperCase();
+    // ADMIN and OWNER have manager-level (or higher) access
+    const role = ['ADMIN', 'OWNER'].includes(rawRole) ? 'MANAGER' : rawRole || null;
     const hasRole = role && requiredRoles.some((r) => r.toUpperCase() === role);
 
     if (!hasRole) {

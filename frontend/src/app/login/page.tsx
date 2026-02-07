@@ -5,10 +5,12 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
+import { useTranslation } from '@/lib/i18n/context';
 
 export default function LoginPage() {
   const router = useRouter();
   const setAuth = useAuth((s) => s.setAuth);
+  const { t } = useTranslation();
   const [businessId, setBusinessId] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -43,7 +45,7 @@ export default function LoginPage() {
         onSubmit={handleSubmit}
         className="w-full max-w-sm p-6 bg-white rounded-lg shadow-md"
       >
-        <h1 className="text-xl font-semibold mb-4">Login</h1>
+        <h1 className="text-xl font-semibold mb-4">{t('auth.login')}</h1>
         {error && (
           <div className="mb-4 p-2 text-sm text-red-600 bg-red-50 rounded">
             {error}
@@ -51,7 +53,7 @@ export default function LoginPage() {
         )}
         <div className="space-y-4">
           <div>
-            <label className="block text-sm text-slate-600 mb-1">Business ID</label>
+            <label className="block text-sm text-slate-600 mb-1">{t('auth.businessId')}</label>
             <input
               type="text"
               value={businessId}
@@ -62,7 +64,7 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-600 mb-1">Email</label>
+            <label className="block text-sm text-slate-600 mb-1">{t('auth.email')}</label>
             <input
               type="email"
               value={email}
@@ -72,7 +74,7 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-600 mb-1">Password</label>
+            <label className="block text-sm text-slate-600 mb-1">{t('auth.password')}</label>
             <input
               type="password"
               value={password}
@@ -87,10 +89,10 @@ export default function LoginPage() {
           disabled={loading}
           className="mt-6 w-full py-2 bg-teal-600 text-white rounded hover:bg-teal-700 disabled:opacity-50"
         >
-          {loading ? 'Logging in...' : 'Login'}
+          {loading ? t('auth.loggingIn') : t('auth.login')}
         </button>
         <p className="mt-4 text-center text-sm text-slate-500">
-          No account? <Link href="/signup" className="text-teal-600">Sign up</Link>
+          {t('auth.noAccount')} <Link href="/signup" className="text-teal-600">{t('auth.signUpLink')}</Link>
         </p>
       </form>
     </div>

@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
+import { useTranslation } from '@/lib/i18n/context';
 
 type BarItem = { id: string; name: string; price: string };
 
 export default function BarPage() {
   const { token, user } = useAuth();
+  const { t } = useTranslation();
   const [items, setItems] = useState<BarItem[]>([]);
   const [cart, setCart] = useState<{ itemId: string; name: string; price: number; qty: number }[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'MOBILE_MONEY' | 'BANK'>('CASH');
@@ -50,7 +52,7 @@ export default function BarPage() {
           paymentMethod,
         }),
       });
-      setMessage('Order confirmed');
+      setMessage(t('bar.orderConfirmed'));
       setCart([]);
     } catch (e) {
       setMessage((e as Error).message);
@@ -59,17 +61,17 @@ export default function BarPage() {
     }
   }
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <div>{t('common.loading')}</div>;
 
   return (
     <div>
-      <h1 className="text-xl font-semibold mb-4">Bar</h1>
+      <h1 className="text-xl font-semibold mb-4">{t('bar.title')}</h1>
       {user?.role === 'BAR' && (
-        <p className="text-sm text-slate-500 mb-4">Select items and confirm order. Prices are read-only.</p>
+        <p className="text-sm text-slate-500 mb-4">{t('bar.selectItemsDesc')}</p>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <h2 className="font-medium mb-2">Items</h2>
+          <h2 className="font-medium mb-2">{t('bar.items')}</h2>
           <div className="grid grid-cols-2 gap-2">
             {items.map((item) => (
               <button
@@ -84,28 +86,28 @@ export default function BarPage() {
           </div>
         </div>
         <div>
-          <h2 className="font-medium mb-2">Order</h2>
+          <h2 className="font-medium mb-2">{t('bar.order')}</h2>
           <div className="bg-white border rounded p-4 space-y-2">
             {cart.map((c) => (
               <div key={c.itemId} className="flex justify-between items-center">
                 <span>{c.name} x{c.qty}</span>
-                <button onClick={() => removeFromCart(c.itemId)} className="text-red-600 text-sm">Remove</button>
+                <button onClick={() => removeFromCart(c.itemId)} className="text-red-600 text-sm">{t('common.remove')}</button>
               </div>
             ))}
-            {cart.length === 0 && <p className="text-slate-500 text-sm">No items</p>}
+            {cart.length === 0 && <p className="text-slate-500 text-sm">{t('common.noItems')}</p>}
           </div>
           {cart.length > 0 && (
             <>
               <div className="mt-4">
-                <label className="block text-sm mb-1">Payment</label>
+                <label className="block text-sm mb-1">{t('bar.payment')}</label>
                 <select
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)}
                   className="w-full px-3 py-2 border rounded"
                 >
-                  <option value="CASH">Cash</option>
-                  <option value="MOBILE_MONEY">Mobile Money</option>
-                  <option value="BANK">Bank</option>
+                  <option value="CASH">{t('bar.cash')}</option>
+                  <option value="MOBILE_MONEY">{t('bar.mobileMoney')}</option>
+                  <option value="BANK">{t('bar.bank')}</option>
                 </select>
               </div>
               <button
@@ -113,7 +115,7 @@ export default function BarPage() {
                 disabled={submitting}
                 className="mt-4 w-full py-2 bg-teal-600 text-white rounded"
               >
-                Confirm Order
+                {t('bar.confirmOrder')}
               </button>
             </>
           )}

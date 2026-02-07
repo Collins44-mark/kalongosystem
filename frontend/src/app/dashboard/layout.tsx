@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
+import { useTranslation } from '@/lib/i18n/context';
 
 function MenuIcon({ open }: { open: boolean }) {
   return (
@@ -21,20 +22,21 @@ function MenuIcon({ open }: { open: boolean }) {
 type MeResponse = {
   email: string;
   role: string;
+  language?: string;
   business: { id: string; name: string; code: string };
 };
 
-const SIDEBAR_LINKS: { href: string; label: string; roles: string[] }[] = [
-  { href: '/dashboard', label: 'Overview', roles: ['MANAGER', 'ADMIN', 'OWNER'] },
-  { href: '/dashboard/front-office', label: 'Front Office', roles: ['MANAGER', 'ADMIN', 'OWNER', 'FRONT_OFFICE'] },
-  { href: '/dashboard/bar', label: 'Bar', roles: ['MANAGER', 'BAR'] },
-  { href: '/dashboard/restaurant', label: 'Restaurant', roles: ['MANAGER', 'RESTAURANT', 'KITCHEN'] },
-  { href: '/dashboard/housekeeping', label: 'Housekeeping', roles: ['MANAGER', 'HOUSEKEEPING'] },
-  { href: '/dashboard/finance', label: 'Finance', roles: ['MANAGER', 'FINANCE'] },
-  { href: '/dashboard/workers', label: 'Workers', roles: ['MANAGER'] },
-  { href: '/dashboard/inventory', label: 'Inventory', roles: ['MANAGER'] },
-  { href: '/dashboard/reports', label: 'Reports', roles: ['MANAGER'] },
-  { href: '/dashboard/settings', label: 'Settings', roles: ['MANAGER'] },
+const SIDEBAR_LINKS: { href: string; labelKey: string; roles: string[] }[] = [
+  { href: '/dashboard', labelKey: 'nav.overview', roles: ['MANAGER', 'ADMIN', 'OWNER'] },
+  { href: '/dashboard/front-office', labelKey: 'nav.frontOffice', roles: ['MANAGER', 'ADMIN', 'OWNER', 'FRONT_OFFICE'] },
+  { href: '/dashboard/bar', labelKey: 'nav.bar', roles: ['MANAGER', 'BAR'] },
+  { href: '/dashboard/restaurant', labelKey: 'nav.restaurant', roles: ['MANAGER', 'RESTAURANT', 'KITCHEN'] },
+  { href: '/dashboard/housekeeping', labelKey: 'nav.housekeeping', roles: ['MANAGER', 'HOUSEKEEPING'] },
+  { href: '/dashboard/finance', labelKey: 'nav.finance', roles: ['MANAGER', 'FINANCE'] },
+  { href: '/dashboard/workers', labelKey: 'nav.workers', roles: ['MANAGER'] },
+  { href: '/dashboard/inventory', labelKey: 'nav.inventory', roles: ['MANAGER'] },
+  { href: '/dashboard/reports', labelKey: 'nav.reports', roles: ['MANAGER'] },
+  { href: '/dashboard/settings', labelKey: 'nav.settings', roles: ['MANAGER'] },
 ];
 
 export default function DashboardLayout({
@@ -45,8 +47,10 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const { token, user, logout, _hasHydrated } = useAuth();
+  const { t, locale, setLocale } = useTranslation();
   const [me, setMe] = useState<MeResponse | null>(null);
   const [meLoading, setMeLoading] = useState(true);
+  const [langOpen, setLangOpen] = useState(false);
 
   useEffect(() => {
     if (_hasHydrated && (!token || !user)) {
@@ -66,6 +70,27 @@ export default function DashboardLayout({
       .finally(() => setMeLoading(false));
   }, [token]);
 
+  useEffect(() => {
+    if (me?.language && (me.language === 'en' || me.language === 'sw') && me.language !== locale) {
+      setLocale(me.language);
+    }
+  }, [me?.language, locale, setLocale]);
+
+  async function changeLanguage(lang: 'en' | 'sw') {
+    if (!token || lang === locale) return;
+    try {
+      await api('/api/me', {
+        method: 'PATCH',
+        token,
+        body: JSON.stringify({ language: lang }),
+      });
+      setLocale(lang);
+      setLangOpen(false);
+    } catch {
+      /* ignore */
+    }
+  }
+
   const role = ['ADMIN', 'OWNER'].includes(user?.role || '') ? 'MANAGER' : user?.role;
   const visibleLinks = SIDEBAR_LINKS.filter((l) =>
     l.roles.includes(role || '')
@@ -79,7 +104,7 @@ export default function DashboardLayout({
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
         className="lg:hidden fixed bottom-4 right-4 z-40 w-12 h-12 rounded-full bg-teal-600 text-white shadow-lg flex items-center justify-center touch-manipulation"
-        aria-label="Toggle menu"
+        aria-label={t('nav.toggleMenu')}
       >
         <MenuIcon open={sidebarOpen} />
       </button>
@@ -113,7 +138,7 @@ export default function DashboardLayout({
                   : 'text-slate-300 hover:bg-slate-700'
               }`}
             >
-              {link.label}
+              {t(link.labelKey)}
             </Link>
           ))}
         </nav>
@@ -125,7 +150,7 @@ export default function DashboardLayout({
             }}
             className="w-full text-left px-3 py-2 text-sm text-slate-400 hover:text-white"
           >
-            Logout
+            {t('nav.logout')}
           </button>
         </div>
       </aside>
@@ -137,10 +162,34 @@ export default function DashboardLayout({
         />
       )}
       <main className="flex-1 overflow-auto min-w-0">
-        <header className="h-12 bg-white border-b flex items-center px-4">
+        <header className="h-12 bg-white border-b flex items-center justify-between px-4 gap-2">
           <span className="text-xs sm:text-sm text-slate-600 truncate">
             {user.email} · {role}
           </span>
+          <div className="relative flex-shrink-0">
+            <button
+              onClick={() => setLangOpen(!langOpen)}
+              className="px-2 py-1 text-sm text-slate-600 hover:bg-slate-100 rounded flex items-center gap-1"
+            >
+              <span>{locale === 'sw' ? 'Kiswahili' : 'English'}</span>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {langOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setLangOpen(false)} aria-hidden />
+                <div className="absolute right-0 top-full mt-1 py-1 bg-white border rounded-lg shadow-lg z-20 min-w-[140px]">
+                  <button onClick={() => changeLanguage('en')} className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-50">
+                    {t('nav.english')}
+                  </button>
+                  <button onClick={() => changeLanguage('sw')} className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-50">
+                    {t('nav.kiswahili')}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </header>
         <div className="p-4 sm:p-6">{children}</div>
       </main>
