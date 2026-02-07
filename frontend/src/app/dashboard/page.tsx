@@ -4,8 +4,11 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 
+type Room = { id: string; roomNumber: string; roomName?: string; status: string; category: { id: string; name: string; pricePerNight: string } };
+
 type DashboardData = {
   roomSummary: { total: number; occupied: number; vacant: number; reserved: number; underMaintenance: number };
+  rooms?: Room[];
   inventoryAlerts: {
     lowStock: { id: string; name: string; quantity: number; minQuantity: number; severity: string }[];
     totalValueAtRisk: number;
@@ -74,7 +77,7 @@ export default function OverviewPage() {
     setLoading(true);
     const emptyData: DashboardData = { ...EMPTY_DASHBOARD, period };
     api<DashboardData>(`/overview?period=${period}`, { token })
-      .then(setData)
+      .then((res) => setData({ ...res, period }))
       .catch(() => setData(emptyData))
       .finally(() => setLoading(false));
   }
@@ -82,6 +85,18 @@ export default function OverviewPage() {
   useEffect(() => {
     fetchOverview();
   }, [token, period]);
+
+  // Fallback: if overview has no rooms, fetch directly from same API as Front Office
+  useEffect(() => {
+    if (!token || loading || !data) return;
+    if ((data.rooms?.length ?? 0) > 0 || (data.roomSummary?.total ?? 0) > 0) return;
+    api<Room[]>('/hotel/rooms', { token })
+      .then((rooms) => {
+        const summary = { total: rooms.length, occupied: rooms.filter((r) => r.status === 'OCCUPIED').length, vacant: rooms.filter((r) => r.status === 'VACANT').length, reserved: rooms.filter((r) => r.status === 'RESERVED').length, underMaintenance: rooms.filter((r) => r.status === 'UNDER_MAINTENANCE').length };
+        setData((prev) => prev ? { ...prev, rooms, roomSummary: summary } : prev);
+      })
+      .catch(() => {});
+  }, [token, loading, data]);
 
   // Refresh when page becomes visible (e.g. user returns from Front Office after adding rooms)
   useEffect(() => {
@@ -141,6 +156,19 @@ export default function OverviewPage() {
 
   if (loading && !data) return <div className="text-slate-500 p-6">Loading...</div>;
   const displayData = data ?? { ...EMPTY_DASHBOARD, period };
+  const rooms = displayData.rooms ?? [];
+  const roomSummary = (() => {
+    const s = displayData.roomSummary;
+    if (s.total > 0) return s;
+    if (rooms.length === 0) return s;
+    return {
+      total: rooms.length,
+      occupied: rooms.filter((r) => r.status === 'OCCUPIED').length,
+      vacant: rooms.filter((r) => r.status === 'VACANT').length,
+      reserved: rooms.filter((r) => r.status === 'RESERVED').length,
+      underMaintenance: rooms.filter((r) => r.status === 'UNDER_MAINTENANCE').length,
+    };
+  })();
   const financeData = finance ?? EMPTY_FINANCE;
 
   const lowStockCount = displayData.inventoryAlerts.lowStock.length;
@@ -212,13 +240,55 @@ export default function OverviewPage() {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="rounded-xl p-5 shadow-lg bg-[#0B3C5D] text-white min-h-[100px] flex flex-col justify-center">
           <div className="text-sm font-medium opacity-90">Total Rooms</div>
-          <div className="text-2xl font-bold mt-0.5">{displayData.roomSummary.total}</div>
+          <div className="text-2xl font-bold mt-0.5">{roomSummary.total}</div>
         </div>
-        <RoomCard title="Occupied" value={displayData.roomSummary.occupied} variant="occupied" />
-        <RoomCard title="Vacant" value={displayData.roomSummary.vacant} variant="vacant" />
-        <RoomCard title="Reserved" value={displayData.roomSummary.reserved} variant="reserved" />
-        <RoomCard title="Under Maintenance" value={displayData.roomSummary.underMaintenance} variant="maintenance" />
+        <RoomCard title="Occupied" value={roomSummary.occupied} variant="occupied" />
+        <RoomCard title="Vacant" value={roomSummary.vacant} variant="vacant" />
+        <RoomCard title="Reserved" value={roomSummary.reserved} variant="reserved" />
+        <RoomCard title="Under Maintenance" value={roomSummary.underMaintenance} variant="maintenance" />
       </div>
+
+      {/* Rooms List - same data as Front Office */}
+      {rooms.length > 0 && (
+        <div className="bg-white rounded-xl shadow-md border border-slate-100 overflow-hidden">
+          <div className="p-4 border-b border-slate-100">
+            <h2 className="font-semibold text-slate-800">Rooms</h2>
+            <p className="text-sm text-slate-500 mt-0.5">Room numbers by category — same as Front Office</p>
+          </div>
+          <div className="p-4 space-y-6">
+            {(() => {
+              const categoryMap = new Map<string, { id: string; name: string }>();
+              rooms.forEach((r) => categoryMap.set(r.category.id, { id: r.category.id, name: r.category.name }));
+              const byCategory = [...new Set(rooms.map((r) => r.category.id))].map((catId) => ({
+                category: categoryMap.get(catId) || { id: catId, name: 'Other' },
+                rooms: rooms.filter((r) => r.category.id === catId),
+              })).sort((a, b) => a.category.name.localeCompare(b.category.name));
+              return byCategory.map(({ category, rooms: catRooms }) => (
+                <div key={category.id}>
+                  <h3 className="text-sm font-medium text-slate-600 mb-2">{category.name}</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+                    {catRooms.map((r) => (
+                      <div
+                        key={r.id}
+                        className={`p-3 rounded-lg border text-sm ${
+                          r.status === 'VACANT' ? 'bg-slate-100 border-slate-300' :
+                          r.status === 'OCCUPIED' ? 'bg-green-50 border-green-200' :
+                          r.status === 'RESERVED' ? 'bg-amber-50 border-amber-200' :
+                          'bg-red-50 border-red-200'
+                        }`}
+                      >
+                        <div className="font-medium">{r.roomNumber}</div>
+                        {r.roomName && <div className="text-xs text-slate-600">{r.roomName}</div>}
+                        <div className="text-xs text-slate-500 mt-0.5">{r.status}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ));
+            })()}
+          </div>
+        </div>
+      )}
 
       {/* Sales Container */}
       <div className="bg-white rounded-xl shadow-md border border-slate-100 overflow-hidden">

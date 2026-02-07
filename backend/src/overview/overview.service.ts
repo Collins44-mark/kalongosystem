@@ -13,18 +13,21 @@ export class OverviewService {
     const emptyRoomSummary = { total: 0, occupied: 0, vacant: 0, reserved: 0, underMaintenance: 0 };
     const emptyInventory = { lowStock: [], totalValueAtRisk: 0 };
 
-    const [roomResult, lowStockResult, valueResult] = await Promise.allSettled([
+    const [roomSummaryResult, roomsResult, lowStockResult, valueResult] = await Promise.allSettled([
       this.hotel.getRoomSummary(businessId, branchId),
+      this.hotel.getRooms(businessId),
       this.inventory.getLowStock(businessId, branchId),
       this.inventory.getTotalValueAtRisk(businessId, branchId),
     ]);
 
-    const roomSummary = roomResult.status === 'fulfilled' ? roomResult.value : emptyRoomSummary;
+    const roomSummary = roomSummaryResult.status === 'fulfilled' ? roomSummaryResult.value : emptyRoomSummary;
+    const rooms = roomsResult.status === 'fulfilled' ? roomsResult.value : [];
     const lowStock = lowStockResult.status === 'fulfilled' ? lowStockResult.value : [];
     const valueAtRisk = valueResult.status === 'fulfilled' ? valueResult.value : 0;
 
     return {
       roomSummary,
+      rooms: Array.isArray(rooms) ? rooms : [],
       inventoryAlerts: {
         lowStock: Array.isArray(lowStock) ? lowStock.map((i: any) => ({
           id: i.id,
