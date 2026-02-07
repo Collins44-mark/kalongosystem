@@ -114,6 +114,7 @@ model Room {
   branchId      String   @default("main")
   categoryId    String
   roomNumber    String
+  roomName      String?  // Optional display name
   status        String   @default("VACANT") // VACANT, OCCUPIED, RESERVED, UNDER_MAINTENANCE
   createdAt     DateTime @default(now())
   createdBy     String?
@@ -138,16 +139,46 @@ model Booking {
   checkOut    DateTime
   nights      Int
   totalAmount Decimal   @db.Decimal(12, 2)
+  currency    String    @default("TZS") // TZS, USD, etc.
+  paymentMode String?   // CASH, BANK, MPESA, TIGOPESA, AIRTEL_MONEY
   status      String    @default("CONFIRMED") // CONFIRMED, CHECKED_IN, CHECKED_OUT, CANCELLED
   folioNumber String?
   createdAt   DateTime  @default(now())
   createdBy   String?
   updatedAt   DateTime  @updatedAt
 
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  room     Room     @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  business Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  room     Room           @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  payments FolioPayment[]
 
   @@map("bookings")
+}
+
+model FolioPayment {
+  id         String   @id @default(cuid())
+  bookingId  String
+  amount     Decimal  @db.Decimal(12, 2)
+  paymentMode String   // CASH, BANK, MPESA, TIGOPESA, AIRTEL_MONEY
+  createdAt  DateTime @default(now())
+  createdBy  String?
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@map("folio_payments")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  role       String
+  businessId String
+  actionType String   // booking_created, booking_checked_in, etc.
+  entityType String?  // booking, folio, room, etc.
+  entityId   String?
+  metadata   String?  @db.Text // JSON string for extra data
+  createdAt  DateTime @default(now())
+
+  @@map("audit_logs")
 }
 
 // ==================== BAR MODULE ====================

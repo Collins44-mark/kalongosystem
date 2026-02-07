@@ -6,6 +6,18 @@ import Link from 'next/link';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 
+function MenuIcon({ open }: { open: boolean }) {
+  return (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      {open ? (
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+      ) : (
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+      )}
+    </svg>
+  );
+}
+
 type MeResponse = {
   email: string;
   role: string;
@@ -58,12 +70,24 @@ export default function DashboardLayout({
   const visibleLinks = SIDEBAR_LINKS.filter((l) =>
     l.roles.includes(role || '')
   );
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   if (!_hasHydrated || !token || !user) return null;
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      <aside className="w-56 bg-slate-800 text-white flex flex-col">
+      <button
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        className="lg:hidden fixed bottom-4 right-4 z-40 w-12 h-12 rounded-full bg-teal-600 text-white shadow-lg flex items-center justify-center touch-manipulation"
+        aria-label="Toggle menu"
+      >
+        <MenuIcon open={sidebarOpen} />
+      </button>
+      <aside
+        className={`fixed lg:static inset-y-0 left-0 z-30 w-56 bg-slate-800 text-white flex flex-col transform transition-transform duration-200 ease-out ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        }`}
+      >
         <div className="p-4 border-b border-slate-700 min-h-[4.5rem]">
           {meLoading ? (
             <div className="animate-pulse space-y-2">
@@ -77,12 +101,13 @@ export default function DashboardLayout({
             </>
           ) : null}
         </div>
-        <nav className="flex-1 p-2 space-y-1">
+        <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
           {visibleLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className={`block px-3 py-2 rounded text-sm ${
+              onClick={() => setSidebarOpen(false)}
+              className={`block px-3 py-2.5 rounded text-sm touch-manipulation ${
                 pathname === link.href
                   ? 'bg-teal-600 text-white'
                   : 'text-slate-300 hover:bg-slate-700'
@@ -104,13 +129,20 @@ export default function DashboardLayout({
           </button>
         </div>
       </aside>
-      <main className="flex-1 overflow-auto">
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/30 z-20 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+      <main className="flex-1 overflow-auto min-w-0">
         <header className="h-12 bg-white border-b flex items-center px-4">
-          <span className="text-sm text-slate-600">
+          <span className="text-xs sm:text-sm text-slate-600 truncate">
             {user.email} · {role}
           </span>
         </header>
-        <div className="p-6">{children}</div>
+        <div className="p-4 sm:p-6">{children}</div>
       </main>
     </div>
   );

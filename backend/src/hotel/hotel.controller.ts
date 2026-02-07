@@ -38,6 +38,9 @@ class CreateRoomDto {
   categoryId: string;
   @IsString()
   roomNumber: string;
+  @IsString()
+  @IsOptional()
+  roomName?: string;
 }
 
 class CreateBookingDto {
@@ -55,6 +58,20 @@ class CreateBookingDto {
   @IsNumber()
   @Min(1)
   nights: number;
+  @IsString()
+  @IsOptional()
+  currency?: string;
+  @IsString()
+  @IsOptional()
+  paymentMode?: string;
+}
+
+class AddPaymentDto {
+  @IsNumber()
+  @Min(0.01)
+  amount: number;
+  @IsString()
+  paymentMode: string;
 }
 
 @Controller('hotel')
@@ -71,12 +88,14 @@ export class HotelController {
     @CurrentUser() user: any,
     @Body() dto: CreateCategoryDto,
   ) {
-    return this.hotel.createCategory(
+    const cat = await this.hotel.createCategory(
       user.businessId,
       user.branchId,
       dto,
       user.sub,
     );
+    await this.hotel.logAudit(user.sub, user.role || 'MANAGER', user.businessId, 'category_created', 'room_category', cat.id);
+    return cat;
   }
 
   @Get('categories')
@@ -88,12 +107,14 @@ export class HotelController {
   @UseGuards(RolesGuard)
   @Roles('MANAGER')
   async createRoom(@CurrentUser() user: any, @Body() dto: CreateRoomDto) {
-    return this.hotel.createRoom(
+    const room = await this.hotel.createRoom(
       user.businessId,
       user.branchId,
       dto,
       user.sub,
     );
+    await this.hotel.logAudit(user.sub, user.role || 'MANAGER', user.businessId, 'room_created', 'room', room.id);
+    return room;
   }
 
   @Get('rooms')
@@ -107,7 +128,13 @@ export class HotelController {
     @Param('id') roomId: string,
     @Body('status') status: string,
   ) {
-    return this.hotel.updateRoomStatus(user.businessId, roomId, status);
+    return this.hotel.updateRoomStatus(
+      user.businessId,
+      roomId,
+      status,
+      user.sub,
+      user.role,
+    );
   }
 
   @Post('bookings')
@@ -115,16 +142,20 @@ export class HotelController {
     @CurrentUser() user: any,
     @Body() dto: CreateBookingDto,
   ) {
-    return this.hotel.createBooking(
+    const booking = await this.hotel.createBooking(
       user.businessId,
       user.branchId,
       {
         ...dto,
         checkIn: new Date(dto.checkIn),
         checkOut: new Date(dto.checkOut),
+        currency: dto.currency,
+        paymentMode: dto.paymentMode,
       },
       user.sub,
     );
+    await this.hotel.logAudit(user.sub, user.role || 'USER', user.businessId, 'booking_created', 'booking', booking.id);
+    return booking;
   }
 
   @Get('bookings')
@@ -144,19 +175,25 @@ export class HotelController {
 
   @Post('bookings/:id/check-in')
   async checkIn(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.hotel.checkIn(id, user.businessId, user.sub);
+    const res = await this.hotel.checkIn(id, user.businessId, user.sub);
+    await this.hotel.logAudit(user.sub, user.role || 'USER', user.businessId, 'booking_checked_in', 'booking', id);
+    return res;
   }
 
   @Post('bookings/:id/check-out')
   async checkOut(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.hotel.checkOut(id, user.businessId);
+    const res = await this.hotel.checkOut(id, user.businessId);
+    await this.hotel.logAudit(user.sub, user.role || 'USER', user.businessId, 'booking_checked_out', 'booking', id);
+    return res;
   }
 
   @Post('bookings/:id/cancel')
   @UseGuards(RolesGuard)
   @Roles('MANAGER')
   async cancelBooking(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.hotel.cancelBooking(id, user.businessId);
+    const res = await this.hotel.cancelBooking(id, user.businessId);
+    await this.hotel.logAudit(user.sub, user.role || 'MANAGER', user.businessId, 'booking_cancelled', 'booking', id);
+    return res;
   }
 
   @Put('bookings/:id/room')
@@ -165,7 +202,9 @@ export class HotelController {
     @Param('id') id: string,
     @Body('roomId') roomId: string,
   ) {
-    return this.hotel.changeRoom(id, user.businessId, roomId, user.sub);
+    const res = await this.hotel.changeRoom(id, user.businessId, roomId, user.sub);
+    await this.hotel.logAudit(user.sub, user.role || 'USER', user.businessId, 'booking_room_changed', 'booking', id, { roomId });
+    return res;
   }
 
   @Put('bookings/:id/extend')
@@ -174,7 +213,9 @@ export class HotelController {
     @Param('id') id: string,
     @Body('checkOut') checkOut: string,
   ) {
-    return this.hotel.extendStay(id, user.businessId, new Date(checkOut));
+    const res = await this.hotel.extendStay(id, user.businessId, new Date(checkOut));
+    await this.hotel.logAudit(user.sub, user.role || 'USER', user.businessId, 'booking_extended', 'booking', id);
+    return res;
   }
 
   @Put('bookings/:id/status')
@@ -185,7 +226,33 @@ export class HotelController {
     @Param('id') id: string,
     @Body('status') status: string,
   ) {
-    return this.hotel.overrideStatus(id, user.businessId, status);
+    const res = await this.hotel.overrideStatus(id, user.businessId, status);
+    await this.hotel.logAudit(user.sub, user.role || 'MANAGER', user.businessId, 'booking_status_overridden', 'booking', id, { status });
+    return res;
+  }
+
+  @Post('bookings/:id/payments')
+  async addPayment(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body() dto: AddPaymentDto,
+  ) {
+    const res = await this.hotel.addPayment(
+      id,
+      user.businessId,
+      { amount: dto.amount, paymentMode: dto.paymentMode },
+      user.sub,
+    );
+    await this.hotel.logAudit(user.sub, user.role || 'USER', user.businessId, 'payment_added', 'folio', id, { amount: dto.amount, paymentMode: dto.paymentMode });
+    return res;
+  }
+
+  @Get('bookings/:id/payments')
+  async getPayments(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+  ) {
+    return this.hotel.getPayments(id, user.businessId);
   }
 
   @Get('summary')

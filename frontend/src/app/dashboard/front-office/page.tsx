@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 
-type Room = { id: string; roomNumber: string; status: string; category: { id: string; name: string; pricePerNight: string } };
+type Room = { id: string; roomNumber: string; roomName?: string; status: string; category: { id: string; name: string; pricePerNight: string } };
 type Category = { id: string; name: string; pricePerNight: string };
 type Booking = {
   id: string;
@@ -15,10 +15,26 @@ type Booking = {
   checkOut: string;
   nights: number;
   totalAmount: string;
+  currency?: string;
+  paymentMode?: string;
   status: string;
   folioNumber?: string;
   servedBy?: string;
 };
+
+const CURRENCIES = [
+  { code: 'TZS', name: 'TZS', rate: 1 },
+  { code: 'USD', name: 'USD', rate: 2500 },
+  { code: 'EUR', name: 'EUR', rate: 2700 },
+  { code: 'GBP', name: 'GBP', rate: 3100 },
+];
+const PAYMENT_MODES = [
+  { value: 'CASH', label: 'Cash' },
+  { value: 'BANK', label: 'Bank' },
+  { value: 'MPESA', label: 'M-Pesa' },
+  { value: 'TIGOPESA', label: 'Tigo Pesa' },
+  { value: 'AIRTEL_MONEY', label: 'Airtel Money' },
+];
 
 export default function FrontOfficePage() {
   const { token, user } = useAuth();
@@ -33,16 +49,17 @@ export default function FrontOfficePage() {
 
   const managerTabs = [
     { id: 'rooms', label: 'Room Availability' },
+    { id: 'setup', label: 'Room Setup' },
     { id: 'bookings', label: 'All Bookings' },
     { id: 'history', label: 'Booking History' },
-    { id: 'new', label: 'New Booking' },
     { id: 'folios', label: 'Active Folios' },
+    { id: 'new', label: 'New Booking' },
   ];
   const staffTabs = [
-    { id: 'rooms', label: 'Rooms' },
-    { id: 'bookings', label: "Today's Bookings" },
-    { id: 'new', label: 'Create Booking' },
+    { id: 'rooms', label: 'Room Availability' },
+    { id: 'new', label: 'New Booking' },
     { id: 'folios', label: 'Active Folios' },
+    { id: 'bookings', label: "Today's Bookings" },
   ];
   const tabs = isManager ? managerTabs : staffTabs;
 
@@ -69,6 +86,7 @@ export default function FrontOfficePage() {
       .then(setBookings)
       .catch(() => {});
     api<Room[]>('/hotel/rooms', { token }).then(setRooms).catch(() => {});
+    api<Category[]>('/hotel/categories', { token }).then(setCategories).catch(() => {});
   }
 
   if (loading) return <div className="text-slate-500">Loading...</div>;
@@ -78,36 +96,36 @@ export default function FrontOfficePage() {
   const todayBookings = isManager && scope === 'all' ? bookings : bookings;
 
   return (
-    <div>
-      <h1 className="text-xl font-semibold mb-4">Front Office</h1>
+    <div className="min-w-0">
+      <h1 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">Front Office</h1>
       {isManager && (
-        <p className="text-sm text-slate-500 mb-2">Supervisory view — all features and controls</p>
+        <p className="text-xs sm:text-sm text-slate-500 mb-2">Supervisory view — all features and controls</p>
       )}
       {!isManager && (
-        <p className="text-sm text-slate-500 mb-2">Operational view — today&apos;s tasks only</p>
+        <p className="text-xs sm:text-sm text-slate-500 mb-2">Operational view — today&apos;s tasks only</p>
       )}
 
       {isManager && activeTab === 'bookings' && (
-        <div className="flex gap-2 mb-4">
+        <div className="flex flex-wrap gap-2 mb-3 sm:mb-4">
           {(['all', 'today', 'mine'] as const).map((s) => (
             <button
               key={s}
               onClick={() => setScope(s)}
-              className={`px-3 py-1 rounded text-sm ${scope === s ? 'bg-teal-600 text-white' : 'bg-slate-200'}`}
+              className={`px-3 py-1.5 rounded text-sm touch-manipulation min-h-[44px] sm:min-h-0 ${scope === s ? 'bg-teal-600 text-white' : 'bg-slate-200'}`}
             >
               {s === 'all' ? 'All' : s === 'today' ? "Today" : 'My Bookings'}
             </button>
           ))}
-          <button onClick={refresh} className="px-3 py-1 text-sm text-teal-600 hover:underline">Refresh</button>
+          <button onClick={refresh} className="px-3 py-1.5 text-sm text-teal-600 hover:underline touch-manipulation">Refresh</button>
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="flex gap-2 mb-3 sm:mb-4 overflow-x-auto pb-1 -mx-1 scrollbar-thin scrollbar-thumb-slate-300">
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id)}
-            className={`px-4 py-2 rounded ${activeTab === t.id ? 'bg-teal-600 text-white' : 'bg-slate-200'}`}
+            className={`px-3 sm:px-4 py-2 rounded text-sm whitespace-nowrap touch-manipulation min-h-[44px] sm:min-h-0 flex-shrink-0 ${activeTab === t.id ? 'bg-teal-600 text-white' : 'bg-slate-200'}`}
           >
             {t.label}
           </button>
@@ -115,11 +133,11 @@ export default function FrontOfficePage() {
       </div>
 
       {activeTab === 'rooms' && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
           {rooms.map((r) => (
             <div
               key={r.id}
-              className={`p-4 rounded border ${
+              className={`p-3 sm:p-4 rounded-lg border ${
                 r.status === 'VACANT'
                   ? 'bg-green-50 border-green-200'
                   : r.status === 'OCCUPIED'
@@ -129,12 +147,21 @@ export default function FrontOfficePage() {
                   : 'bg-slate-50 border-slate-200'
               }`}
             >
-              <div className="font-medium">{r.roomNumber}</div>
-              <div className="text-sm text-slate-600">{r.category.name}</div>
-              <div className="text-xs">{r.status}</div>
+              <div className="font-medium text-sm sm:text-base">{r.roomNumber}</div>
+              <div className="text-xs sm:text-sm text-slate-600">{r.category.name}</div>
+              <div className="text-xs text-slate-500 mt-0.5">{r.status}</div>
             </div>
           ))}
         </div>
+      )}
+
+      {activeTab === 'setup' && isManager && (
+        <RoomSetup
+          token={token!}
+          categories={categories}
+          rooms={rooms}
+          onAction={refresh}
+        />
       )}
 
       {activeTab === 'bookings' && (
@@ -176,6 +203,195 @@ export default function FrontOfficePage() {
           onAction={refresh}
         />
       )}
+    </div>
+  );
+}
+
+function RoomSetup({
+  token,
+  categories,
+  rooms,
+  onAction,
+}: {
+  token: string;
+  categories: Category[];
+  rooms: Room[];
+  onAction: () => void;
+}) {
+  const [catName, setCatName] = useState('');
+  const [catPrice, setCatPrice] = useState('');
+  const [roomCatId, setRoomCatId] = useState('');
+  const [roomNumber, setRoomNumber] = useState('');
+  const [roomName, setRoomName] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function createCategory(e: React.FormEvent) {
+    e.preventDefault();
+    if (!catName || !catPrice) return;
+    setLoading(true);
+    try {
+      await api('/hotel/categories', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ name: catName, pricePerNight: parseFloat(catPrice) }),
+      });
+      setCatName('');
+      setCatPrice('');
+      onAction();
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function createRoom(e: React.FormEvent) {
+    e.preventDefault();
+    if (!roomCatId || !roomNumber) return;
+    setLoading(true);
+    try {
+      await api('/hotel/rooms', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          categoryId: roomCatId,
+          roomNumber: roomNumber.trim(),
+          roomName: roomName.trim() || undefined,
+        }),
+      });
+      setRoomCatId('');
+      setRoomNumber('');
+      setRoomName('');
+      onAction();
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function setRoomStatus(roomId: string, status: string) {
+    try {
+      await api(`/hotel/rooms/${roomId}/status`, {
+        method: 'PUT',
+        token,
+        body: JSON.stringify({ status }),
+      });
+      onAction();
+    } catch (err) {
+      alert((err as Error).message);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <section className="bg-white border rounded-lg p-4 sm:p-5">
+        <h2 className="text-base font-semibold mb-3">Create Room Category</h2>
+        <form onSubmit={createCategory} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="block text-sm mb-1">Category name</label>
+            <input
+              value={catName}
+              onChange={(e) => setCatName(e.target.value)}
+              placeholder="e.g. Standard, Deluxe"
+              className="w-full px-3 py-2 border rounded text-base"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm mb-1">Price per night</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={catPrice}
+              onChange={(e) => setCatPrice(e.target.value)}
+              className="w-full px-3 py-2 border rounded text-base"
+              required
+            />
+          </div>
+          <div className="sm:col-span-2 flex justify-end">
+            <button type="submit" disabled={loading} className="px-4 py-2 bg-teal-600 text-white rounded touch-manipulation min-h-[44px]">
+              Add Category
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section className="bg-white border rounded-lg p-4 sm:p-5">
+        <h2 className="text-base font-semibold mb-3">Create Room</h2>
+        <form onSubmit={createRoom} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 items-end">
+          <div>
+            <label className="block text-sm mb-1">Category</label>
+            <select
+              value={roomCatId}
+              onChange={(e) => setRoomCatId(e.target.value)}
+              className="w-full px-3 py-2 border rounded text-base"
+              required
+            >
+              <option value="">Select</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm mb-1">Room number</label>
+            <input
+              value={roomNumber}
+              onChange={(e) => setRoomNumber(e.target.value)}
+              placeholder="e.g. 101"
+              className="w-full px-3 py-2 border rounded text-base"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm mb-1">Room name (optional)</label>
+            <input
+              value={roomName}
+              onChange={(e) => setRoomName(e.target.value)}
+              placeholder="e.g. Lake View"
+              className="w-full px-3 py-2 border rounded text-base"
+            />
+          </div>
+          <div className="sm:col-span-2 flex justify-end">
+            <button type="submit" disabled={loading} className="px-4 py-2 bg-teal-600 text-white rounded touch-manipulation min-h-[44px]">
+              Add Room
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section className="bg-white border rounded-lg p-4 sm:p-5">
+        <h2 className="text-base font-semibold mb-3">Rooms</h2>
+        <div className="overflow-x-auto -mx-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 min-w-0">
+            {rooms.map((r) => (
+              <div
+                key={r.id}
+                className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-lg gap-2"
+              >
+                <div>
+                  <span className="font-medium">{r.roomNumber}</span>
+                  {r.roomName && <span className="text-slate-500 ml-1">({r.roomName})</span>}
+                  <div className="text-xs text-slate-600">{r.category.name}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs px-2 py-0.5 rounded bg-slate-100">{r.status}</span>
+                  {(r.status === 'VACANT' || r.status === 'UNDER_MAINTENANCE') && (
+                    <button
+                      onClick={() => setRoomStatus(r.id, r.status === 'VACANT' ? 'UNDER_MAINTENANCE' : 'VACANT')}
+                      className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-800 hover:bg-amber-200 touch-manipulation"
+                    >
+                      {r.status === 'VACANT' ? 'Set maintenance' : 'Set available'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
@@ -248,10 +464,10 @@ function BookingList({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 sm:space-y-3">
       {bookings.map((b) => (
-        <div key={b.id} className="p-4 bg-white border rounded flex flex-wrap justify-between items-center gap-2">
-          <div>
+        <div key={b.id} className="p-4 sm:p-5 bg-white border rounded-lg flex flex-col sm:flex-row sm:flex-wrap sm:justify-between sm:items-center gap-3">
+          <div className="flex-1 min-w-0">
             <div className="font-medium">{b.guestName}</div>
             <div className="text-sm text-slate-600">
               {b.room.roomNumber} · {b.nights} nights · {b.status}
@@ -261,24 +477,24 @@ function BookingList({
               {b.servedBy && ` · Served by: ${b.servedBy}`}
             </div>
           </div>
-          <div className="text-sm font-medium">{formatTzs(parseFloat(b.totalAmount))}</div>
+          <div className="text-sm font-medium flex-shrink-0">{formatTzs(parseFloat(b.totalAmount))}</div>
           {!readOnly && (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 sm:gap-2 touch-manipulation">
               {b.status === 'CONFIRMED' && (
-                <button onClick={() => checkIn(b.id)} className="px-3 py-1 bg-green-600 text-white rounded text-sm">
+                <button onClick={() => checkIn(b.id)} className="px-3 py-1.5 bg-green-600 text-white rounded text-sm touch-manipulation">
                   Check-in
                 </button>
               )}
               {b.status === 'CHECKED_IN' && (
                 <>
-                  <button onClick={() => checkOut(b.id)} className="px-3 py-1 bg-teal-600 text-white rounded text-sm">
+                  <button onClick={() => checkOut(b.id)} className="px-3 py-1.5 bg-teal-600 text-white rounded text-sm touch-manipulation">
                     Check-out
                   </button>
                   <ExtendStayModal booking={b} token={token} onDone={onAction} />
                 </>
               )}
               {isManager && (b.status === 'CONFIRMED' || b.status === 'RESERVED') && (
-                <button onClick={() => cancel(b.id)} className="px-3 py-1 bg-red-600 text-white rounded text-sm">
+                <button onClick={() => cancel(b.id)} className="px-3 py-1.5 bg-red-600 text-white rounded text-sm touch-manipulation">
                   Cancel
                 </button>
               )}
@@ -286,7 +502,7 @@ function BookingList({
                 <select
                   value=""
                   onChange={(e) => { const v = e.target.value; if (v) overrideStatus(b.id, v); e.target.value = ''; }}
-                  className="px-2 py-1 border rounded text-sm"
+                  className="px-2 py-1.5 border rounded text-sm touch-manipulation"
                 >
                   <option value="">Override status</option>
                   <option value="CONFIRMED">Confirmed</option>
@@ -299,7 +515,7 @@ function BookingList({
                 <select
                   value=""
                   onChange={(e) => { const v = e.target.value; if (v) changeRoom(b.id, v); e.target.value = ''; }}
-                  className="px-2 py-1 border rounded text-sm"
+                  className="px-2 py-1.5 border rounded text-sm touch-manipulation"
                 >
                   <option value="">Change room</option>
                   {vacantRooms.filter((r) => r.id !== b.room.id).map((r) => (
@@ -359,6 +575,124 @@ function ExtendStayModal({ booking, token, onDone }: { booking: Booking; token: 
   );
 }
 
+type FolioPayment = { id: string; amount: string; paymentMode: string; createdAt: string };
+
+function AddPaymentModal({ booking, token, onDone }: { booking: Booking; token: string; onDone: () => void }) {
+  const [show, setShow] = useState(false);
+  const [amount, setAmount] = useState('');
+  const [paymentMode, setPaymentMode] = useState('CASH');
+  const [loading, setLoading] = useState(false);
+
+  async function submit() {
+    const amt = parseFloat(amount);
+    if (!amt || amt <= 0) return;
+    setLoading(true);
+    try {
+      await api(`/hotel/bookings/${booking.id}/payments`, {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ amount: amt, paymentMode }),
+      });
+      setShow(false);
+      setAmount('');
+      onDone();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <>
+      <button onClick={() => setShow(true)} className="px-3 py-1.5 bg-emerald-600 text-white rounded text-sm touch-manipulation">
+        Add Payment
+      </button>
+      {show && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-4 sm:p-5 rounded-lg max-w-sm w-full">
+            <h3 className="font-medium mb-3">Add Payment — {booking.guestName}</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm mb-1">Amount</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className="w-full px-3 py-2 border rounded text-base"
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <label className="block text-sm mb-1">Payment mode</label>
+                <select value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)} className="w-full px-3 py-2 border rounded text-base">
+                  {PAYMENT_MODES.map((p) => (
+                    <option key={p.value} value={p.value}>{p.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={submit} disabled={loading} className="flex-1 px-4 py-2.5 bg-teal-600 text-white rounded touch-manipulation">
+                Add
+              </button>
+              <button onClick={() => setShow(false)} className="px-4 py-2.5 bg-slate-200 rounded touch-manipulation">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function ViewPaymentsModal({ booking, token }: { booking: Booking; token: string }) {
+  const [show, setShow] = useState(false);
+  const [payments, setPayments] = useState<FolioPayment[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (show && booking.id) {
+      setLoading(true);
+      api<FolioPayment[]>(`/hotel/bookings/${booking.id}/payments`, { token })
+        .then(setPayments)
+        .catch(() => setPayments([]))
+        .finally(() => setLoading(false));
+    }
+  }, [show, booking.id, token]);
+
+  return (
+    <>
+      <button onClick={() => setShow(true)} className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded text-sm touch-manipulation">
+        View Payments
+      </button>
+      {show && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-4 sm:p-5 rounded-lg max-w-sm w-full max-h-[80vh] overflow-auto">
+            <h3 className="font-medium mb-3">Payment history — {booking.guestName}</h3>
+            {loading ? (
+              <p className="text-slate-500">Loading...</p>
+            ) : payments.length === 0 ? (
+              <p className="text-slate-500">No payments recorded</p>
+            ) : (
+              <ul className="space-y-2">
+                {payments.map((p) => (
+                  <li key={p.id} className="flex justify-between text-sm py-2 border-b">
+                    <span>{formatTzs(parseFloat(p.amount))} · {PAYMENT_MODES.find(m => m.value === p.paymentMode)?.label ?? p.paymentMode}</span>
+                    <span className="text-slate-500 text-xs">{new Date(p.createdAt).toLocaleString()}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button onClick={() => setShow(false)} className="mt-4 w-full px-4 py-2 bg-slate-200 rounded touch-manipulation">Close</button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function FolioList({
   folios,
   token,
@@ -399,8 +733,8 @@ function FolioList({
     <div className="space-y-4">
       <p className="text-sm text-slate-600">Active folios are checked-in bookings. View details and manage stay.</p>
       {folios.map((b) => (
-        <div key={b.id} className="p-4 bg-white border rounded">
-          <div className="flex justify-between items-start mb-2">
+        <div key={b.id} className="p-4 sm:p-5 bg-white border rounded-lg">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-3">
             <div>
               <div className="font-medium">{b.guestName} {b.guestPhone && `· ${b.guestPhone}`}</div>
               <div className="text-sm text-slate-600">Room {b.room.roomNumber} · {b.room.category?.name}</div>
@@ -409,21 +743,23 @@ function FolioList({
                 {b.servedBy && ` · Served by: ${b.servedBy}`}
               </div>
             </div>
-            <div className="text-right">
+            <div className="text-left sm:text-right">
               <div className="font-semibold">{formatTzs(parseFloat(b.totalAmount))}</div>
-              <div className="text-xs text-slate-500">Balance (read-only)</div>
+              <div className="text-xs text-slate-500">Total charges</div>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t">
-            <button onClick={() => checkOut(b.id)} className="px-3 py-1 bg-teal-600 text-white rounded text-sm">
+          <div className="flex flex-wrap gap-2 pt-3 border-t">
+            <button onClick={() => checkOut(b.id)} className="px-3 py-1.5 bg-teal-600 text-white rounded text-sm touch-manipulation">
               Check-out
             </button>
             <ExtendStayModal booking={b} token={token} onDone={onAction} />
+            <AddPaymentModal booking={b} token={token} onDone={onAction} />
+            {isManager && <ViewPaymentsModal booking={b} token={token} />}
             {vacantRooms.length > 0 && (
               <select
                 value=""
                 onChange={(e) => { const v = e.target.value; if (v) changeRoom(b.id, v); e.target.value = ''; }}
-                className="px-2 py-1 border rounded text-sm"
+                className="px-2 py-1.5 border rounded text-sm touch-manipulation"
               >
                 <option value="">Change room</option>
                 {vacantRooms.filter((r) => r.id !== b.room.id).map((r) => (
@@ -431,7 +767,6 @@ function FolioList({
                 ))}
               </select>
             )}
-            {isManager && <span className="text-xs text-slate-400 px-2">View payments (read-only) — coming soon</span>}
           </div>
         </div>
       ))}
@@ -457,6 +792,8 @@ function NewBookingForm({
   const [guestPhone, setGuestPhone] = useState('');
   const [checkIn, setCheckIn] = useState('');
   const [checkOut, setCheckOut] = useState('');
+  const [currency, setCurrency] = useState('TZS');
+  const [paymentMode, setPaymentMode] = useState('');
   const [loading, setLoading] = useState(false);
 
   const category = categories.find((c) => c.id === categoryId);
@@ -468,7 +805,9 @@ function NewBookingForm({
     ? Math.max(0, Math.ceil((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / (1000 * 60 * 60 * 24)))
     : 0;
   const pricePerNight = room ? parseFloat(room.category.pricePerNight) : category ? parseFloat(category.pricePerNight) : 0;
-  const total = nights * pricePerNight;
+  const totalTzs = nights * pricePerNight;
+  const curr = CURRENCIES.find((c) => c.code === currency) || CURRENCIES[0];
+  const totalDisplay = totalTzs / curr.rate;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -485,6 +824,8 @@ function NewBookingForm({
           checkIn,
           checkOut,
           nights,
+          currency,
+          paymentMode: paymentMode || undefined,
         }),
       });
       onDone();
@@ -496,19 +837,19 @@ function NewBookingForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="max-w-md space-y-4">
+    <form onSubmit={handleSubmit} className="max-w-lg space-y-4">
       <div>
         <label className="block text-sm mb-1">Room Category</label>
-        <select value={categoryId} onChange={(e) => { setCategoryId(e.target.value); setRoomId(''); }} className="w-full px-3 py-2 border rounded" required>
+        <select value={categoryId} onChange={(e) => { setCategoryId(e.target.value); setRoomId(''); }} className="w-full px-3 py-2.5 border rounded text-base" required>
           <option value="">Select category</option>
           {categories.map((c) => (
-            <option key={c.id} value={c.id}>{c.name} — {formatTzs(parseFloat(c.pricePerNight))}/night</option>
+            <option key={c.id} value={c.id}>{c.name} — {formatCurrency(parseFloat(c.pricePerNight), 'TZS')}/night</option>
           ))}
         </select>
       </div>
       <div>
         <label className="block text-sm mb-1">Room</label>
-        <select value={roomId} onChange={(e) => setRoomId(e.target.value)} className="w-full px-3 py-2 border rounded" required disabled={!categoryId}>
+        <select value={roomId} onChange={(e) => setRoomId(e.target.value)} className="w-full px-3 py-2.5 border rounded text-base" required disabled={!categoryId}>
           <option value="">Select room</option>
           {availableRooms.map((r) => (
             <option key={r.id} value={r.id}>{r.roomNumber} - {r.category.name}</option>
@@ -517,34 +858,57 @@ function NewBookingForm({
       </div>
       <div>
         <label className="block text-sm mb-1">Guest Name</label>
-        <input value={guestName} onChange={(e) => setGuestName(e.target.value)} className="w-full px-3 py-2 border rounded" required />
+        <input value={guestName} onChange={(e) => setGuestName(e.target.value)} className="w-full px-3 py-2.5 border rounded text-base" required />
       </div>
       <div>
         <label className="block text-sm mb-1">Phone / ID (optional)</label>
-        <input value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} className="w-full px-3 py-2 border rounded" />
+        <input value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} className="w-full px-3 py-2.5 border rounded text-base" />
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm mb-1">Check-in</label>
-          <input type="date" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="w-full px-3 py-2 border rounded" required />
+          <input type="date" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="w-full px-3 py-2.5 border rounded text-base" required />
         </div>
         <div>
           <label className="block text-sm mb-1">Check-out</label>
-          <input type="date" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="w-full px-3 py-2 border rounded" required />
+          <input type="date" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="w-full px-3 py-2.5 border rounded text-base" required />
         </div>
       </div>
-      <div className="p-3 bg-slate-50 rounded text-sm">
-        <div>Nights: {nights}</div>
-        <div>Price/night: {formatTzs(pricePerNight)}</div>
-        <div className="font-medium">Total: {formatTzs(total)}</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm mb-1">Currency</label>
+          <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="w-full px-3 py-2.5 border rounded text-base">
+            {CURRENCIES.map((c) => (
+              <option key={c.code} value={c.code}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm mb-1">Payment mode (optional)</label>
+          <select value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)} className="w-full px-3 py-2.5 border rounded text-base">
+            <option value="">—</option>
+            {PAYMENT_MODES.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
-      <button type="submit" disabled={loading} className="px-4 py-2 bg-teal-600 text-white rounded">
+      <div className="p-3 sm:p-4 bg-slate-50 rounded-lg text-sm">
+        <div>Nights: {nights}</div>
+        <div>Price/night: {formatCurrency(pricePerNight, 'TZS')} <span className="text-slate-500">(read-only)</span></div>
+        <div className="font-medium mt-1">Total: {formatCurrency(totalDisplay, currency)}</div>
+      </div>
+      <button type="submit" disabled={loading} className="px-4 py-3 bg-teal-600 text-white rounded touch-manipulation min-h-[44px] w-full sm:w-auto">
         Create Booking
       </button>
     </form>
   );
 }
 
+function formatCurrency(n: number, currency: string = 'TZS') {
+  return new Intl.NumberFormat('en', { style: 'currency', currency, maximumFractionDigits: 0 }).format(n);
+}
+
 function formatTzs(n: number) {
-  return new Intl.NumberFormat('en-TZ', { style: 'currency', currency: 'TZS', maximumFractionDigits: 0 }).format(n);
+  return formatCurrency(n, 'TZS');
 }

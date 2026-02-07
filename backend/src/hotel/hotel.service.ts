@@ -2,9 +2,37 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
 
+const PAYMENT_MODES = ['CASH', 'BANK', 'MPESA', 'TIGOPESA', 'AIRTEL_MONEY'] as const;
+
 @Injectable()
 export class HotelService {
   constructor(private prisma: PrismaService) {}
+
+  async logAudit(
+    userId: string,
+    role: string,
+    businessId: string,
+    actionType: string,
+    entityType?: string,
+    entityId?: string,
+    metadata?: object,
+  ) {
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          userId,
+          role,
+          businessId,
+          actionType,
+          entityType,
+          entityId,
+          metadata: metadata ? JSON.stringify(metadata) : null,
+        },
+      });
+    } catch {
+      // Non-fatal: log failures should not break operations
+    }
+  }
 
   // Room Categories
   async createCategory(
@@ -13,7 +41,7 @@ export class HotelService {
     data: { name: string; pricePerNight: number; description?: string },
     createdBy: string,
   ) {
-    return this.prisma.roomCategory.create({
+    const cat = await this.prisma.roomCategory.create({
       data: {
         businessId,
         branchId,
@@ -23,6 +51,7 @@ export class HotelService {
         createdBy,
       },
     });
+    return cat;
   }
 
   async getCategories(businessId: string, branchId: string) {
@@ -36,19 +65,21 @@ export class HotelService {
   async createRoom(
     businessId: string,
     branchId: string,
-    data: { categoryId: string; roomNumber: string },
+    data: { categoryId: string; roomNumber: string; roomName?: string },
     createdBy: string,
   ) {
-    return this.prisma.room.create({
+    const room = await this.prisma.room.create({
       data: {
         businessId,
         branchId,
         categoryId: data.categoryId,
         roomNumber: data.roomNumber,
+        roomName: data.roomName,
         status: 'VACANT',
         createdBy,
       },
     });
+    return room;
   }
 
   async getRooms(businessId: string, branchId: string) {
@@ -62,7 +93,15 @@ export class HotelService {
     businessId: string,
     roomId: string,
     status: string,
+    userId?: string,
+    role?: string,
   ) {
+    const valid = ['VACANT', 'OCCUPIED', 'RESERVED', 'UNDER_MAINTENANCE'];
+    if (!valid.includes(status)) throw new NotFoundException('Invalid status');
+    // Only MANAGER can set UNDER_MAINTENANCE
+    if (status === 'UNDER_MAINTENANCE' && role !== 'MANAGER' && role !== 'ADMIN') {
+      throw new NotFoundException('Only manager can set room to maintenance');
+    }
     return this.prisma.room.update({
       where: { id: roomId, businessId },
       data: { status },
@@ -80,6 +119,8 @@ export class HotelService {
       checkIn: Date;
       checkOut: Date;
       nights: number;
+      currency?: string;
+      paymentMode?: string;
     },
     createdBy: string,
   ) {
@@ -103,6 +144,8 @@ export class HotelService {
         checkOut: data.checkOut,
         nights: data.nights,
         totalAmount: new Decimal(totalAmount),
+        currency: data.currency || 'TZS',
+        paymentMode: data.paymentMode,
         status: 'CONFIRMED',
         folioNumber,
         createdBy,
@@ -116,6 +159,45 @@ export class HotelService {
     });
 
     return booking;
+  }
+
+  async addPayment(
+    bookingId: string,
+    businessId: string,
+    data: { amount: number; paymentMode: string },
+    createdBy: string,
+  ) {
+    const b = await this.prisma.booking.findFirst({
+      where: { id: bookingId, businessId },
+      include: { payments: true },
+    });
+    if (!b) throw new NotFoundException('Booking not found');
+    if (b.status !== 'CHECKED_IN') {
+      throw new NotFoundException('Can only add payments to checked-in bookings');
+    }
+    if (!PAYMENT_MODES.includes(data.paymentMode as any)) {
+      throw new NotFoundException('Invalid payment mode');
+    }
+    await this.prisma.folioPayment.create({
+      data: {
+        bookingId,
+        amount: new Decimal(data.amount),
+        paymentMode: data.paymentMode,
+        createdBy,
+      },
+    });
+    return { message: 'Payment added' };
+  }
+
+  async getPayments(bookingId: string, businessId: string) {
+    const b = await this.prisma.booking.findFirst({
+      where: { id: bookingId, businessId },
+    });
+    if (!b) throw new NotFoundException('Booking not found');
+    return this.prisma.folioPayment.findMany({
+      where: { bookingId },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   async getBookings(
