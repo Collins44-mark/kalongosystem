@@ -55,10 +55,16 @@ export class HotelService {
   }
 
   async getCategories(businessId: string, branchId: string) {
-    return this.prisma.roomCategory.findMany({
+    const categories = await this.prisma.roomCategory.findMany({
       where: { businessId, branchId },
       include: { rooms: true },
     });
+    return categories.map((c) => ({
+      id: c.id,
+      name: c.name,
+      pricePerNight: String(c.pricePerNight),
+      rooms: c.rooms,
+    }));
   }
 
   // Rooms

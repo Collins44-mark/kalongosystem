@@ -120,9 +120,9 @@ export default function FrontOfficePage() {
       api<Booking[]>(`/hotel/bookings?${params}`, { token }).catch(() => []),
     ])
       .then(([c, r, b]) => {
-        setCategories(c);
-        setRooms(r);
-        setBookings(b);
+        setCategories(Array.isArray(c) ? c : []);
+        setRooms(Array.isArray(r) ? r : []);
+        setBookings(Array.isArray(b) ? b : []);
       })
       .finally(() => setLoading(false));
   }, [token, isManager, activeTab, bookingFrom, bookingTo]);
@@ -145,11 +145,15 @@ export default function FrontOfficePage() {
     } else {
       params.set('scope', 'today');
     }
-    api<Booking[]>(`/hotel/bookings?${params}`, { token })
-      .then(setBookings)
-      .catch(() => {});
-    api<Room[]>('/hotel/rooms', { token }).then(setRooms).catch(() => {});
-    api<Category[]>('/hotel/categories', { token }).then(setCategories).catch(() => {});
+    Promise.all([
+      api<Category[]>('/hotel/categories', { token }).catch(() => []),
+      api<Room[]>('/hotel/rooms', { token }).catch(() => []),
+      api<Booking[]>(`/hotel/bookings?${params}`, { token }).catch(() => []),
+    ]).then(([c, r, b]) => {
+      setCategories(Array.isArray(c) ? c : []);
+      setRooms(Array.isArray(r) ? r : []);
+      setBookings(Array.isArray(b) ? b : []);
+    });
   }
 
   if (loading) return <div className="text-slate-500">Loading...</div>;
@@ -416,18 +420,23 @@ function RoomSetup({
   async function createCategory(e: React.FormEvent) {
     e.preventDefault();
     if (!catName || !catPrice) return;
+    const price = parseFloat(catPrice);
+    if (isNaN(price) || price < 0) {
+      alert('Please enter a valid price');
+      return;
+    }
     setLoading(true);
     try {
       await api('/hotel/categories', {
         method: 'POST',
         token,
-        body: JSON.stringify({ name: catName, pricePerNight: parseFloat(catPrice) }),
+        body: JSON.stringify({ name: catName.trim(), pricePerNight: price }),
       });
       setCatName('');
       setCatPrice('');
       onAction();
     } catch (err) {
-      alert((err as Error).message);
+      alert((err as Error).message || 'Failed to add category');
     } finally {
       setLoading(false);
     }
@@ -475,6 +484,11 @@ function RoomSetup({
     <div className="space-y-6">
       <section className="bg-white border rounded-lg p-4 sm:p-5">
         <h2 className="text-base font-semibold mb-3">Create Room Category</h2>
+        {categories.length > 0 && (
+          <p className="text-sm text-slate-600 mb-3">
+            Existing categories: {categories.map((c) => c.name).join(', ')}
+          </p>
+        )}
         <form onSubmit={createCategory} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="block text-sm mb-1">Category name</label>
@@ -517,7 +531,7 @@ function RoomSetup({
               className="w-full px-3 py-2 border rounded text-base"
               required
             >
-              <option value="">Select</option>
+              <option value="">{categories.length === 0 ? 'No categories yet — add one above' : 'Select category'}</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}

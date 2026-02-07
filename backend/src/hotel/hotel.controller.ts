@@ -101,7 +101,7 @@ export class HotelController {
 
   @Get('categories')
   async getCategories(@CurrentUser() user: any) {
-    return this.hotel.getCategories(user.businessId, user.branchId);
+    return this.hotel.getCategories(user.businessId, user.branchId || 'main');
   }
 
   @Post('rooms')
@@ -120,7 +120,7 @@ export class HotelController {
 
   @Get('rooms')
   async getRooms(@CurrentUser() user: any) {
-    return this.hotel.getRooms(user.businessId, user.branchId);
+    return this.hotel.getRooms(user.businessId, user.branchId || 'main');
   }
 
   @Put('rooms/:id/status')
