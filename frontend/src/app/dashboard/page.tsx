@@ -99,6 +99,16 @@ export default function OverviewPage() {
     return () => document.removeEventListener('visibilitychange', handler);
   }, [token, period]);
 
+  // Refetch when Front Office updates rooms (cross-tab)
+  useEffect(() => {
+    if (!token) return;
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'hms-data-updated') fetchOverview();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [token, period]);
+
   // Auto-refresh every 30s when visible so room counts/amounts stay current
   useEffect(() => {
     if (!token) return;
@@ -305,12 +315,12 @@ export default function OverviewPage() {
 
 function RoomCard({ title, value, variant }: { title: string; value: number; variant: 'occupied' | 'vacant' | 'reserved' | 'maintenance' }) {
   const styles = {
-    occupied: 'border-2 border-amber-400 ring-2 ring-amber-100 bg-white',
-    vacant: 'border-2 border-sky-400 ring-2 ring-sky-100 bg-white',
-    reserved: 'border-2 border-blue-400 ring-2 ring-blue-100 bg-white',
+    occupied: 'border-2 border-green-400 ring-2 ring-green-100 bg-white',
+    vacant: 'border-2 border-slate-300 ring-2 ring-slate-100 bg-white',
+    reserved: 'border-2 border-amber-400 ring-2 ring-amber-100 bg-white',
     maintenance: 'border-2 border-red-400 ring-2 ring-red-100 bg-white',
   };
-  const valueColor = variant === 'occupied' ? 'text-amber-700' : variant === 'vacant' ? 'text-sky-700' : variant === 'maintenance' ? 'text-red-600' : variant === 'reserved' ? 'text-blue-700' : 'text-slate-800';
+  const valueColor = variant === 'occupied' ? 'text-green-600' : variant === 'vacant' ? 'text-slate-700' : variant === 'maintenance' ? 'text-red-600' : variant === 'reserved' ? 'text-amber-700' : 'text-slate-800';
   return (
     <div className={`rounded-xl p-5 shadow-md min-h-[100px] flex flex-col justify-center ${styles[variant]}`}>
       <div className="text-sm text-slate-500">{title}</div>

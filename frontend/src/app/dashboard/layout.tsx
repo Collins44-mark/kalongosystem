@@ -25,8 +25,8 @@ type MeResponse = {
 };
 
 const SIDEBAR_LINKS: { href: string; label: string; roles: string[] }[] = [
-  { href: '/dashboard', label: 'Overview', roles: ['MANAGER'] },
-  { href: '/dashboard/front-office', label: 'Front Office', roles: ['MANAGER', 'FRONT_OFFICE'] },
+  { href: '/dashboard', label: 'Overview', roles: ['MANAGER', 'ADMIN', 'OWNER'] },
+  { href: '/dashboard/front-office', label: 'Front Office', roles: ['MANAGER', 'ADMIN', 'OWNER', 'FRONT_OFFICE'] },
   { href: '/dashboard/bar', label: 'Bar', roles: ['MANAGER', 'BAR'] },
   { href: '/dashboard/restaurant', label: 'Restaurant', roles: ['MANAGER', 'RESTAURANT', 'KITCHEN'] },
   { href: '/dashboard/housekeeping', label: 'Housekeeping', roles: ['MANAGER', 'HOUSEKEEPING'] },
@@ -66,7 +66,7 @@ export default function DashboardLayout({
       .finally(() => setMeLoading(false));
   }, [token]);
 
-  const role = user?.role === 'ADMIN' ? 'MANAGER' : user?.role;
+  const role = ['ADMIN', 'OWNER'].includes(user?.role || '') ? 'MANAGER' : user?.role;
   const visibleLinks = SIDEBAR_LINKS.filter((l) =>
     l.roles.includes(role || '')
   );
