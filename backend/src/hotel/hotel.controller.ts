@@ -90,7 +90,7 @@ export class HotelController {
   ) {
     const cat = await this.hotel.createCategory(
       user.businessId,
-      user.branchId,
+      user.branchId || 'main',
       dto,
       user.sub,
     );
@@ -109,7 +109,7 @@ export class HotelController {
   async createRoom(@CurrentUser() user: any, @Body() dto: CreateRoomDto) {
     const room = await this.hotel.createRoom(
       user.businessId,
-      user.branchId,
+      user.branchId || 'main',
       dto,
       user.sub,
     );

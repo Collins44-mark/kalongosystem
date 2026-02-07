@@ -172,8 +172,8 @@ export class AuthService {
       email: payload.email,
       businessId: payload.businessId,
       businessCode: payload.businessCode,
-      role: payload.role,
-      branchId: payload.branchId || 'main',
+      role: bu.role || payload.role || 'MANAGER',
+      branchId: bu.branchId || payload.branchId || 'main',
     };
   }
 }
