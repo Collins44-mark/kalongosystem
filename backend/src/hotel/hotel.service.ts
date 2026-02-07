@@ -54,6 +54,37 @@ export class HotelService {
     return cat;
   }
 
+  async updateCategory(
+    businessId: string,
+    categoryId: string,
+    data: { name?: string; pricePerNight?: number },
+  ) {
+    const cat = await this.prisma.roomCategory.findFirst({
+      where: { id: categoryId, businessId },
+    });
+    if (!cat) throw new NotFoundException('Category not found');
+    const updateData: Record<string, unknown> = {};
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.pricePerNight !== undefined) updateData.pricePerNight = new Decimal(data.pricePerNight);
+    return this.prisma.roomCategory.update({
+      where: { id: categoryId },
+      data: updateData,
+    });
+  }
+
+  async deleteCategory(businessId: string, categoryId: string) {
+    const cat = await this.prisma.roomCategory.findFirst({
+      where: { id: categoryId, businessId },
+      include: { rooms: true },
+    });
+    if (!cat) throw new NotFoundException('Category not found');
+    if (cat.rooms.length > 0) {
+      throw new NotFoundException('Delete all rooms in this category first');
+    }
+    await this.prisma.roomCategory.delete({ where: { id: categoryId } });
+    return { success: true };
+  }
+
   async getCategories(businessId: string, branchId?: string) {
     const where: { businessId: string; branchId?: string } = { businessId };
     if (branchId) where.branchId = branchId;
@@ -110,6 +141,39 @@ export class HotelService {
         pricePerNight: String(r.category.pricePerNight),
       },
     }));
+  }
+
+  async updateRoom(
+    businessId: string,
+    roomId: string,
+    data: { roomNumber?: string; roomName?: string; categoryId?: string },
+  ) {
+    const room = await this.prisma.room.findFirst({
+      where: { id: roomId, businessId },
+    });
+    if (!room) throw new NotFoundException('Room not found');
+    const updateData: Record<string, unknown> = {};
+    if (data.roomNumber !== undefined) updateData.roomNumber = data.roomNumber;
+    if (data.roomName !== undefined) updateData.roomName = data.roomName;
+    if (data.categoryId !== undefined) updateData.categoryId = data.categoryId;
+    return this.prisma.room.update({
+      where: { id: roomId },
+      data: updateData,
+      include: { category: true },
+    });
+  }
+
+  async deleteRoom(businessId: string, roomId: string) {
+    const room = await this.prisma.room.findFirst({
+      where: { id: roomId, businessId },
+      include: { bookings: { where: { status: { in: ['CONFIRMED', 'CHECKED_IN', 'RESERVED'] } } } },
+    });
+    if (!room) throw new NotFoundException('Room not found');
+    if (room.bookings.length > 0) {
+      throw new NotFoundException('Cannot delete room with active or upcoming bookings');
+    }
+    await this.prisma.room.delete({ where: { id: roomId } });
+    return { success: true };
   }
 
   async updateRoomStatus(

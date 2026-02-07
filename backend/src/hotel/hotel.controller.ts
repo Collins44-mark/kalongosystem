@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -109,6 +110,25 @@ export class HotelController {
     return this.hotel.getCategories(user.businessId);
   }
 
+  @Put('categories/:id')
+  @SkipRolesGuard()
+  @UseGuards(AllowManagerGuard)
+  async updateCategory(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body() dto: { name?: string; pricePerNight?: number },
+  ) {
+    const cat = await this.hotel.updateCategory(user.businessId, id, dto);
+    return { id: cat.id, name: cat.name, pricePerNight: String(cat.pricePerNight) };
+  }
+
+  @Delete('categories/:id')
+  @SkipRolesGuard()
+  @UseGuards(AllowManagerGuard)
+  async deleteCategory(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.hotel.deleteCategory(user.businessId, id);
+  }
+
   @Post('rooms')
   @SkipRolesGuard()
   @UseGuards(AllowManagerGuard)
@@ -127,6 +147,31 @@ export class HotelController {
   @SkipRolesGuard()
   async getRooms(@CurrentUser() user: any) {
     return this.hotel.getRooms(user.businessId);
+  }
+
+  @Put('rooms/:id')
+  @SkipRolesGuard()
+  @UseGuards(AllowManagerGuard)
+  async updateRoom(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body() dto: { roomNumber?: string; roomName?: string; categoryId?: string },
+  ) {
+    const room = await this.hotel.updateRoom(user.businessId, id, dto);
+    return {
+      id: room.id,
+      roomNumber: room.roomNumber,
+      roomName: room.roomName,
+      status: room.status,
+      category: { id: room.category.id, name: room.category.name, pricePerNight: String(room.category.pricePerNight) },
+    };
+  }
+
+  @Delete('rooms/:id')
+  @SkipRolesGuard()
+  @UseGuards(AllowManagerGuard)
+  async deleteRoom(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.hotel.deleteRoom(user.businessId, id);
   }
 
   @Put('rooms/:id/status')

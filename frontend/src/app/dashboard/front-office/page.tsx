@@ -395,7 +395,6 @@ function RoomAvailability({
                           {r.roomNumber}
                           {r.roomName && <span className="text-slate-600 font-normal ml-1">({r.roomName})</span>}
                         </div>
-                        <div className="text-xs sm:text-sm text-slate-600 mt-0.5">{r.category.name}</div>
                       </div>
                       <div className="text-xs text-slate-500 mt-1 sm:mt-2">{r.status}</div>
                     </div>
@@ -431,6 +430,19 @@ function RoomSetup({
   const [roomNumber, setRoomNumber] = useState('');
   const [roomName, setRoomName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [editCatName, setEditCatName] = useState('');
+  const [editCatPrice, setEditCatPrice] = useState('');
+  const [editingRoom, setEditingRoom] = useState<Room | null>(null);
+  const [editRoomNumber, setEditRoomNumber] = useState('');
+  const [editRoomName, setEditRoomName] = useState('');
+  const [editRoomCatId, setEditRoomCatId] = useState('');
+
+  const categoryMap = new Map(categories.map((c) => [c.id, c]));
+  const roomsByCategory = [...new Set(rooms.map((r) => r.category.id))].map((catId) => {
+    const cat = categoryMap.get(catId) || { id: catId, name: rooms.find((r) => r.category.id === catId)?.category.name ?? 'Other', pricePerNight: '0' };
+    return { category: cat, rooms: rooms.filter((r) => r.category.id === catId) };
+  }).sort((a, b) => a.category.name.localeCompare(b.category.name));
 
   async function createCategory(e: React.FormEvent) {
     e.preventDefault();
@@ -490,6 +502,84 @@ function RoomSetup({
         token,
         body: JSON.stringify({ status }),
       });
+      onAction();
+    } catch (err) {
+      alert((err as Error).message);
+    }
+  }
+
+  function editCategory(cat: Category) {
+    setEditingCategory(cat);
+    setEditCatName(cat.name);
+    setEditCatPrice(cat.pricePerNight);
+  }
+
+  async function saveCategory() {
+    if (!editingCategory) return;
+    const price = parseFloat(editCatPrice);
+    if (isNaN(price) || price < 0) {
+      alert('Please enter a valid price');
+      return;
+    }
+    setLoading(true);
+    try {
+      await api(`/hotel/categories/${editingCategory.id}`, {
+        method: 'PUT',
+        token,
+        body: JSON.stringify({ name: editCatName.trim(), pricePerNight: price }),
+      });
+      setEditingCategory(null);
+      onAction();
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function deleteCategory(categoryId: string) {
+    if (!confirm('Delete this category? You must delete all rooms in it first.')) return;
+    try {
+      await api(`/hotel/categories/${categoryId}`, { method: 'DELETE', token });
+      onAction();
+    } catch (err) {
+      alert((err as Error).message);
+    }
+  }
+
+  function editRoom(room: Room) {
+    setEditingRoom(room);
+    setEditRoomNumber(room.roomNumber);
+    setEditRoomName(room.roomName || '');
+    setEditRoomCatId(room.category.id);
+  }
+
+  async function saveRoom() {
+    if (!editingRoom) return;
+    setLoading(true);
+    try {
+      await api(`/hotel/rooms/${editingRoom.id}`, {
+        method: 'PUT',
+        token,
+        body: JSON.stringify({
+          roomNumber: editRoomNumber.trim(),
+          roomName: editRoomName.trim() || undefined,
+          categoryId: editRoomCatId,
+        }),
+      });
+      setEditingRoom(null);
+      onAction();
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function deleteRoom(roomId: string) {
+    if (!confirm('Delete this room? Cannot delete if it has active or upcoming bookings.')) return;
+    try {
+      await api(`/hotel/rooms/${roomId}`, { method: 'DELETE', token });
       onAction();
     } catch (err) {
       alert((err as Error).message);
@@ -578,35 +668,150 @@ function RoomSetup({
       </section>
 
       <section className="bg-white border rounded-lg p-4 sm:p-5">
-        <h2 className="text-base font-semibold mb-3">Rooms</h2>
-        <div className="overflow-x-auto -mx-2">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 min-w-0">
-            {rooms.map((r) => (
-              <div
-                key={r.id}
-                className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-lg gap-2"
-              >
-                <div>
-                  <span className="font-medium">{r.roomNumber}</span>
-                  {r.roomName && <span className="text-slate-500 ml-1">({r.roomName})</span>}
-                  <div className="text-xs text-slate-600">{r.category.name}</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs px-2 py-0.5 rounded bg-slate-100">{r.status}</span>
-                  {(r.status === 'VACANT' || r.status === 'UNDER_MAINTENANCE') && (
+        <h2 className="text-base font-semibold mb-3">Your Categories</h2>
+        {categories.length > 0 ? (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {categories.map((c) => (
+              <div key={c.id} className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg border">
+                <span className="font-medium">{c.name}</span>
+                <span className="text-xs text-slate-500">— {formatTzs(parseFloat(c.pricePerNight))}/night</span>
+                <button
+                  onClick={() => editCategory(c)}
+                  className="text-xs px-2 py-0.5 rounded bg-teal-100 text-teal-700 hover:bg-teal-200"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => deleteCategory(c.id)}
+                  className="text-xs px-2 py-0.5 rounded bg-red-100 text-red-700 hover:bg-red-200"
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500 mb-4">No categories yet. Add one above.</p>
+        )}
+      </section>
+
+      <section className="bg-white border rounded-lg p-4 sm:p-5">
+        <h2 className="text-base font-semibold mb-3">Rooms by Category</h2>
+        {roomsByCategory.length > 0 ? (
+          <div className="space-y-6">
+            {roomsByCategory.map(({ category, rooms: catRooms }) => (
+              <div key={category.id} className="border rounded-xl p-4 bg-slate-50/50">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-slate-800">{category.name}</h3>
+                  <div className="flex gap-2">
                     <button
-                      onClick={() => setRoomStatus(r.id, r.status === 'VACANT' ? 'UNDER_MAINTENANCE' : 'VACANT')}
-                      className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-800 hover:bg-amber-200 touch-manipulation"
+                      onClick={() => editCategory(category)}
+                      className="text-xs px-2 py-1 rounded bg-teal-100 text-teal-700 hover:bg-teal-200"
                     >
-                      {r.status === 'VACANT' ? 'Set maintenance' : 'Set available'}
+                      Edit category
                     </button>
-                  )}
+                    <button
+                      onClick={() => deleteCategory(category.id)}
+                      className="text-xs px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200"
+                    >
+                      Delete category
+                    </button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {catRooms.map((r) => (
+                    <div
+                      key={r.id}
+                      className={`p-3 rounded-lg border flex flex-col justify-between min-h-[80px] ${
+                        r.status === 'VACANT' ? 'bg-green-50 border-green-200' :
+                        r.status === 'OCCUPIED' ? 'bg-amber-50 border-amber-200' :
+                        r.status === 'RESERVED' ? 'bg-blue-50 border-blue-200' :
+                        'bg-slate-50 border-slate-200'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-medium">{r.roomNumber}</div>
+                        {r.roomName && <div className="text-xs text-slate-600">{r.roomName}</div>}
+                        <div className="text-xs text-slate-500 mt-0.5">{r.status}</div>
+                      </div>
+                      <div className="flex items-center gap-1 mt-2 flex-wrap">
+                        {(r.status === 'VACANT' || r.status === 'UNDER_MAINTENANCE') && (
+                          <button
+                            onClick={() => setRoomStatus(r.id, r.status === 'VACANT' ? 'UNDER_MAINTENANCE' : 'VACANT')}
+                            className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 hover:bg-amber-200"
+                          >
+                            {r.status === 'VACANT' ? 'Maintenance' : 'Available'}
+                          </button>
+                        )}
+                        <button onClick={() => editRoom(r)} className="text-xs px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 hover:bg-teal-200">
+                          Edit
+                        </button>
+                        <button onClick={() => deleteRoom(r.id)} className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 hover:bg-red-200">
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}
           </div>
-        </div>
+        ) : (
+          <p className="text-slate-500 text-sm py-4">No rooms yet. Add a category above, then create rooms.</p>
+        )}
       </section>
+
+      {editingCategory && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-5 rounded-lg max-w-sm w-full">
+            <h3 className="font-semibold mb-3">Edit Category</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm mb-1">Name</label>
+                <input value={editCatName} onChange={(e) => setEditCatName(e.target.value)} className="w-full px-3 py-2 border rounded" />
+              </div>
+              <div>
+                <label className="block text-sm mb-1">Price per night</label>
+                <input type="number" min="0" step="0.01" value={editCatPrice} onChange={(e) => setEditCatPrice(e.target.value)} className="w-full px-3 py-2 border rounded" />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={saveCategory} disabled={loading} className="px-4 py-2 bg-teal-600 text-white rounded">Save</button>
+              <button onClick={() => setEditingCategory(null)} className="px-4 py-2 bg-slate-200 rounded">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingRoom && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-5 rounded-lg max-w-sm w-full">
+            <h3 className="font-semibold mb-3">Edit Room</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm mb-1">Category</label>
+                <select value={editRoomCatId} onChange={(e) => setEditRoomCatId(e.target.value)} className="w-full px-3 py-2 border rounded">
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm mb-1">Room number</label>
+                <input value={editRoomNumber} onChange={(e) => setEditRoomNumber(e.target.value)} className="w-full px-3 py-2 border rounded" />
+              </div>
+              <div>
+                <label className="block text-sm mb-1">Room name (optional)</label>
+                <input value={editRoomName} onChange={(e) => setEditRoomName(e.target.value)} placeholder="e.g. Lake View" className="w-full px-3 py-2 border rounded" />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={saveRoom} disabled={loading} className="px-4 py-2 bg-teal-600 text-white rounded">Save</button>
+              <button onClick={() => setEditingRoom(null)} className="px-4 py-2 bg-slate-200 rounded">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
