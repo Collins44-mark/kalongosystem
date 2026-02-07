@@ -5,13 +5,19 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { ROLES_KEY } from '../decorators/roles.decorator';
+import { ROLES_KEY, SKIP_ROLES_KEY } from '../decorators/roles.decorator';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
+    const skip = this.reflector.getAllAndOverride<boolean>(SKIP_ROLES_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (skip) return true;
+
     const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
       context.getHandler(),
       context.getClass(),

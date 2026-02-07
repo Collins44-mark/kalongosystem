@@ -12,8 +12,9 @@ import { HotelService } from './hotel.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { SubscriptionGuard } from '../common/guards/subscription.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { Roles } from '../common/decorators/roles.decorator';
+import { Roles, SkipRolesGuard } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { AllowManagerGuard } from '../common/guards/allow-manager.guard';
 import {
   IsDateString,
   IsNumber,
@@ -82,8 +83,8 @@ export class HotelController {
   constructor(private hotel: HotelService) {}
 
   @Post('categories')
-  @UseGuards(RolesGuard)
-  @Roles('MANAGER', 'ADMIN')
+  @SkipRolesGuard()
+  @UseGuards(AllowManagerGuard)
   async createCategory(
     @CurrentUser() user: any,
     @Body() dto: CreateCategoryDto,
@@ -104,8 +105,8 @@ export class HotelController {
   }
 
   @Post('rooms')
-  @UseGuards(RolesGuard)
-  @Roles('MANAGER', 'ADMIN')
+  @SkipRolesGuard()
+  @UseGuards(AllowManagerGuard)
   async createRoom(@CurrentUser() user: any, @Body() dto: CreateRoomDto) {
     const room = await this.hotel.createRoom(
       user.businessId,
