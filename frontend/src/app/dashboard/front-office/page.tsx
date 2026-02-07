@@ -1246,6 +1246,7 @@ function NewBookingForm({
   const [currency, setCurrency] = useState('TZS');
   const [paymentMode, setPaymentMode] = useState('');
   const [totalOverride, setTotalOverride] = useState<string>('');
+  const [checkInImmediately, setCheckInImmediately] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const category = categories.find((c) => c.id === categoryId);
@@ -1283,6 +1284,7 @@ function NewBookingForm({
           totalAmount: totalTzs,
           currency,
           paymentMode: paymentMode || undefined,
+          checkInImmediately: checkInImmediately || undefined,
         }),
       });
       onDone();
@@ -1333,6 +1335,18 @@ function NewBookingForm({
           <label className="block text-sm mb-1">Check-out</label>
           <input type="date" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="w-full px-3 py-2.5 border rounded text-base" required />
         </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="checkInImmediately"
+          checked={checkInImmediately}
+          onChange={(e) => setCheckInImmediately(e.target.checked)}
+          className="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+        />
+        <label htmlFor="checkInImmediately" className="text-sm text-slate-700">
+          Check in immediately — creates as active folio (guest in-house)
+        </label>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>

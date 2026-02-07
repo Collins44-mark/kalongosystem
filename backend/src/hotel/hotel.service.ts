@@ -209,6 +209,7 @@ export class HotelService {
       totalAmount?: number;
       currency?: string;
       paymentMode?: string;
+      checkInImmediately?: boolean;
     },
     createdBy: string,
   ) {
@@ -223,6 +224,10 @@ export class HotelService {
       : Number(room.category.pricePerNight) * data.nights;
     const folioNumber = `FOL-${Date.now()}`;
 
+    // When checkInImmediately: create as active folio (CHECKED_IN) and room OCCUPIED
+    const status = data.checkInImmediately ? 'CHECKED_IN' : 'CONFIRMED';
+    const roomStatus = data.checkInImmediately ? 'OCCUPIED' : 'RESERVED';
+
     const booking = await this.prisma.booking.create({
       data: {
         businessId,
@@ -236,7 +241,7 @@ export class HotelService {
         totalAmount: new Decimal(totalAmount),
         currency: data.currency || 'TZS',
         paymentMode: data.paymentMode,
-        status: 'CONFIRMED',
+        status,
         folioNumber,
         createdBy,
       },
@@ -245,7 +250,7 @@ export class HotelService {
 
     await this.prisma.room.update({
       where: { id: data.roomId },
-      data: { status: 'RESERVED' },
+      data: { status: roomStatus },
     });
 
     return booking;
@@ -464,9 +469,10 @@ export class HotelService {
     });
     if (!b) throw new NotFoundException('Booking not found');
 
+    const actualCheckOut = new Date(); // Auto-detect checkout date (now)
     await this.prisma.booking.update({
       where: { id: bookingId },
-      data: { status: 'CHECKED_OUT' },
+      data: { status: 'CHECKED_OUT', checkOut: actualCheckOut },
     });
     await this.prisma.room.update({
       where: { id: b.roomId },

@@ -17,6 +17,7 @@ import { Roles, SkipRolesGuard } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { AllowManagerGuard } from '../common/guards/allow-manager.guard';
 import {
+  IsBoolean,
   IsDateString,
   IsNumber,
   IsOptional,
@@ -70,6 +71,9 @@ class CreateBookingDto {
   @IsString()
   @IsOptional()
   paymentMode?: string;
+  @IsOptional()
+  @IsBoolean()
+  checkInImmediately?: boolean; // if true, create as CHECKED_IN (active folio) and room OCCUPIED
 }
 
 class AddPaymentDto {
@@ -207,6 +211,7 @@ export class HotelController {
         checkOut: new Date(dto.checkOut),
         currency: dto.currency,
         paymentMode: dto.paymentMode,
+        checkInImmediately: dto.checkInImmediately,
       },
       user.sub,
     );
@@ -221,7 +226,7 @@ export class HotelController {
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
-    const isManager = user.role === 'MANAGER' || user.role === 'ADMIN';
+    const isManager = ['MANAGER', 'ADMIN', 'OWNER'].includes(user.role || '');
     const s = scope && ['all', 'today', 'mine'].includes(scope)
       ? scope
       : isManager
@@ -248,7 +253,7 @@ export class HotelController {
 
   @Post('bookings/:id/cancel')
   @UseGuards(RolesGuard)
-  @Roles('MANAGER', 'ADMIN')
+  @Roles('MANAGER', 'ADMIN', 'OWNER')
   async cancelBooking(@CurrentUser() user: any, @Param('id') id: string) {
     const res = await this.hotel.cancelBooking(id, user.businessId);
     await this.hotel.logAudit(user.sub, user.role || 'MANAGER', user.businessId, 'booking_cancelled', 'booking', id);
@@ -279,7 +284,7 @@ export class HotelController {
 
   @Put('bookings/:id/status')
   @UseGuards(RolesGuard)
-  @Roles('MANAGER', 'ADMIN')
+  @Roles('MANAGER', 'ADMIN', 'OWNER')
   async overrideStatus(
     @CurrentUser() user: any,
     @Param('id') id: string,
