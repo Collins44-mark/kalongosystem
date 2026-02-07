@@ -94,11 +94,22 @@ export class HotelService {
   async getRooms(businessId: string, branchId?: string) {
     const where: { businessId: string; branchId?: string } = { businessId };
     if (branchId) where.branchId = branchId;
-    return this.prisma.room.findMany({
+    const rooms = await this.prisma.room.findMany({
       where,
       include: { category: true },
       orderBy: { roomNumber: 'asc' },
     });
+    return rooms.map((r) => ({
+      id: r.id,
+      roomNumber: r.roomNumber,
+      roomName: r.roomName,
+      status: r.status,
+      category: {
+        id: r.category.id,
+        name: r.category.name,
+        pricePerNight: String(r.category.pricePerNight),
+      },
+    }));
   }
 
   async updateRoomStatus(
@@ -397,9 +408,10 @@ export class HotelService {
     return { message: 'Checked out' };
   }
 
-  async getRoomSummary(businessId: string, branchId: string) {
+  async getRoomSummary(businessId: string, _branchId?: string) {
+    // Count ALL rooms for the business (dashboard overview is business-wide)
     const rooms = await this.prisma.room.findMany({
-      where: { businessId, branchId },
+      where: { businessId },
     });
     const total = rooms.length;
     const occupied = rooms.filter((r) => r.status === 'OCCUPIED').length;

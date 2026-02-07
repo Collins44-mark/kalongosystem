@@ -9,7 +9,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 @Controller('overview')
 @UseGuards(JwtAuthGuard, SubscriptionGuard)
 @UseGuards(RolesGuard)
-@Roles('MANAGER')
+@Roles('MANAGER', 'ADMIN')
 export class OverviewController {
   constructor(private overview: OverviewService) {}
 

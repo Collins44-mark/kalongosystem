@@ -499,12 +499,8 @@ function RoomSetup({
   return (
     <div className="space-y-6">
       <section className="bg-white border rounded-lg p-4 sm:p-5">
-        <h2 className="text-base font-semibold mb-3">Create Room Category</h2>
-        {categories.length > 0 && (
-          <p className="text-sm text-slate-600 mb-3">
-            Existing categories: {categories.map((c) => c.name).join(', ')}
-          </p>
-        )}
+        <h2 className="text-base font-semibold mb-3">Step 1: Create Room Category</h2>
+        <p className="text-sm text-slate-500 mb-3">Add a category with name and price per night. Each category can have multiple rooms.</p>
         <form onSubmit={createCategory} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="block text-sm mb-1">Category name</label>
@@ -537,17 +533,18 @@ function RoomSetup({
       </section>
 
       <section className="bg-white border rounded-lg p-4 sm:p-5">
-        <h2 className="text-base font-semibold mb-3">Create Room</h2>
+        <h2 className="text-base font-semibold mb-3">Step 2: Create Room</h2>
+        <p className="text-sm text-slate-500 mb-3">Choose a category (from step 1), enter room number, then add the room. It will appear in Room Availability and Dashboard.</p>
         <form onSubmit={createRoom} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 items-end">
           <div>
-            <label className="block text-sm mb-1">Category</label>
+            <label className="block text-sm mb-1">Room Category</label>
             <select
               value={roomCatId}
               onChange={(e) => setRoomCatId(e.target.value)}
               className="w-full px-3 py-2 border rounded text-base"
               required
             >
-              <option value="">{categories.length === 0 ? 'No categories yet — add one above' : 'Select category'}</option>
+              <option value="">{categories.length === 0 ? 'Add a category above first' : 'Select category'}</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}

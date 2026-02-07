@@ -69,7 +69,7 @@ export default function OverviewPage() {
     return { financeFrom: '', financeTo: '' };
   })();
 
-  useEffect(() => {
+  function fetchOverview() {
     if (!token) return;
     setLoading(true);
     const emptyData: DashboardData = { ...EMPTY_DASHBOARD, period };
@@ -77,6 +77,26 @@ export default function OverviewPage() {
       .then(setData)
       .catch(() => setData(emptyData))
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    fetchOverview();
+  }, [token, period]);
+
+  // Refresh when page becomes visible (e.g. user returns from Front Office after adding rooms)
+  useEffect(() => {
+    const handler = () => {
+      if (document.visibilityState === 'visible' && token) {
+        setLoading(true);
+        const emptyData: DashboardData = { ...EMPTY_DASHBOARD, period };
+        api<DashboardData>(`/overview?period=${period}`, { token })
+          .then(setData)
+          .catch(() => setData(emptyData))
+          .finally(() => setLoading(false));
+      }
+    };
+    document.addEventListener('visibilitychange', handler);
+    return () => document.removeEventListener('visibilitychange', handler);
   }, [token, period]);
 
   useEffect(() => {
@@ -114,6 +134,9 @@ export default function OverviewPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button onClick={() => fetchOverview()} className="px-3 py-1.5 text-sm text-teal-600 hover:underline">
+            Refresh
+          </button>
           <div className="flex rounded-full bg-slate-100 p-1 gap-0.5 transition-all duration-200">
             {(['today', 'week', 'month'] as const).map((f) => (
               <button
