@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { FinanceService } from '../finance/finance.service';
 import { BarService } from '../bar/bar.service';
@@ -9,6 +9,7 @@ import { WorkersService } from '../workers/workers.service';
 export class ReportsService {
   constructor(
     private prisma: PrismaService,
+    @Inject(forwardRef(() => FinanceService))
     private finance: FinanceService,
     private bar: BarService,
     private restaurant: RestaurantService,
