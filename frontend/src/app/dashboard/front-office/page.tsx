@@ -44,6 +44,7 @@ export default function FrontOfficePage() {
   const [activeTab, setActiveTab] = useState<string>('rooms');
   const [loading, setLoading] = useState(true);
   const [scope, setScope] = useState<'all' | 'today' | 'mine'>('all');
+  const [roomStatusFilter, setRoomStatusFilter] = useState<string>('all');
 
   const isManager = user?.role === 'MANAGER' || user?.role === 'ADMIN';
 
@@ -133,26 +134,12 @@ export default function FrontOfficePage() {
       </div>
 
       {activeTab === 'rooms' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
-          {rooms.map((r) => (
-            <div
-              key={r.id}
-              className={`p-3 sm:p-4 rounded-lg border ${
-                r.status === 'VACANT'
-                  ? 'bg-green-50 border-green-200'
-                  : r.status === 'OCCUPIED'
-                  ? 'bg-amber-50 border-amber-200'
-                  : r.status === 'RESERVED'
-                  ? 'bg-blue-50 border-blue-200'
-                  : 'bg-slate-50 border-slate-200'
-              }`}
-            >
-              <div className="font-medium text-sm sm:text-base">{r.roomNumber}</div>
-              <div className="text-xs sm:text-sm text-slate-600">{r.category.name}</div>
-              <div className="text-xs text-slate-500 mt-0.5">{r.status}</div>
-            </div>
-          ))}
-        </div>
+        <RoomAvailability
+          rooms={rooms}
+          isManager={isManager}
+          roomStatusFilter={roomStatusFilter}
+          onFilterChange={setRoomStatusFilter}
+        />
       )}
 
       {activeTab === 'setup' && isManager && (
@@ -202,6 +189,80 @@ export default function FrontOfficePage() {
           rooms={rooms}
           onAction={refresh}
         />
+      )}
+    </div>
+  );
+}
+
+const ROOM_STATUS_OPTIONS = [
+  { value: 'all', label: 'All' },
+  { value: 'VACANT', label: 'Vacant' },
+  { value: 'OCCUPIED', label: 'Occupied' },
+  { value: 'RESERVED', label: 'Reserved' },
+  { value: 'UNDER_MAINTENANCE', label: 'Maintenance' },
+];
+
+function RoomAvailability({
+  rooms,
+  isManager,
+  roomStatusFilter,
+  onFilterChange,
+}: {
+  rooms: Room[];
+  isManager: boolean;
+  roomStatusFilter: string;
+  onFilterChange: (v: string) => void;
+}) {
+  const filteredRooms =
+    roomStatusFilter === 'all'
+      ? rooms
+      : rooms.filter((r) => r.status === roomStatusFilter);
+
+  return (
+    <div className="space-y-3 sm:space-y-4">
+      {isManager && (
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="text-sm text-slate-600">Filter by status:</label>
+          <select
+            value={roomStatusFilter}
+            onChange={(e) => onFilterChange(e.target.value)}
+            className="px-3 py-2 border rounded-lg text-sm touch-manipulation min-h-[44px] sm:min-h-0 bg-white"
+          >
+            {ROOM_STATUS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+      )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
+        {filteredRooms.map((r) => (
+          <div
+            key={r.id}
+            className={`p-3 sm:p-4 rounded-lg border min-h-[80px] flex flex-col justify-between ${
+              r.status === 'VACANT'
+                ? 'bg-green-50 border-green-200'
+                : r.status === 'OCCUPIED'
+                ? 'bg-amber-50 border-amber-200'
+                : r.status === 'RESERVED'
+                ? 'bg-blue-50 border-blue-200'
+                : 'bg-slate-50 border-slate-200'
+            }`}
+          >
+            <div>
+              <div className="font-medium text-sm sm:text-base">
+                {r.roomNumber}
+                {r.roomName && (
+                  <span className="text-slate-600 font-normal ml-1">({r.roomName})</span>
+                )}
+              </div>
+              <div className="text-xs sm:text-sm text-slate-600 mt-0.5">{r.category.name}</div>
+            </div>
+            <div className="text-xs text-slate-500 mt-1 sm:mt-2">{r.status}</div>
+          </div>
+        ))}
+      </div>
+      {filteredRooms.length === 0 && (
+        <p className="text-slate-500 text-sm py-4">No rooms match the selected filter.</p>
       )}
     </div>
   );
@@ -848,13 +909,16 @@ function NewBookingForm({
         </select>
       </div>
       <div>
-        <label className="block text-sm mb-1">Room</label>
-        <select value={roomId} onChange={(e) => setRoomId(e.target.value)} className="w-full px-3 py-2.5 border rounded text-base" required disabled={!categoryId}>
-          <option value="">Select room</option>
+        <label className="block text-sm mb-1">Room (available only)</label>
+        <select value={roomId} onChange={(e) => setRoomId(e.target.value)} className="w-full px-3 py-2.5 border rounded text-base touch-manipulation" required disabled={!categoryId}>
+          <option value="">{categoryId && availableRooms.length === 0 ? 'No vacant rooms in this category' : 'Select room'}</option>
           {availableRooms.map((r) => (
-            <option key={r.id} value={r.id}>{r.roomNumber} - {r.category.name}</option>
+            <option key={r.id} value={r.id}>{r.roomNumber}{r.roomName ? ` - ${r.roomName}` : ''} · {r.category.name}</option>
           ))}
         </select>
+        {categoryId && availableRooms.length === 0 && (
+          <p className="text-xs text-amber-600 mt-1">All rooms in this category are booked or occupied.</p>
+        )}
       </div>
       <div>
         <label className="block text-sm mb-1">Guest Name</label>

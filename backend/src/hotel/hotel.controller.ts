@@ -77,13 +77,13 @@ class AddPaymentDto {
 @Controller('hotel')
 @UseGuards(JwtAuthGuard, SubscriptionGuard)
 @UseGuards(RolesGuard)
-@Roles('MANAGER', 'FRONT_OFFICE')
+@Roles('MANAGER', 'ADMIN', 'FRONT_OFFICE')
 export class HotelController {
   constructor(private hotel: HotelService) {}
 
   @Post('categories')
   @UseGuards(RolesGuard)
-  @Roles('MANAGER')
+  @Roles('MANAGER', 'ADMIN')
   async createCategory(
     @CurrentUser() user: any,
     @Body() dto: CreateCategoryDto,
@@ -105,7 +105,7 @@ export class HotelController {
 
   @Post('rooms')
   @UseGuards(RolesGuard)
-  @Roles('MANAGER')
+  @Roles('MANAGER', 'ADMIN')
   async createRoom(@CurrentUser() user: any, @Body() dto: CreateRoomDto) {
     const room = await this.hotel.createRoom(
       user.businessId,
@@ -189,7 +189,7 @@ export class HotelController {
 
   @Post('bookings/:id/cancel')
   @UseGuards(RolesGuard)
-  @Roles('MANAGER')
+  @Roles('MANAGER', 'ADMIN')
   async cancelBooking(@CurrentUser() user: any, @Param('id') id: string) {
     const res = await this.hotel.cancelBooking(id, user.businessId);
     await this.hotel.logAudit(user.sub, user.role || 'MANAGER', user.businessId, 'booking_cancelled', 'booking', id);
@@ -220,7 +220,7 @@ export class HotelController {
 
   @Put('bookings/:id/status')
   @UseGuards(RolesGuard)
-  @Roles('MANAGER')
+  @Roles('MANAGER', 'ADMIN')
   async overrideStatus(
     @CurrentUser() user: any,
     @Param('id') id: string,
