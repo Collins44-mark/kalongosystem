@@ -63,6 +63,12 @@ export class BusinessController {
     };
   }
 
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  async getCurrentBusiness(@CurrentUser('businessId') businessId: string) {
+    return this.business.getById(businessId);
+  }
+
   @Get('check/:businessId')
   async checkBusiness(@Param('businessId') businessId: string) {
     return this.business.getByCode(businessId);

@@ -58,6 +58,23 @@ npm run dev
 - Use the **Internal** connection string for `DATABASE_URL` (private network)
 - If using External URL, ensure `?sslmode=require` at the end for SSL
 
+### "Table users does not exist" – Run migrations
+
+If you see this error, the database migrations haven't run. Fix:
+
+1. **Render Dashboard** → your backend service → **Settings** → **Build & Deploy**
+2. Ensure **Build Command** is exactly:
+   ```
+   npm install && npx prisma generate && npx prisma migrate deploy && npm run build
+   ```
+3. Ensure **DATABASE_URL** is set (link your Postgres DB or add it manually)
+4. **Manual Deploy** → **Clear build cache & deploy**
+
+Or run migrations once via Render Shell: **Shell** tab → run:
+```
+cd backend && npx prisma migrate deploy
+```
+
 ## Common Render errors
 
 | Error | Fix |

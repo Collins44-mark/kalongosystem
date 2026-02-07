@@ -41,7 +41,7 @@ export class BusinessService {
       data: {
         userId: data.userId,
         businessId: business.id,
-        role: 'ADMIN',
+        role: 'MANAGER',
         branchId: 'main',
         createdBy: data.userId,
       },
@@ -81,5 +81,21 @@ export class BusinessService {
     });
     if (!b) throw new NotFoundException('Business not found');
     return b;
+  }
+
+  /** Get business info for sidebar / settings (by internal business ID from JWT). */
+  async getById(id: string) {
+    const b = await this.prisma.business.findUnique({
+      where: { id },
+      include: { subscription: true },
+    });
+    if (!b) throw new NotFoundException('Business not found');
+    return {
+      id: b.id,
+      name: b.name,
+      businessId: b.businessId,
+      businessType: b.businessType,
+      subscription: b.subscription,
+    };
   }
 }

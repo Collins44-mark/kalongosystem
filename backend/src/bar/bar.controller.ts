@@ -39,7 +39,7 @@ export class BarController {
   /** Bar staff: list items (read-only prices) */
   @Get('items')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'BAR')
+  @Roles('MANAGER', 'BAR')
   async getItems(@CurrentUser() user: any) {
     return this.bar.getItems(user.businessId, user.branchId);
   }
@@ -47,7 +47,7 @@ export class BarController {
   /** Bar staff: create order - NO totals shown in response for staff, but we return minimal confirmation */
   @Post('orders')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'BAR')
+  @Roles('MANAGER', 'BAR')
   async createOrder(@CurrentUser() user: any, @Body() dto: CreateOrderDto) {
     const order = await this.bar.createOrder(
       user.businessId,
@@ -62,7 +62,7 @@ export class BarController {
   /** Admin only: create bar item */
   @Post('items')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN')
+  @Roles('MANAGER')
   async createItem(@CurrentUser() user: any, @Body() dto: CreateItemDto) {
     return this.bar.createItem(
       user.businessId,
@@ -75,7 +75,7 @@ export class BarController {
   /** Admin only: get sales/orders */
   @Get('orders')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN')
+  @Roles('MANAGER')
   async getOrders(
     @CurrentUser() user: any,
     @Query('from') from?: string,
@@ -91,7 +91,7 @@ export class BarController {
 
   @Get('sales')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN')
+  @Roles('MANAGER')
   async getSales(
     @CurrentUser() user: any,
     @Query('from') from?: string,

@@ -16,9 +16,9 @@ export default function InventoryPage() {
   useEffect(() => {
     if (!token) return;
     Promise.all([
-      api<Item[]>('/inventory/items', { token }),
-      api<Item[]>('/inventory/low-stock', { token }),
-      api<number>('/inventory/value-at-risk', { token }),
+      api<Item[]>('/inventory/items', { token }).catch(() => []),
+      api<Item[]>('/inventory/low-stock', { token }).catch(() => []),
+      api<number>('/inventory/value-at-risk', { token }).catch(() => 0),
     ])
       .then(([i, l, v]) => {
         setItems(i);

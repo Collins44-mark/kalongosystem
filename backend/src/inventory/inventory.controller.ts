@@ -35,7 +35,7 @@ class RestockDto {
 @Controller('inventory')
 @UseGuards(JwtAuthGuard, SubscriptionGuard)
 @UseGuards(RolesGuard)
-@Roles('ADMIN')
+@Roles('MANAGER')
 export class InventoryController {
   constructor(private inventory: InventoryService) {}
 

@@ -1,21 +1,24 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/store/auth';
+import { api } from '@/lib/api';
+
+type BusinessInfo = { name: string; businessId: string } | null;
 
 const SIDEBAR_LINKS: { href: string; label: string; roles: string[] }[] = [
-  { href: '/dashboard', label: 'Overview', roles: ['ADMIN'] },
-  { href: '/dashboard/front-office', label: 'Front Office', roles: ['ADMIN', 'FRONT_OFFICE'] },
-  { href: '/dashboard/bar', label: 'Bar', roles: ['ADMIN', 'BAR'] },
-  { href: '/dashboard/restaurant', label: 'Restaurant', roles: ['ADMIN', 'RESTAURANT', 'KITCHEN'] },
-  { href: '/dashboard/housekeeping', label: 'Housekeeping', roles: ['ADMIN', 'HOUSEKEEPING'] },
-  { href: '/dashboard/finance', label: 'Finance', roles: ['ADMIN', 'FINANCE'] },
-  { href: '/dashboard/workers', label: 'Workers', roles: ['ADMIN'] },
-  { href: '/dashboard/inventory', label: 'Inventory', roles: ['ADMIN'] },
-  { href: '/dashboard/reports', label: 'Reports', roles: ['ADMIN', 'FINANCE'] },
-  { href: '/dashboard/settings', label: 'Settings', roles: ['ADMIN'] },
+  { href: '/dashboard', label: 'Overview', roles: ['MANAGER'] },
+  { href: '/dashboard/front-office', label: 'Front Office', roles: ['MANAGER', 'FRONT_OFFICE'] },
+  { href: '/dashboard/bar', label: 'Bar', roles: ['MANAGER', 'BAR'] },
+  { href: '/dashboard/restaurant', label: 'Restaurant', roles: ['MANAGER', 'RESTAURANT', 'KITCHEN'] },
+  { href: '/dashboard/housekeeping', label: 'Housekeeping', roles: ['MANAGER', 'HOUSEKEEPING'] },
+  { href: '/dashboard/finance', label: 'Finance', roles: ['MANAGER', 'FINANCE'] },
+  { href: '/dashboard/workers', label: 'Workers', roles: ['MANAGER'] },
+  { href: '/dashboard/inventory', label: 'Inventory', roles: ['MANAGER'] },
+  { href: '/dashboard/reports', label: 'Reports', roles: ['MANAGER', 'FINANCE'] },
+  { href: '/dashboard/settings', label: 'Settings', roles: ['MANAGER'] },
 ];
 
 export default function DashboardLayout({
@@ -26,6 +29,7 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const { token, user, logout } = useAuth();
+  const [business, setBusiness] = useState<BusinessInfo>(null);
 
   useEffect(() => {
     if (!token || !user) {
@@ -33,8 +37,16 @@ export default function DashboardLayout({
     }
   }, [token, user, router]);
 
+  useEffect(() => {
+    if (!token) return;
+    api<{ name: string; businessId: string }>('/business/me', { token })
+      .then((b) => setBusiness({ name: b.name, businessId: b.businessId }))
+      .catch(() => setBusiness(null));
+  }, [token]);
+
+  const role = user?.role === 'ADMIN' ? 'MANAGER' : user?.role; // backward compat
   const visibleLinks = SIDEBAR_LINKS.filter((l) =>
-    l.roles.includes(user?.role || '')
+    l.roles.includes(role || '')
   );
 
   if (!token || !user) return null;
@@ -43,8 +55,8 @@ export default function DashboardLayout({
     <div className="flex min-h-screen bg-slate-50">
       <aside className="w-56 bg-slate-800 text-white flex flex-col">
         <div className="p-4 border-b border-slate-700">
-          <div className="font-semibold">HMS</div>
-          <div className="text-xs text-slate-400">{user.businessId}</div>
+          <div className="font-semibold">{business?.name ?? 'HMS'}</div>
+          <div className="text-xs text-slate-400">{business?.businessId ?? user?.businessId ?? '—'}</div>
         </div>
         <nav className="flex-1 p-2 space-y-1">
           {visibleLinks.map((link) => (

@@ -13,7 +13,10 @@ export default function WorkersPage() {
 
   useEffect(() => {
     if (!token) return;
-    api<Worker[]>('/workers', { token }).then(setWorkers).finally(() => setLoading(false));
+    api<Worker[]>('/workers', { token })
+      .then(setWorkers)
+      .catch(() => setWorkers([]))
+      .finally(() => setLoading(false));
   }, [token]);
 
   if (loading) return <div>Loading...</div>;

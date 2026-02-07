@@ -19,9 +19,9 @@ export default function FrontOfficePage() {
   useEffect(() => {
     if (!token) return;
     Promise.all([
-      api<Category[]>('/hotel/categories', { token }),
-      api<Room[]>('/hotel/rooms', { token }),
-      api<Booking[]>('/hotel/bookings', { token }),
+      api<Category[]>('/hotel/categories', { token }).catch(() => []),
+      api<Room[]>('/hotel/rooms', { token }).catch(() => []),
+      api<Booking[]>('/hotel/bookings', { token }).catch(() => []),
     ])
       .then(([c, r, b]) => {
         setCategories(c);

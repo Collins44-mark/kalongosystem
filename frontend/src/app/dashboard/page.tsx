@@ -21,16 +21,24 @@ export default function OverviewPage() {
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('today');
   const [loading, setLoading] = useState(true);
 
+  const emptyData: DashboardData = {
+    roomSummary: { total: 0, occupied: 0, vacant: 0, reserved: 0, underMaintenance: 0 },
+    financeSummary: { totalRevenue: 0, totalExpenses: 0, netProfit: 0 },
+    inventoryAlerts: { lowStock: [], totalValueAtRisk: 0 },
+    salesBySector: { bar: 0, restaurant: 0, hotel: 0, total: 0 },
+    period,
+  };
+
   useEffect(() => {
     if (!token) return;
     api<DashboardData>(`/overview?period=${period}`, { token })
       .then(setData)
-      .catch(() => setData(null))
+      .catch(() => setData(emptyData))
       .finally(() => setLoading(false));
   }, [token, period]);
 
   if (loading) return <div className="text-slate-500">Loading...</div>;
-  if (!data) return <div className="text-red-600">Failed to load overview</div>;
+  const displayData = data ?? emptyData;
 
   return (
     <div className="space-y-6">
@@ -48,29 +56,29 @@ export default function OverviewPage() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <Card title="Total Rooms" value={data.roomSummary.total} />
-        <Card title="Occupied" value={data.roomSummary.occupied} />
-        <Card title="Vacant" value={data.roomSummary.vacant} />
-        <Card title="Reserved" value={data.roomSummary.reserved} />
-        <Card title="Under Maintenance" value={data.roomSummary.underMaintenance} />
+        <Card title="Total Rooms" value={displayData.roomSummary.total} />
+        <Card title="Occupied" value={displayData.roomSummary.occupied} />
+        <Card title="Vacant" value={displayData.roomSummary.vacant} />
+        <Card title="Reserved" value={displayData.roomSummary.reserved} />
+        <Card title="Under Maintenance" value={displayData.roomSummary.underMaintenance} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card title="Total Revenue" value={data.financeSummary.totalRevenue} format="currency" />
-        <Card title="Total Expenses" value={data.financeSummary.totalExpenses} format="currency" />
+        <Card title="Total Revenue" value={displayData.financeSummary.totalRevenue} format="currency" />
+        <Card title="Total Expenses" value={displayData.financeSummary.totalExpenses} format="currency" />
         <Card
           title="Net Profit"
-          value={data.financeSummary.netProfit}
+          value={displayData.financeSummary.netProfit}
           format="currency"
-          color={data.financeSummary.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}
+          color={displayData.financeSummary.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}
         />
       </div>
 
-      {data.inventoryAlerts.lowStock.length > 0 && (
+      {displayData.inventoryAlerts.lowStock.length > 0 && (
         <div className="bg-white rounded-lg border p-4">
           <h2 className="font-medium mb-2">Inventory Alerts</h2>
           <div className="space-y-1">
-            {data.inventoryAlerts.lowStock.map((item) => (
+            {displayData.inventoryAlerts.lowStock.map((item) => (
               <div
                 key={item.id}
                 className={`text-sm ${item.severity === 'RED' ? 'text-red-600' : 'text-amber-600'}`}
@@ -80,7 +88,7 @@ export default function OverviewPage() {
             ))}
           </div>
           <p className="mt-2 text-sm text-slate-600">
-            Value at risk: {formatCurrency(data.inventoryAlerts.totalValueAtRisk)}
+            Value at risk: {formatCurrency(displayData.inventoryAlerts.totalValueAtRisk)}
           </p>
         </div>
       )}
@@ -88,12 +96,12 @@ export default function OverviewPage() {
       <div className="bg-white rounded-lg border p-4">
         <h2 className="font-medium mb-2">Sales by Sector</h2>
         <div className="grid grid-cols-3 gap-4 text-sm">
-          <div>Bar: {formatCurrency(data.salesBySector.bar)}</div>
-          <div>Restaurant: {formatCurrency(data.salesBySector.restaurant)}</div>
-          <div>Hotel: {formatCurrency(data.salesBySector.hotel)}</div>
+          <div>Bar: {formatCurrency(displayData.salesBySector.bar)}</div>
+          <div>Restaurant: {formatCurrency(displayData.salesBySector.restaurant)}</div>
+          <div>Hotel: {formatCurrency(displayData.salesBySector.hotel)}</div>
         </div>
         <div className="mt-2 font-medium">
-          Total: {formatCurrency(data.salesBySector.total)}
+          Total: {formatCurrency(displayData.salesBySector.total)}
         </div>
       </div>
     </div>

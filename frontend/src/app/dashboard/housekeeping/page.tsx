@@ -13,7 +13,10 @@ export default function HousekeepingPage() {
 
   useEffect(() => {
     if (!token) return;
-    api<Room[]>('/housekeeping/rooms', { token }).then(setRooms).finally(() => setLoading(false));
+    api<Room[]>('/housekeeping/rooms', { token })
+      .then(setRooms)
+      .catch(() => setRooms([]))
+      .finally(() => setLoading(false));
   }, [token]);
 
   async function updateStatus(roomId: string, status: string) {

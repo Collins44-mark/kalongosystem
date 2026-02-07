@@ -9,6 +9,10 @@ class SignupDto {
   @IsString()
   @MinLength(6)
   password: string;
+
+  @IsString()
+  @IsNotEmpty()
+  business_name: string;
 }
 
 class LoginDto {
@@ -30,7 +34,7 @@ export class AuthController {
 
   @Post('signup')
   async signup(@Body() dto: SignupDto) {
-    return this.auth.signup(dto.email, dto.password);
+    return this.auth.signup(dto.email, dto.password, dto.business_name);
   }
 
   @Post('login')

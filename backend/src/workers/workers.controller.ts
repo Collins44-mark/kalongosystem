@@ -32,7 +32,7 @@ class MarkPaidDto {
 @Controller('workers')
 @UseGuards(JwtAuthGuard, SubscriptionGuard)
 @UseGuards(RolesGuard)
-@Roles('ADMIN')
+@Roles('MANAGER')
 export class WorkersController {
   constructor(private workers: WorkersService) {}
 

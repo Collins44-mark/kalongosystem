@@ -59,7 +59,7 @@ class CreateBookingDto {
 @Controller('hotel')
 @UseGuards(JwtAuthGuard, SubscriptionGuard)
 @UseGuards(RolesGuard)
-@Roles('ADMIN', 'FRONT_OFFICE')
+@Roles('MANAGER', 'FRONT_OFFICE')
 export class HotelController {
   constructor(private hotel: HotelService) {}
 

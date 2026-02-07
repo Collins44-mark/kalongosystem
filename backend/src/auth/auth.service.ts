@@ -15,29 +15,89 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  /** Signup: email + password only. Returns token for business registration step. */
-  async signup(email: string, password: string) {
+  /** Signup: email + password + business_name. Creates User, Business, BusinessUser (MANAGER), Subscription. */
+  async signup(email: string, password: string, businessName: string) {
     const existing = await this.prisma.user.findUnique({
       where: { email: email.toLowerCase().trim() },
     });
     if (existing) throw new ConflictException('Email already registered');
 
     const hashed = await bcrypt.hash(password, 10);
-    const user = await this.prisma.user.create({
-      data: {
-        email: email.toLowerCase().trim(),
-        password: hashed,
-      },
-      select: { id: true, email: true, createdAt: true },
+    const businessId = await this.generateBusinessCode();
+
+    const [user, business, subscription] = await this.prisma.$transaction(async (tx) => {
+      const u = await tx.user.create({
+        data: {
+          email: email.toLowerCase().trim(),
+          password: hashed,
+        },
+        select: { id: true, email: true },
+      });
+
+      const b = await tx.business.create({
+        data: {
+          businessId,
+          businessType: 'HOTEL',
+          name: businessName.trim(),
+          createdBy: u.id,
+        },
+      });
+
+      const trialEndsAt = new Date();
+      trialEndsAt.setDate(trialEndsAt.getDate() + 14);
+
+      await tx.businessUser.create({
+        data: {
+          userId: u.id,
+          businessId: b.id,
+          role: 'MANAGER',
+          branchId: 'main',
+          createdBy: u.id,
+        },
+      });
+
+      const sub = await tx.subscription.create({
+        data: {
+          businessId: b.id,
+          plan: 'FRONT_AND_BACK',
+          status: 'TRIAL',
+          trialEndsAt,
+        },
+      });
+
+      return [u, b, sub] as const;
     });
 
-    const payload = { sub: user.id, email: user.email };
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      businessId: business.id,
+      businessCode: business.businessId,
+      role: 'MANAGER',
+      branchId: 'main',
+    };
     const accessToken = this.jwtService.sign(payload);
+
     return {
       accessToken,
-      user: { id: user.id, email: user.email },
-      message: 'Account created. Please register a business to continue.',
+      user: {
+        id: user.id,
+        email: user.email,
+        businessId: business.businessId,
+        role: 'MANAGER',
+      },
+      business: { name: business.name, businessId: business.businessId },
+      message: 'Account created. 14-day trial started.',
     };
+  }
+
+  private async generateBusinessCode(): Promise<string> {
+    let code: string;
+    do {
+      const num = Math.floor(10000 + Math.random() * 90000);
+      code = `HMS-${num}`;
+    } while (await this.prisma.business.findUnique({ where: { businessId: code } }));
+    return code;
   }
 
   /** Login: Business ID + Email + Password. Returns JWT with tenant context. */
@@ -81,7 +141,7 @@ export class AuthService {
     };
   }
 
-  /** Create token for user+business (used after business registration) */
+  /** Create token for user+business (used after business registration - legacy flow) */
   createTokenForBusinessUser(
     bu: { userId: string; businessId: string; role: string; branchId: string | null },
     user: { email: string },

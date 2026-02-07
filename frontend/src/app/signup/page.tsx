@@ -6,11 +6,17 @@ import Link from 'next/link';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 
+type SignupRes = {
+  accessToken: string;
+  user: { id: string; email: string; businessId: string; role: string };
+};
+
 export default function SignupPage() {
   const router = useRouter();
   const setAuth = useAuth((s) => s.setAuth);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [businessName, setBusinessName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -19,12 +25,16 @@ export default function SignupPage() {
     setError('');
     setLoading(true);
     try {
-      const res = await api<{ accessToken: string; user: { id: string; email: string } }>('/auth/signup', {
+      const res = await api<SignupRes>('/auth/signup', {
         method: 'POST',
-        body: JSON.stringify({ email: email.trim(), password }),
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+          business_name: businessName.trim(),
+        }),
       });
-      setAuth(res.accessToken, { ...res.user, businessId: '', role: 'ADMIN' });
-      router.replace('/register-business');
+      setAuth(res.accessToken, res.user);
+      router.replace('/dashboard');
     } catch (err: unknown) {
       setError((err as Error).message || 'Signup failed');
     } finally {
@@ -45,6 +55,17 @@ export default function SignupPage() {
           </div>
         )}
         <div className="space-y-4">
+          <div>
+            <label className="block text-sm text-slate-600 mb-1">Business Name</label>
+            <input
+              type="text"
+              value={businessName}
+              onChange={(e) => setBusinessName(e.target.value)}
+              className="w-full px-3 py-2 border rounded"
+              placeholder="e.g. Kalongo Guest House"
+              required
+            />
+          </div>
           <div>
             <label className="block text-sm text-slate-600 mb-1">Email</label>
             <input

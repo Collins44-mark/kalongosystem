@@ -24,13 +24,27 @@ export default function FinancePage() {
     const params = new URLSearchParams();
     if (from) params.set('from', from);
     if (to) params.set('to', to);
+    const empty: Dashboard = {
+      totalRevenue: 0,
+      totalExpenses: 0,
+      netProfit: 0,
+      bySector: { bar: 0, restaurant: 0, hotel: 0 },
+      expenses: [],
+    };
     api<Dashboard>(`/finance/dashboard?${params}`, { token })
       .then(setData)
+      .catch(() => setData(empty))
       .finally(() => setLoading(false));
   }, [token, from, to]);
 
   if (loading) return <div>Loading...</div>;
-  if (!data) return <div>Failed to load</div>;
+  const displayData = data ?? {
+    totalRevenue: 0,
+    totalExpenses: 0,
+    netProfit: 0,
+    bySector: { bar: 0, restaurant: 0, hotel: 0 },
+    expenses: [],
+  };
 
   return (
     <div>
@@ -42,31 +56,31 @@ export default function FinancePage() {
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="bg-white border rounded p-4">
           <div className="text-sm text-slate-500">Revenue</div>
-          <div className="text-xl font-semibold">{formatTzs(data.totalRevenue)}</div>
+          <div className="text-xl font-semibold">{formatTzs(displayData.totalRevenue)}</div>
         </div>
         <div className="bg-white border rounded p-4">
           <div className="text-sm text-slate-500">Expenses</div>
-          <div className="text-xl font-semibold">{formatTzs(data.totalExpenses)}</div>
+          <div className="text-xl font-semibold">{formatTzs(displayData.totalExpenses)}</div>
         </div>
         <div className="bg-white border rounded p-4">
           <div className="text-sm text-slate-500">Net Profit</div>
-          <div className={`text-xl font-semibold ${data.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {formatTzs(data.netProfit)}
+          <div className={`text-xl font-semibold ${displayData.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            {formatTzs(displayData.netProfit)}
           </div>
         </div>
       </div>
       <div className="bg-white border rounded p-4 mb-4">
         <h2 className="font-medium mb-2">By Sector</h2>
         <div className="grid grid-cols-3 gap-4 text-sm">
-          <div>Bar: {formatTzs(data.bySector.bar)}</div>
-          <div>Restaurant: {formatTzs(data.bySector.restaurant)}</div>
-          <div>Hotel: {formatTzs(data.bySector.hotel)}</div>
+          <div>Bar: {formatTzs(displayData.bySector.bar)}</div>
+          <div>Restaurant: {formatTzs(displayData.bySector.restaurant)}</div>
+          <div>Hotel: {formatTzs(displayData.bySector.hotel)}</div>
         </div>
       </div>
       <div className="bg-white border rounded p-4">
         <h2 className="font-medium mb-2">Recent Expenses</h2>
         <div className="space-y-2">
-          {data.expenses.slice(0, 10).map((e) => (
+          {displayData.expenses.slice(0, 10).map((e) => (
             <div key={e.id} className="flex justify-between text-sm">
               <span>{e.category} - {new Date(e.expenseDate).toLocaleDateString()}</span>
               <span>{formatTzs(parseFloat(e.amount))}</span>

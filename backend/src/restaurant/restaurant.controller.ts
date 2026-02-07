@@ -38,14 +38,14 @@ export class RestaurantController {
 
   @Get('items')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'RESTAURANT', 'KITCHEN')
+  @Roles('MANAGER', 'RESTAURANT', 'KITCHEN')
   async getItems(@CurrentUser() user: any) {
     return this.restaurant.getItems(user.businessId, user.branchId);
   }
 
   @Post('orders')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'RESTAURANT', 'KITCHEN')
+  @Roles('MANAGER', 'RESTAURANT', 'KITCHEN')
   async createOrder(@CurrentUser() user: any, @Body() dto: CreateOrderDto) {
     const order = await this.restaurant.createOrder(
       user.businessId,
@@ -59,7 +59,7 @@ export class RestaurantController {
 
   @Post('items')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN')
+  @Roles('MANAGER')
   async createItem(@CurrentUser() user: any, @Body() dto: CreateItemDto) {
     return this.restaurant.createItem(
       user.businessId,
@@ -71,7 +71,7 @@ export class RestaurantController {
 
   @Get('orders')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN')
+  @Roles('MANAGER')
   async getOrders(
     @CurrentUser() user: any,
     @Query('from') from?: string,
@@ -87,7 +87,7 @@ export class RestaurantController {
 
   @Get('sales')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN')
+  @Roles('MANAGER')
   async getSales(
     @CurrentUser() user: any,
     @Query('from') from?: string,

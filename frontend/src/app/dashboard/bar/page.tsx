@@ -19,6 +19,7 @@ export default function BarPage() {
     if (!token) return;
     api<BarItem[]>('/bar/items', { token })
       .then(setItems)
+      .catch(() => setItems([]))
       .finally(() => setLoading(false));
   }, [token]);
 

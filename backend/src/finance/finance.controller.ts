@@ -31,7 +31,7 @@ class CreateExpenseDto {
 @Controller('finance')
 @UseGuards(JwtAuthGuard, SubscriptionGuard)
 @UseGuards(RolesGuard)
-@Roles('ADMIN', 'FINANCE')
+@Roles('MANAGER', 'FINANCE')
 export class FinanceController {
   constructor(private finance: FinanceService) {}
 

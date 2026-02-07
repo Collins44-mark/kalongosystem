@@ -34,14 +34,14 @@ export class HousekeepingController {
 
   @Get('rooms')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'HOUSEKEEPING', 'FRONT_OFFICE')
+  @Roles('MANAGER', 'HOUSEKEEPING', 'FRONT_OFFICE')
   async getRooms(@CurrentUser() user: any) {
     return this.housekeeping.getRooms(user.businessId, user.branchId);
   }
 
   @Put('rooms/:id/status')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'HOUSEKEEPING', 'FRONT_OFFICE')
+  @Roles('MANAGER', 'HOUSEKEEPING', 'FRONT_OFFICE')
   async updateRoomStatus(
     @CurrentUser() user: any,
     @Param('id') roomId: string,
@@ -56,7 +56,7 @@ export class HousekeepingController {
 
   @Post('requests')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'HOUSEKEEPING')
+  @Roles('MANAGER', 'HOUSEKEEPING')
   async submitRequest(@CurrentUser() user: any, @Body() dto: SubmitRequestDto) {
     return this.housekeeping.submitRequest(
       user.businessId,
@@ -68,21 +68,21 @@ export class HousekeepingController {
 
   @Get('requests')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'HOUSEKEEPING')
+  @Roles('MANAGER', 'HOUSEKEEPING')
   async getRequests(@CurrentUser() user: any) {
     return this.housekeeping.getRequests(user.businessId, user.branchId);
   }
 
   @Post('requests/:id/approve')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN')
+  @Roles('MANAGER')
   async approve(@CurrentUser() user: any, @Param('id') id: string) {
     return this.housekeeping.approveRequest(user.businessId, id);
   }
 
   @Post('requests/:id/reject')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN')
+  @Roles('MANAGER')
   async reject(@CurrentUser() user: any, @Param('id') id: string) {
     return this.housekeeping.rejectRequest(user.businessId, id);
   }

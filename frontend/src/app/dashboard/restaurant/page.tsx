@@ -19,6 +19,7 @@ export default function RestaurantPage() {
     if (!token) return;
     api<RestaurantItem[]>('/restaurant/items', { token })
       .then(setItems)
+      .catch(() => setItems([]))
       .finally(() => setLoading(false));
   }, [token]);
 
