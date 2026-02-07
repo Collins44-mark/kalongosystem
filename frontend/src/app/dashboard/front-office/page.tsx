@@ -437,6 +437,7 @@ function RoomSetup({
   const [editRoomNumber, setEditRoomNumber] = useState('');
   const [editRoomName, setEditRoomName] = useState('');
   const [editRoomCatId, setEditRoomCatId] = useState('');
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
 
   const categoryMap = new Map(categories.map((c) => [c.id, c]));
   const roomsByCategory = [...new Set(rooms.map((r) => r.category.id))].map((catId) => {
@@ -590,7 +591,6 @@ function RoomSetup({
     <div className="space-y-6">
       <section className="bg-white border rounded-lg p-4 sm:p-5">
         <h2 className="text-base font-semibold mb-3">Step 1: Create Room Category</h2>
-        <p className="text-sm text-slate-500 mb-3">Add a category with name and price per night. Each category can have multiple rooms.</p>
         <form onSubmit={createCategory} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="block text-sm mb-1">Category name</label>
@@ -605,13 +605,12 @@ function RoomSetup({
           <div>
             <label className="block text-sm mb-1">Price per night</label>
             <input
-              type="number"
-              min="0"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={catPrice}
-              onChange={(e) => setCatPrice(e.target.value)}
-              className="w-full px-3 py-2 border rounded text-base"
-              required
+              onChange={(e) => setCatPrice(e.target.value.replace(/[^\d.]/g, ''))}
+              placeholder="0"
+              className="w-full px-3 py-2 border rounded text-base [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
           </div>
           <div className="sm:col-span-2 flex justify-end">
@@ -624,7 +623,6 @@ function RoomSetup({
 
       <section className="bg-white border rounded-lg p-4 sm:p-5">
         <h2 className="text-base font-semibold mb-3">Step 2: Create Room</h2>
-        <p className="text-sm text-slate-500 mb-3">Choose a category (from step 1), enter room number, then add the room. It will appear in Room Availability and Dashboard.</p>
         <form onSubmit={createRoom} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 items-end">
           <div>
             <label className="block text-sm mb-1">Room Category</label>
@@ -672,21 +670,28 @@ function RoomSetup({
         {categories.length > 0 ? (
           <div className="flex flex-wrap gap-2 mb-4">
             {categories.map((c) => (
-              <div key={c.id} className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg border">
+              <div key={c.id} className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg border relative">
                 <span className="font-medium">{c.name}</span>
-                <span className="text-xs text-slate-500">— {formatTzs(parseFloat(c.pricePerNight))}/night</span>
-                <button
-                  onClick={() => editCategory(c)}
-                  className="text-xs px-2 py-0.5 rounded bg-teal-100 text-teal-700 hover:bg-teal-200"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => deleteCategory(c.id)}
-                  className="text-xs px-2 py-0.5 rounded bg-red-100 text-red-700 hover:bg-red-200"
-                >
-                  Delete
-                </button>
+                <span className="text-xs text-slate-500">— {formatTzs(parseFloat(c.pricePerNight || '0'))}/night</span>
+                <div className="relative ml-1">
+                  <button
+                    type="button"
+                    onClick={() => setOpenMenu(openMenu === `cat-chip-${c.id}` ? null : `cat-chip-${c.id}`)}
+                    className="p-1 rounded hover:bg-slate-200 text-slate-500"
+                    aria-label="Options"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="6" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="18" r="1.5"/></svg>
+                  </button>
+                  {openMenu === `cat-chip-${c.id}` && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setOpenMenu(null)} aria-hidden />
+                      <div className="absolute right-0 top-full mt-0.5 py-1 bg-white border rounded-lg shadow-lg z-20 min-w-[100px]">
+                        <button onClick={() => { editCategory(c); setOpenMenu(null); }} className="block w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">Edit</button>
+                        <button onClick={() => { deleteCategory(c.id); setOpenMenu(null); }} className="block w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">Delete</button>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -703,19 +708,24 @@ function RoomSetup({
               <div key={category.id} className="border rounded-xl p-4 bg-slate-50/50">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-slate-800">{category.name}</h3>
-                  <div className="flex gap-2">
+                  <div className="relative">
                     <button
-                      onClick={() => editCategory(category)}
-                      className="text-xs px-2 py-1 rounded bg-teal-100 text-teal-700 hover:bg-teal-200"
+                      type="button"
+                      onClick={() => setOpenMenu(openMenu === `cat-header-${category.id}` ? null : `cat-header-${category.id}`)}
+                      className="p-1 rounded hover:bg-slate-200 text-slate-500"
+                      aria-label="Options"
                     >
-                      Edit category
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="6" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="18" r="1.5"/></svg>
                     </button>
-                    <button
-                      onClick={() => deleteCategory(category.id)}
-                      className="text-xs px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200"
-                    >
-                      Delete category
-                    </button>
+                    {openMenu === `cat-header-${category.id}` && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setOpenMenu(null)} aria-hidden />
+                        <div className="absolute right-0 top-full mt-0.5 py-1 bg-white border rounded-lg shadow-lg z-20 min-w-[100px]">
+                          <button onClick={() => { editCategory(category); setOpenMenu(null); }} className="block w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">Edit</button>
+                          <button onClick={() => { deleteCategory(category.id); setOpenMenu(null); }} className="block w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">Delete</button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
@@ -734,21 +744,36 @@ function RoomSetup({
                         {r.roomName && <div className="text-xs text-slate-600">{r.roomName}</div>}
                         <div className="text-xs text-slate-500 mt-0.5">{r.status}</div>
                       </div>
-                      <div className="flex items-center gap-1 mt-2 flex-wrap">
-                        {(r.status === 'VACANT' || r.status === 'UNDER_MAINTENANCE') && (
+                      <div className="flex items-center justify-between mt-2">
+                        <div className="flex gap-1">
+                          {(r.status === 'VACANT' || r.status === 'UNDER_MAINTENANCE') && (
+                            <button
+                              onClick={() => setRoomStatus(r.id, r.status === 'VACANT' ? 'UNDER_MAINTENANCE' : 'VACANT')}
+                              className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 hover:bg-amber-200"
+                            >
+                              {r.status === 'VACANT' ? 'Maintenance' : 'Available'}
+                            </button>
+                          )}
+                        </div>
+                        <div className="relative">
                           <button
-                            onClick={() => setRoomStatus(r.id, r.status === 'VACANT' ? 'UNDER_MAINTENANCE' : 'VACANT')}
-                            className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 hover:bg-amber-200"
+                            type="button"
+                            onClick={() => setOpenMenu(openMenu === `room-${r.id}` ? null : `room-${r.id}`)}
+                            className="p-0.5 rounded hover:bg-slate-200 text-slate-500"
+                            aria-label="Options"
                           >
-                            {r.status === 'VACANT' ? 'Maintenance' : 'Available'}
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="6" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="18" r="1.5"/></svg>
                           </button>
-                        )}
-                        <button onClick={() => editRoom(r)} className="text-xs px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 hover:bg-teal-200">
-                          Edit
-                        </button>
-                        <button onClick={() => deleteRoom(r.id)} className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 hover:bg-red-200">
-                          Delete
-                        </button>
+                          {openMenu === `room-${r.id}` && (
+                            <>
+                              <div className="fixed inset-0 z-10" onClick={() => setOpenMenu(null)} aria-hidden />
+                              <div className="absolute right-0 top-full mt-0.5 py-1 bg-white border rounded-lg shadow-lg z-20 min-w-[100px]">
+                                <button onClick={() => { editRoom(r); setOpenMenu(null); }} className="block w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">Edit</button>
+                                <button onClick={() => { deleteRoom(r.id); setOpenMenu(null); }} className="block w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">Delete</button>
+                              </div>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -772,7 +797,14 @@ function RoomSetup({
               </div>
               <div>
                 <label className="block text-sm mb-1">Price per night</label>
-                <input type="number" min="0" step="0.01" value={editCatPrice} onChange={(e) => setEditCatPrice(e.target.value)} className="w-full px-3 py-2 border rounded" />
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={editCatPrice}
+                  onChange={(e) => setEditCatPrice(e.target.value.replace(/[^\d.]/g, ''))}
+                  placeholder="0"
+                  className="w-full px-3 py-2 border rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
               </div>
             </div>
             <div className="flex gap-2 mt-4">
