@@ -5,12 +5,13 @@ import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 
 type Subscription = { plan: string; status: string; trialEndsAt: string };
-type BusinessInfo = { name: string; businessId: string };
+type MeResponse = { email: string; role: string; business: { id: string; name: string; code: string } };
 
 export default function SettingsPage() {
   const { token, user } = useAuth();
   const [sub, setSub] = useState<Subscription | null>(null);
-  const [business, setBusiness] = useState<BusinessInfo | null>(null);
+  const [me, setMe] = useState<MeResponse | null>(null);
+  const [meLoading, setMeLoading] = useState(true);
 
   useEffect(() => {
     if (!token) return;
@@ -18,8 +19,15 @@ export default function SettingsPage() {
   }, [token]);
 
   useEffect(() => {
-    if (!token) return;
-    api<BusinessInfo>('/business/me', { token }).then(setBusiness).catch(() => setBusiness(null));
+    if (!token) {
+      setMeLoading(false);
+      return;
+    }
+    setMeLoading(true);
+    api<MeResponse>('/api/me', { token })
+      .then(setMe)
+      .catch(() => setMe(null))
+      .finally(() => setMeLoading(false));
   }, [token]);
 
   const isManager = user?.role === 'MANAGER' || user?.role === 'ADMIN';
@@ -30,10 +38,17 @@ export default function SettingsPage() {
 
       <div className="bg-white border rounded p-4 max-w-md">
         <h2 className="font-medium mb-2">Business</h2>
-        <div className="text-sm space-y-1">
-          <div>Name: {business?.name ?? '—'}</div>
-          <div>Business ID: {business?.businessId ?? user?.businessId ?? '—'}</div>
-        </div>
+        {meLoading ? (
+          <div className="animate-pulse space-y-2">
+            <div className="h-4 bg-slate-200 rounded w-2/3" />
+            <div className="h-4 bg-slate-200 rounded w-1/2" />
+          </div>
+        ) : me?.business ? (
+          <div className="text-sm space-y-1">
+            <div>Name: {me.business.name}</div>
+            <div>Business ID: {me.business.code}</div>
+          </div>
+        ) : null}
       </div>
 
       {sub && (

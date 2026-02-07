@@ -15,30 +15,31 @@ type DashboardData = {
   period: string;
 };
 
+const EMPTY_DATA: Omit<DashboardData, 'period'> = {
+  roomSummary: { total: 0, occupied: 0, vacant: 0, reserved: 0, underMaintenance: 0 },
+  financeSummary: { totalRevenue: 0, totalExpenses: 0, netProfit: 0 },
+  inventoryAlerts: { lowStock: [], totalValueAtRisk: 0 },
+  salesBySector: { bar: 0, restaurant: 0, hotel: 0, total: 0 },
+};
+
 export default function OverviewPage() {
   const { token } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('today');
   const [loading, setLoading] = useState(true);
 
-  const emptyData: DashboardData = {
-    roomSummary: { total: 0, occupied: 0, vacant: 0, reserved: 0, underMaintenance: 0 },
-    financeSummary: { totalRevenue: 0, totalExpenses: 0, netProfit: 0 },
-    inventoryAlerts: { lowStock: [], totalValueAtRisk: 0 },
-    salesBySector: { bar: 0, restaurant: 0, hotel: 0, total: 0 },
-    period,
-  };
-
   useEffect(() => {
     if (!token) return;
+    setLoading(true);
+    const emptyData: DashboardData = { ...EMPTY_DATA, period };
     api<DashboardData>(`/overview?period=${period}`, { token })
       .then(setData)
       .catch(() => setData(emptyData))
       .finally(() => setLoading(false));
   }, [token, period]);
 
-  if (loading) return <div className="text-slate-500">Loading...</div>;
-  const displayData = data ?? emptyData;
+  if (loading && !data) return <div className="text-slate-500">Loading...</div>;
+  const displayData = data ?? { ...EMPTY_DATA, period };
 
   return (
     <div className="space-y-6">

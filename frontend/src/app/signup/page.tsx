@@ -62,7 +62,7 @@ export default function SignupPage() {
               value={businessName}
               onChange={(e) => setBusinessName(e.target.value)}
               className="w-full px-3 py-2 border rounded"
-              placeholder="e.g. Kalongo Guest House"
+              placeholder="e.g. My Hotel"
               required
             />
           </div>

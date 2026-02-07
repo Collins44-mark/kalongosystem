@@ -6,7 +6,11 @@ import Link from 'next/link';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 
-type BusinessInfo = { name: string; businessId: string } | null;
+type MeResponse = {
+  email: string;
+  role: string;
+  business: { id: string; name: string; code: string };
+};
 
 const SIDEBAR_LINKS: { href: string; label: string; roles: string[] }[] = [
   { href: '/dashboard', label: 'Overview', roles: ['MANAGER'] },
@@ -29,7 +33,8 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const { token, user, logout } = useAuth();
-  const [business, setBusiness] = useState<BusinessInfo>(null);
+  const [me, setMe] = useState<MeResponse | null>(null);
+  const [meLoading, setMeLoading] = useState(true);
 
   useEffect(() => {
     if (!token || !user) {
@@ -38,13 +43,18 @@ export default function DashboardLayout({
   }, [token, user, router]);
 
   useEffect(() => {
-    if (!token) return;
-    api<{ name: string; businessId: string }>('/business/me', { token })
-      .then((b) => setBusiness({ name: b.name, businessId: b.businessId }))
-      .catch(() => setBusiness(null));
+    if (!token) {
+      setMeLoading(false);
+      return;
+    }
+    setMeLoading(true);
+    api<MeResponse>('/api/me', { token })
+      .then(setMe)
+      .catch(() => setMe(null))
+      .finally(() => setMeLoading(false));
   }, [token]);
 
-  const role = user?.role === 'ADMIN' ? 'MANAGER' : user?.role; // backward compat
+  const role = user?.role === 'ADMIN' ? 'MANAGER' : user?.role;
   const visibleLinks = SIDEBAR_LINKS.filter((l) =>
     l.roles.includes(role || '')
   );
@@ -54,9 +64,18 @@ export default function DashboardLayout({
   return (
     <div className="flex min-h-screen bg-slate-50">
       <aside className="w-56 bg-slate-800 text-white flex flex-col">
-        <div className="p-4 border-b border-slate-700">
-          <div className="font-semibold">{business?.name ?? 'HMS'}</div>
-          <div className="text-xs text-slate-400">{business?.businessId ?? user?.businessId ?? '—'}</div>
+        <div className="p-4 border-b border-slate-700 min-h-[4.5rem]">
+          {meLoading ? (
+            <div className="animate-pulse space-y-2">
+              <div className="h-4 bg-slate-600 rounded w-3/4" />
+              <div className="h-3 bg-slate-600 rounded w-1/2" />
+            </div>
+          ) : me?.business ? (
+            <>
+              <div className="font-semibold">{me.business.name}</div>
+              <div className="text-xs text-slate-400">{me.business.code}</div>
+            </>
+          ) : null}
         </div>
         <nav className="flex-1 p-2 space-y-1">
           {visibleLinks.map((link) => (
@@ -88,7 +107,7 @@ export default function DashboardLayout({
       <main className="flex-1 overflow-auto">
         <header className="h-12 bg-white border-b flex items-center px-4">
           <span className="text-sm text-slate-600">
-            {user.email} · {user.role}
+            {user.email} · {role}
           </span>
         </header>
         <div className="p-6">{children}</div>
