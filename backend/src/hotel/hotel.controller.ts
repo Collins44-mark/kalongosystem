@@ -162,6 +162,8 @@ export class HotelController {
   async getBookings(
     @CurrentUser() user: any,
     @Query('scope') scope?: 'all' | 'today' | 'mine',
+    @Query('from') from?: string,
+    @Query('to') to?: string,
   ) {
     const isManager = user.role === 'MANAGER' || user.role === 'ADMIN';
     const s = scope && ['all', 'today', 'mine'].includes(scope)
@@ -170,7 +172,8 @@ export class HotelController {
         ? 'all'
         : 'today';
     const opts = s === 'all' ? undefined : { scope: s, userId: user.sub };
-    return this.hotel.getBookings(user.businessId, user.branchId, opts);
+    const dateRange = from && to ? { from, to } : undefined;
+    return this.hotel.getBookings(user.businessId, user.branchId, opts, dateRange);
   }
 
   @Post('bookings/:id/check-in')

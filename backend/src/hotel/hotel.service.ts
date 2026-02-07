@@ -204,9 +204,20 @@ export class HotelService {
     businessId: string,
     branchId: string,
     opts?: { scope?: 'all' | 'today' | 'mine'; userId?: string },
+    dateRange?: { from: string; to: string },
   ) {
     const where: Record<string, unknown> = { businessId, branchId };
-    if (opts?.scope === 'today') {
+    if (dateRange?.from && dateRange?.to) {
+      const from = new Date(dateRange.from);
+      from.setHours(0, 0, 0, 0);
+      const to = new Date(dateRange.to);
+      to.setHours(23, 59, 59, 999);
+      where.OR = [
+        { checkIn: { gte: from, lte: to } },
+        { checkOut: { gte: from, lte: to } },
+        { checkIn: { lte: from }, checkOut: { gte: to } },
+      ];
+    } else if (opts?.scope === 'today') {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today);
@@ -216,7 +227,8 @@ export class HotelService {
         { checkOut: { gte: today, lt: tomorrow } },
         { status: 'CHECKED_IN', checkIn: { lte: today }, checkOut: { gte: today } },
       ];
-    } else if (opts?.scope === 'mine' && opts?.userId) {
+    }
+    if (opts?.scope === 'mine' && opts?.userId) {
       where.createdBy = opts.userId;
     }
     const bookings = await this.prisma.booking.findMany({

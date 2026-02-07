@@ -43,15 +43,47 @@ export default function FrontOfficePage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [activeTab, setActiveTab] = useState<string>('rooms');
   const [loading, setLoading] = useState(true);
-  const [scope, setScope] = useState<'all' | 'today' | 'mine'>('all');
+  const [bookingFilter, setBookingFilter] = useState<'today' | 'week' | 'month' | 'bydate'>('today');
+  const [bookingDateFrom, setBookingDateFrom] = useState('');
+  const [bookingDateTo, setBookingDateTo] = useState('');
   const [roomStatusFilter, setRoomStatusFilter] = useState<string>('all');
 
   const isManager = user?.role === 'MANAGER' || user?.role === 'ADMIN';
 
+  const { bookingFrom, bookingTo } = (() => {
+    const now = new Date();
+    if (bookingFilter === 'bydate' && bookingDateFrom && bookingDateTo) {
+      return { bookingFrom: bookingDateFrom, bookingTo: bookingDateTo };
+    }
+    if (bookingFilter === 'bydate') {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const end = new Date(start);
+      end.setHours(23, 59, 59, 999);
+      return { bookingFrom: start.toISOString().slice(0, 10), bookingTo: end.toISOString().slice(0, 10) };
+    }
+    if (bookingFilter === 'today') {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const end = new Date(start);
+      end.setHours(23, 59, 59, 999);
+      return { bookingFrom: start.toISOString().slice(0, 10), bookingTo: end.toISOString().slice(0, 10) };
+    }
+    if (bookingFilter === 'week') {
+      const end = new Date(now);
+      const start = new Date(now);
+      start.setDate(start.getDate() - 7);
+      return { bookingFrom: start.toISOString().slice(0, 10), bookingTo: end.toISOString().slice(0, 10) };
+    }
+    if (bookingFilter === 'month') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { bookingFrom: start.toISOString().slice(0, 10), bookingTo: now.toISOString().slice(0, 10) };
+    }
+    return { bookingFrom: '', bookingTo: '' };
+  })();
+
   const managerTabs = [
     { id: 'rooms', label: 'Room Availability' },
     { id: 'setup', label: 'Room Setup' },
-    { id: 'bookings', label: 'All Bookings' },
+    { id: 'bookings', label: 'Bookings' },
     { id: 'history', label: 'Booking History' },
     { id: 'folios', label: 'Active Folios' },
     { id: 'new', label: 'New Booking' },
@@ -66,11 +98,26 @@ export default function FrontOfficePage() {
 
   useEffect(() => {
     if (!token) return;
-    const bookingScope = activeTab === 'history' ? 'all' : isManager ? scope : 'today';
+    const params = new URLSearchParams();
+    if (activeTab === 'history') {
+      params.set('scope', 'all');
+      if (bookingFrom && bookingTo) {
+        params.set('from', bookingFrom);
+        params.set('to', bookingTo);
+      }
+    } else if (isManager) {
+      params.set('scope', 'all');
+      if (bookingFrom && bookingTo) {
+        params.set('from', bookingFrom);
+        params.set('to', bookingTo);
+      }
+    } else {
+      params.set('scope', 'today');
+    }
     Promise.all([
       api<Category[]>('/hotel/categories', { token }).catch(() => []),
       api<Room[]>('/hotel/rooms', { token }).catch(() => []),
-      api<Booking[]>(`/hotel/bookings?scope=${bookingScope}`, { token }).catch(() => []),
+      api<Booking[]>(`/hotel/bookings?${params}`, { token }).catch(() => []),
     ])
       .then(([c, r, b]) => {
         setCategories(c);
@@ -78,12 +125,27 @@ export default function FrontOfficePage() {
         setBookings(b);
       })
       .finally(() => setLoading(false));
-  }, [token, isManager, scope, activeTab]);
+  }, [token, isManager, activeTab, bookingFrom, bookingTo]);
 
   function refresh() {
     if (!token) return;
-    const bookingScope = activeTab === 'history' ? 'all' : isManager ? scope : 'today';
-    api<Booking[]>(`/hotel/bookings?scope=${bookingScope}`, { token })
+    const params = new URLSearchParams();
+    if (activeTab === 'history') {
+      params.set('scope', 'all');
+      if (bookingFrom && bookingTo) {
+        params.set('from', bookingFrom);
+        params.set('to', bookingTo);
+      }
+    } else if (isManager) {
+      params.set('scope', 'all');
+      if (bookingFrom && bookingTo) {
+        params.set('from', bookingFrom);
+        params.set('to', bookingTo);
+      }
+    } else {
+      params.set('scope', 'today');
+    }
+    api<Booking[]>(`/hotel/bookings?${params}`, { token })
       .then(setBookings)
       .catch(() => {});
     api<Room[]>('/hotel/rooms', { token }).then(setRooms).catch(() => {});
@@ -94,7 +156,7 @@ export default function FrontOfficePage() {
 
   const activeFolios = bookings.filter((b) => b.status === 'CHECKED_IN');
   const historyBookings = isManager ? bookings.filter((b) => b.status === 'CHECKED_OUT' || b.status === 'CANCELLED') : [];
-  const todayBookings = isManager && scope === 'all' ? bookings : bookings;
+  const activeBookings = bookings.filter((b) => ['CONFIRMED', 'CHECKED_IN', 'RESERVED'].includes(b.status));
 
   return (
     <div className="min-w-0">
@@ -106,18 +168,42 @@ export default function FrontOfficePage() {
         <p className="text-xs sm:text-sm text-slate-500 mb-2">Operational view — today&apos;s tasks only</p>
       )}
 
-      {isManager && activeTab === 'bookings' && (
-        <div className="flex flex-wrap gap-2 mb-3 sm:mb-4">
-          {(['all', 'today', 'mine'] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => setScope(s)}
-              className={`px-3 py-1.5 rounded text-sm touch-manipulation min-h-[44px] sm:min-h-0 ${scope === s ? 'bg-teal-600 text-white' : 'bg-slate-200'}`}
-            >
-              {s === 'all' ? 'All' : s === 'today' ? "Today" : 'My Bookings'}
-            </button>
-          ))}
-          <button onClick={refresh} className="px-3 py-1.5 text-sm text-teal-600 hover:underline touch-manipulation">Refresh</button>
+      {isManager && (activeTab === 'bookings' || activeTab === 'history') && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
+          <p className="text-sm text-slate-500">
+            {activeTab === 'bookings' ? 'Active bookings' : 'Booking history'} — {bookingFilter === 'today' ? 'Today' : bookingFilter === 'week' ? 'This Week' : bookingFilter === 'month' ? 'This Month' : bookingDateFrom && bookingDateTo ? `${bookingDateFrom} to ${bookingDateTo}` : 'Select dates'}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex rounded-full bg-slate-100 p-1 gap-0.5">
+              {(['today', 'week', 'month'] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setBookingFilter(f)}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                    bookingFilter === f ? 'bg-white text-teal-600 shadow-sm ring-1 ring-teal-200' : 'text-slate-600 hover:text-slate-800'
+                  }`}
+                >
+                  {f === 'today' ? 'Today' : f === 'week' ? 'This Week' : 'This Month'}
+                </button>
+              ))}
+              <button
+                onClick={() => setBookingFilter('bydate')}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  bookingFilter === 'bydate' ? 'bg-white text-teal-600 shadow-sm ring-1 ring-teal-200' : 'text-slate-600 hover:text-slate-800'
+                }`}
+              >
+                By Date
+              </button>
+            </div>
+            {bookingFilter === 'bydate' && (
+              <div className="flex items-center gap-2">
+                <input type="date" value={bookingDateFrom} onChange={(e) => setBookingDateFrom(e.target.value)} className="px-3 py-1.5 rounded-full border border-slate-200 text-sm" />
+                <span className="text-slate-400">to</span>
+                <input type="date" value={bookingDateTo} onChange={(e) => setBookingDateTo(e.target.value)} className="px-3 py-1.5 rounded-full border border-slate-200 text-sm" />
+              </div>
+            )}
+            <button onClick={refresh} className="px-3 py-1.5 text-sm text-teal-600 hover:underline">Refresh</button>
+          </div>
         </div>
       )}
 
@@ -139,6 +225,7 @@ export default function FrontOfficePage() {
           isManager={isManager}
           roomStatusFilter={roomStatusFilter}
           onFilterChange={setRoomStatusFilter}
+          categories={categories}
         />
       )}
 
@@ -153,7 +240,7 @@ export default function FrontOfficePage() {
 
       {activeTab === 'bookings' && (
         <BookingList
-          bookings={todayBookings}
+          bookings={isManager ? activeBookings : bookings}
           token={token!}
           isManager={isManager}
           rooms={rooms}
@@ -194,76 +281,116 @@ export default function FrontOfficePage() {
   );
 }
 
-const ROOM_STATUS_OPTIONS = [
-  { value: 'all', label: 'All' },
-  { value: 'VACANT', label: 'Vacant' },
-  { value: 'OCCUPIED', label: 'Occupied' },
-  { value: 'RESERVED', label: 'Reserved' },
-  { value: 'UNDER_MAINTENANCE', label: 'Maintenance' },
-];
-
 function RoomAvailability({
   rooms,
   isManager,
   roomStatusFilter,
   onFilterChange,
+  categories,
 }: {
   rooms: Room[];
   isManager: boolean;
   roomStatusFilter: string;
   onFilterChange: (v: string) => void;
+  categories: Category[];
 }) {
   const filteredRooms =
     roomStatusFilter === 'all'
       ? rooms
       : rooms.filter((r) => r.status === roomStatusFilter);
 
+  const total = rooms.length;
+  const occupied = rooms.filter((r) => r.status === 'OCCUPIED').length;
+  const vacant = rooms.filter((r) => r.status === 'VACANT').length;
+  const reserved = rooms.filter((r) => r.status === 'RESERVED').length;
+  const maintenance = rooms.filter((r) => r.status === 'UNDER_MAINTENANCE').length;
+
+  const categoryMap = new Map(categories.map((c) => [c.id, c]));
+  const roomsByCategory = [...new Set(filteredRooms.map((r) => r.category.id))].map((catId) => {
+    const cat = categoryMap.get(catId) || { id: catId, name: filteredRooms.find((r) => r.category.id === catId)?.category.name ?? 'Other', pricePerNight: '0' };
+    return { category: cat, rooms: filteredRooms.filter((r) => r.category.id === catId) };
+  }).sort((a, b) => a.category.name.localeCompare(b.category.name));
+
+  const statusByVariant: Record<string, string> = {
+    total: 'all',
+    occupied: 'OCCUPIED',
+    vacant: 'VACANT',
+    reserved: 'RESERVED',
+    maintenance: 'UNDER_MAINTENANCE',
+  };
+  const RoomStatusCard = ({ label, value, variant }: { label: string; value: number; variant: keyof typeof statusByVariant }) => {
+    const styles: Record<string, string> = {
+      total: 'bg-[#0B3C5D] text-white',
+      occupied: 'border-2 border-green-400 ring-2 ring-green-100 bg-white',
+      vacant: 'border border-slate-200 bg-white',
+      reserved: 'border-2 border-amber-400 ring-2 ring-amber-100 bg-white',
+      maintenance: 'border-2 border-red-400 ring-2 ring-red-100 bg-white',
+    };
+    const valueColor = variant === 'occupied' ? 'text-green-600' : variant === 'maintenance' ? 'text-red-600' : variant === 'reserved' ? 'text-amber-700' : variant === 'total' ? 'text-white' : 'text-slate-800';
+    return (
+      <button
+        type="button"
+        onClick={() => isManager && onFilterChange(statusByVariant[variant])}
+        className={`rounded-xl p-5 shadow-md min-h-[100px] flex flex-col justify-center text-left w-full transition-all ${
+          styles[variant]
+        } ${isManager ? 'cursor-pointer hover:shadow-lg' : 'cursor-default'}`}
+      >
+        <div className={`text-sm font-medium ${variant === 'total' ? 'opacity-90' : 'text-slate-500'}`}>{label}</div>
+        <div className={`text-2xl font-bold mt-0.5 ${valueColor}`}>{value}</div>
+      </button>
+    );
+  };
+
   return (
-    <div className="space-y-3 sm:space-y-4">
-      {isManager && (
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="text-sm text-slate-600">Filter by status:</label>
-          <select
-            value={roomStatusFilter}
-            onChange={(e) => onFilterChange(e.target.value)}
-            className="px-3 py-2 border rounded-lg text-sm touch-manipulation min-h-[44px] sm:min-h-0 bg-white"
-          >
-            {ROOM_STATUS_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </div>
-      )}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
-        {filteredRooms.map((r) => (
-          <div
-            key={r.id}
-            className={`p-3 sm:p-4 rounded-lg border min-h-[80px] flex flex-col justify-between ${
-              r.status === 'VACANT'
-                ? 'bg-green-50 border-green-200'
-                : r.status === 'OCCUPIED'
-                ? 'bg-amber-50 border-amber-200'
-                : r.status === 'RESERVED'
-                ? 'bg-blue-50 border-blue-200'
-                : 'bg-slate-50 border-slate-200'
-            }`}
-          >
-            <div>
-              <div className="font-medium text-sm sm:text-base">
-                {r.roomNumber}
-                {r.roomName && (
-                  <span className="text-slate-600 font-normal ml-1">({r.roomName})</span>
-                )}
-              </div>
-              <div className="text-xs sm:text-sm text-slate-600 mt-0.5">{r.category.name}</div>
-            </div>
-            <div className="text-xs text-slate-500 mt-1 sm:mt-2">{r.status}</div>
-          </div>
-        ))}
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <RoomStatusCard label="Total Rooms" value={total} variant="total" />
+        <RoomStatusCard label="Occupied" value={occupied} variant="occupied" />
+        <RoomStatusCard label="Vacant" value={vacant} variant="vacant" />
+        <RoomStatusCard label="Reserved" value={reserved} variant="reserved" />
+        <RoomStatusCard label="Under Maintenance" value={maintenance} variant="maintenance" />
       </div>
-      {filteredRooms.length === 0 && (
-        <p className="text-slate-500 text-sm py-4">No rooms match the selected filter.</p>
-      )}
+
+      <div className="bg-white rounded-xl shadow-md border border-slate-100 overflow-hidden">
+        <div className="p-4 border-b border-slate-100">
+          <h2 className="font-semibold text-slate-800">
+            Rooms {roomStatusFilter !== 'all' ? `— ${roomStatusFilter.replace('_', ' ')}` : ''}
+          </h2>
+        </div>
+        <div className="p-4 space-y-6">
+          {roomsByCategory.length > 0 ? (
+            roomsByCategory.map(({ category, rooms: catRooms }) => (
+              <div key={category.id}>
+                <h3 className="text-sm font-medium text-slate-600 mb-2">{category.name}</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
+                  {catRooms.map((r) => (
+                    <div
+                      key={r.id}
+                      className={`p-3 sm:p-4 rounded-lg border min-h-[80px] flex flex-col justify-between ${
+                        r.status === 'VACANT' ? 'bg-green-50 border-green-200' :
+                        r.status === 'OCCUPIED' ? 'bg-amber-50 border-amber-200' :
+                        r.status === 'RESERVED' ? 'bg-blue-50 border-blue-200' :
+                        'bg-slate-50 border-slate-200'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-medium text-sm sm:text-base">
+                          {r.roomNumber}
+                          {r.roomName && <span className="text-slate-600 font-normal ml-1">({r.roomName})</span>}
+                        </div>
+                        <div className="text-xs sm:text-sm text-slate-600 mt-0.5">{r.category.name}</div>
+                      </div>
+                      <div className="text-xs text-slate-500 mt-1 sm:mt-2">{r.status}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="text-slate-500 text-sm py-4">No rooms match the selected filter.</p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
