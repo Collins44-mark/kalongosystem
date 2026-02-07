@@ -72,4 +72,10 @@ npm run dev
 1. Import the repo in Vercel
 2. **Root Directory:** set to `frontend` (required for monorepo – fixes "No Output Directory named public" error)
 3. **Framework Preset:** Next.js (auto-detected when Root Directory is correct)
-4. Add env var: `NEXT_PUBLIC_API_URL` = your Render backend URL
+4. Add env var: `NEXT_PUBLIC_API_URL` = your Render backend URL (e.g. `https://hms-backend-xxx.onrender.com`)
+
+**Important:** For frontend ↔ backend to work:
+- **Vercel:** `NEXT_PUBLIC_API_URL` = your Render backend URL
+- **Render:** `FRONTEND_URL` = your Vercel frontend URL (e.g. `https://yourapp.vercel.app`)
+
+If you get "Failed to fetch": check both URLs, ensure no trailing slashes, and redeploy both.
