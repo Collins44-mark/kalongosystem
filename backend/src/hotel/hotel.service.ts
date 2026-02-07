@@ -54,10 +54,13 @@ export class HotelService {
     return cat;
   }
 
-  async getCategories(businessId: string, branchId: string) {
+  async getCategories(businessId: string, branchId?: string) {
+    const where: { businessId: string; branchId?: string } = { businessId };
+    if (branchId) where.branchId = branchId;
     const categories = await this.prisma.roomCategory.findMany({
-      where: { businessId, branchId },
+      where,
       include: { rooms: true },
+      orderBy: { name: 'asc' },
     });
     return categories.map((c) => ({
       id: c.id,
@@ -88,10 +91,13 @@ export class HotelService {
     return room;
   }
 
-  async getRooms(businessId: string, branchId: string) {
+  async getRooms(businessId: string, branchId?: string) {
+    const where: { businessId: string; branchId?: string } = { businessId };
+    if (branchId) where.branchId = branchId;
     return this.prisma.room.findMany({
-      where: { businessId, branchId },
+      where,
       include: { category: true },
+      orderBy: { roomNumber: 'asc' },
     });
   }
 

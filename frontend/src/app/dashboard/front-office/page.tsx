@@ -114,17 +114,22 @@ export default function FrontOfficePage() {
     } else {
       params.set('scope', 'today');
     }
-    Promise.all([
-      api<Category[]>('/hotel/categories', { token }).catch(() => []),
-      api<Room[]>('/hotel/rooms', { token }).catch(() => []),
-      api<Booking[]>(`/hotel/bookings?${params}`, { token }).catch(() => []),
-    ])
-      .then(([c, r, b]) => {
-        setCategories(Array.isArray(c) ? c : []);
-        setRooms(Array.isArray(r) ? r : []);
-        setBookings(Array.isArray(b) ? b : []);
-      })
-      .finally(() => setLoading(false));
+    Promise.allSettled([
+      api<Category[]>('/hotel/categories', { token }),
+      api<Room[]>('/hotel/rooms', { token }),
+      api<Booking[]>(`/hotel/bookings?${params}`, { token }),
+    ]).then((results) => {
+      const [cRes, rRes, bRes] = results;
+      setCategories((prev) =>
+        cRes.status === 'fulfilled' && Array.isArray(cRes.value) ? cRes.value : prev
+      );
+      setRooms((prev) =>
+        rRes.status === 'fulfilled' && Array.isArray(rRes.value) ? rRes.value : prev
+      );
+      setBookings((prev) =>
+        bRes.status === 'fulfilled' && Array.isArray(bRes.value) ? bRes.value : prev
+      );
+    }).finally(() => setLoading(false));
   }, [token, isManager, activeTab, bookingFrom, bookingTo]);
 
   function refresh() {
@@ -145,14 +150,21 @@ export default function FrontOfficePage() {
     } else {
       params.set('scope', 'today');
     }
-    Promise.all([
-      api<Category[]>('/hotel/categories', { token }).catch(() => []),
-      api<Room[]>('/hotel/rooms', { token }).catch(() => []),
-      api<Booking[]>(`/hotel/bookings?${params}`, { token }).catch(() => []),
-    ]).then(([c, r, b]) => {
-      setCategories(Array.isArray(c) ? c : []);
-      setRooms(Array.isArray(r) ? r : []);
-      setBookings(Array.isArray(b) ? b : []);
+    Promise.allSettled([
+      api<Category[]>('/hotel/categories', { token }),
+      api<Room[]>('/hotel/rooms', { token }),
+      api<Booking[]>(`/hotel/bookings?${params}`, { token }),
+    ]).then((results) => {
+      const [cRes, rRes, bRes] = results;
+      setCategories((prev) =>
+        cRes.status === 'fulfilled' && Array.isArray(cRes.value) ? cRes.value : prev
+      );
+      setRooms((prev) =>
+        rRes.status === 'fulfilled' && Array.isArray(rRes.value) ? rRes.value : prev
+      );
+      setBookings((prev) =>
+        bRes.status === 'fulfilled' && Array.isArray(bRes.value) ? bRes.value : prev
+      );
     });
   }
 
@@ -239,6 +251,7 @@ export default function FrontOfficePage() {
           categories={categories}
           rooms={rooms}
           onAction={refresh}
+          onCategoryAdded={(cat) => setCategories((prev) => [...prev, { id: cat.id, name: cat.name, pricePerNight: String(cat.pricePerNight || '0') }])}
         />
       )}
 
@@ -404,11 +417,13 @@ function RoomSetup({
   categories,
   rooms,
   onAction,
+  onCategoryAdded,
 }: {
   token: string;
   categories: Category[];
   rooms: Room[];
   onAction: () => void;
+  onCategoryAdded?: (cat: { id: string; name: string; pricePerNight?: string | number }) => void;
 }) {
   const [catName, setCatName] = useState('');
   const [catPrice, setCatPrice] = useState('');
@@ -427,13 +442,14 @@ function RoomSetup({
     }
     setLoading(true);
     try {
-      await api('/hotel/categories', {
+      const newCat = await api<{ id: string; name: string; pricePerNight: string | number }>('/hotel/categories', {
         method: 'POST',
         token,
         body: JSON.stringify({ name: catName.trim(), pricePerNight: price }),
       });
       setCatName('');
       setCatPrice('');
+      onCategoryAdded?.(newCat);
       onAction();
     } catch (err) {
       alert((err as Error).message || 'Failed to add category');

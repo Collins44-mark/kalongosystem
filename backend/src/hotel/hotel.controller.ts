@@ -96,12 +96,17 @@ export class HotelController {
       user.sub,
     );
     await this.hotel.logAudit(user.sub, user.role || 'MANAGER', user.businessId, 'category_created', 'room_category', cat.id);
-    return cat;
+    return {
+      id: cat.id,
+      name: cat.name,
+      pricePerNight: String(cat.pricePerNight),
+    };
   }
 
   @Get('categories')
+  @SkipRolesGuard()
   async getCategories(@CurrentUser() user: any) {
-    return this.hotel.getCategories(user.businessId, user.branchId || 'main');
+    return this.hotel.getCategories(user.businessId);
   }
 
   @Post('rooms')
@@ -119,8 +124,9 @@ export class HotelController {
   }
 
   @Get('rooms')
+  @SkipRolesGuard()
   async getRooms(@CurrentUser() user: any) {
-    return this.hotel.getRooms(user.businessId, user.branchId || 'main');
+    return this.hotel.getRooms(user.businessId);
   }
 
   @Put('rooms/:id/status')
