@@ -5,6 +5,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { HotelService } from './hotel.service';
@@ -64,6 +65,8 @@ export class HotelController {
   constructor(private hotel: HotelService) {}
 
   @Post('categories')
+  @UseGuards(RolesGuard)
+  @Roles('MANAGER')
   async createCategory(
     @CurrentUser() user: any,
     @Body() dto: CreateCategoryDto,
@@ -82,6 +85,8 @@ export class HotelController {
   }
 
   @Post('rooms')
+  @UseGuards(RolesGuard)
+  @Roles('MANAGER')
   async createRoom(@CurrentUser() user: any, @Body() dto: CreateRoomDto) {
     return this.hotel.createRoom(
       user.businessId,
@@ -123,18 +128,64 @@ export class HotelController {
   }
 
   @Get('bookings')
-  async getBookings(@CurrentUser() user: any) {
-    return this.hotel.getBookings(user.businessId, user.branchId);
+  async getBookings(
+    @CurrentUser() user: any,
+    @Query('scope') scope?: 'all' | 'today' | 'mine',
+  ) {
+    const isManager = user.role === 'MANAGER' || user.role === 'ADMIN';
+    const s = scope && ['all', 'today', 'mine'].includes(scope)
+      ? scope
+      : isManager
+        ? 'all'
+        : 'today';
+    const opts = s === 'all' ? undefined : { scope: s, userId: user.sub };
+    return this.hotel.getBookings(user.businessId, user.branchId, opts);
   }
 
   @Post('bookings/:id/check-in')
   async checkIn(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.hotel.checkIn(id, user.businessId);
+    return this.hotel.checkIn(id, user.businessId, user.sub);
   }
 
   @Post('bookings/:id/check-out')
   async checkOut(@CurrentUser() user: any, @Param('id') id: string) {
     return this.hotel.checkOut(id, user.businessId);
+  }
+
+  @Post('bookings/:id/cancel')
+  @UseGuards(RolesGuard)
+  @Roles('MANAGER')
+  async cancelBooking(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.hotel.cancelBooking(id, user.businessId);
+  }
+
+  @Put('bookings/:id/room')
+  async changeRoom(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body('roomId') roomId: string,
+  ) {
+    return this.hotel.changeRoom(id, user.businessId, roomId, user.sub);
+  }
+
+  @Put('bookings/:id/extend')
+  async extendStay(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body('checkOut') checkOut: string,
+  ) {
+    return this.hotel.extendStay(id, user.businessId, new Date(checkOut));
+  }
+
+  @Put('bookings/:id/status')
+  @UseGuards(RolesGuard)
+  @Roles('MANAGER')
+  async overrideStatus(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body('status') status: string,
+  ) {
+    return this.hotel.overrideStatus(id, user.businessId, status);
   }
 
   @Get('summary')
