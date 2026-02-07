@@ -248,48 +248,6 @@ export default function OverviewPage() {
         <RoomCard title="Under Maintenance" value={roomSummary.underMaintenance} variant="maintenance" />
       </div>
 
-      {/* Rooms List - same data as Front Office */}
-      {rooms.length > 0 && (
-        <div className="bg-white rounded-xl shadow-md border border-slate-100 overflow-hidden">
-          <div className="p-4 border-b border-slate-100">
-            <h2 className="font-semibold text-slate-800">Rooms</h2>
-            <p className="text-sm text-slate-500 mt-0.5">Room numbers by category — same as Front Office</p>
-          </div>
-          <div className="p-4 space-y-6">
-            {(() => {
-              const categoryMap = new Map<string, { id: string; name: string }>();
-              rooms.forEach((r) => categoryMap.set(r.category.id, { id: r.category.id, name: r.category.name }));
-              const byCategory = [...new Set(rooms.map((r) => r.category.id))].map((catId) => ({
-                category: categoryMap.get(catId) || { id: catId, name: 'Other' },
-                rooms: rooms.filter((r) => r.category.id === catId),
-              })).sort((a, b) => a.category.name.localeCompare(b.category.name));
-              return byCategory.map(({ category, rooms: catRooms }) => (
-                <div key={category.id}>
-                  <h3 className="text-sm font-medium text-slate-600 mb-2">{category.name}</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-                    {catRooms.map((r) => (
-                      <div
-                        key={r.id}
-                        className={`p-3 rounded-lg border text-sm ${
-                          r.status === 'VACANT' ? 'bg-slate-100 border-slate-300' :
-                          r.status === 'OCCUPIED' ? 'bg-green-50 border-green-200' :
-                          r.status === 'RESERVED' ? 'bg-amber-50 border-amber-200' :
-                          'bg-red-50 border-red-200'
-                        }`}
-                      >
-                        <div className="font-medium">{r.roomNumber}</div>
-                        {r.roomName && <div className="text-xs text-slate-600">{r.roomName}</div>}
-                        <div className="text-xs text-slate-500 mt-0.5">{r.status}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ));
-            })()}
-          </div>
-        </div>
-      )}
-
       {/* Sales Container */}
       <div className="bg-white rounded-xl shadow-md border border-slate-100 overflow-hidden">
         <div className="p-4 border-b border-slate-100">
