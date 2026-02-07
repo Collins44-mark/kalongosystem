@@ -32,15 +32,15 @@ export default function DashboardLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { token, user, logout } = useAuth();
+  const { token, user, logout, _hasHydrated } = useAuth();
   const [me, setMe] = useState<MeResponse | null>(null);
   const [meLoading, setMeLoading] = useState(true);
 
   useEffect(() => {
-    if (!token || !user) {
+    if (_hasHydrated && (!token || !user)) {
       router.replace('/login');
     }
-  }, [token, user, router]);
+  }, [_hasHydrated, token, user, router]);
 
   useEffect(() => {
     if (!token) {
@@ -59,7 +59,7 @@ export default function DashboardLayout({
     l.roles.includes(role || '')
   );
 
-  if (!token || !user) return null;
+  if (!_hasHydrated || !token || !user) return null;
 
   return (
     <div className="flex min-h-screen bg-slate-50">

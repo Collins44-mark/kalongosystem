@@ -12,8 +12,10 @@ export type User = {
 type AuthState = {
   token: string | null;
   user: User | null;
+  _hasHydrated: boolean;
   setAuth: (token: string, user: User) => void;
   logout: () => void;
+  setHasHydrated: (v: boolean) => void;
 };
 
 export const useAuth = create<AuthState>()(
@@ -21,9 +23,17 @@ export const useAuth = create<AuthState>()(
     (set) => ({
       token: null,
       user: null,
+      _hasHydrated: false,
       setAuth: (token, user) => set({ token, user }),
       logout: () => set({ token: null, user: null }),
+      setHasHydrated: (v) => set({ _hasHydrated: v }),
     }),
-    { name: 'hms-auth' }
+    {
+      name: 'hms-auth',
+      partialize: (s) => ({ token: s.token, user: s.user }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
+    }
   )
 );
