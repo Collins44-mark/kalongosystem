@@ -7,10 +7,11 @@ import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
 import { roleForPermission } from '@/lib/roles';
+import { defaultDashboardRoute, isOverviewAllowed } from '@/lib/homeRoute';
 
 function MenuIcon({ open }: { open: boolean }) {
   return (
-    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       {open ? (
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
       ) : (
@@ -136,6 +137,13 @@ export default function DashboardLayout({
 
   if (!_hasHydrated || !token || !user) return null;
 
+  // Prevent non-manager users from staying on Overview route (direct URL access).
+  if (!isOverviewAllowed(user?.role) && pathname === '/dashboard') {
+    // Avoid rendering a flash of overview UI.
+    router.replace(defaultDashboardRoute(user.role));
+    return null;
+  }
+
   // Mandatory worker selection when role has workers
   if (me?.needsWorkerSelection && me?.workers?.length) {
     return (
@@ -171,7 +179,7 @@ export default function DashboardLayout({
     <div className="flex min-h-screen bg-slate-50">
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="lg:hidden fixed bottom-4 right-4 z-40 w-12 h-12 rounded-full bg-teal-600 text-white shadow-lg flex items-center justify-center touch-manipulation"
+        className="lg:hidden fixed bottom-4 right-4 z-40 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-teal-600 text-white shadow-lg flex items-center justify-center touch-manipulation"
         aria-label={t('nav.toggleMenu')}
       >
         <MenuIcon open={sidebarOpen} />
@@ -230,14 +238,14 @@ export default function DashboardLayout({
         />
       )}
       <main className="flex-1 overflow-auto min-w-0">
-        <header className="h-12 bg-white border-b flex items-center justify-between px-4 gap-2">
+        <header className="h-12 sm:h-12 bg-white border-b flex items-center justify-between px-3 sm:px-4 gap-2">
           <span className="text-xs sm:text-sm text-slate-600 truncate font-medium uppercase">
             {displayWorker ? `${displayRole} | ${displayWorker}` : displayRole}
           </span>
           <div className="relative flex-shrink-0">
             <button
               onClick={() => setLangOpen(!langOpen)}
-              className="px-2 py-1 text-sm text-slate-600 hover:bg-slate-100 rounded flex items-center gap-1"
+              className="px-2 py-1 text-xs sm:text-sm text-slate-600 hover:bg-slate-100 rounded flex items-center gap-1"
             >
               <span>{locale === 'sw' ? 'Kiswahili' : 'English'}</span>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

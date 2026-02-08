@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
+import { defaultDashboardRoute } from '@/lib/homeRoute';
 
 type LoginUser = { id: string; email: string; name?: string; businessId: string; role: string };
 type Worker = { id: string; fullName: string };
@@ -56,7 +57,7 @@ export default function LoginPage() {
         setWorkerId(res.workers[0]?.id ?? '');
       } else {
         setAuth(token, user);
-        router.replace('/dashboard');
+        router.replace(defaultDashboardRoute(user.role));
       }
     } catch (err: unknown) {
       setError((err as Error).message || 'Login failed');
@@ -80,7 +81,7 @@ export default function LoginPage() {
       setPendingWorkerSelection(null);
       setLoginToken(null);
       setLoginUser(null);
-      router.replace('/dashboard');
+      router.replace(defaultDashboardRoute(loginUser.role));
     } catch (err: unknown) {
       setError((err as Error).message || 'Failed to select worker');
     } finally {

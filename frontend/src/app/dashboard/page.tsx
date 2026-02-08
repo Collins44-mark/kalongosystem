@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
+import { useRouter } from 'next/navigation';
+import { isManagerLevel } from '@/lib/roles';
+import { defaultDashboardRoute } from '@/lib/homeRoute';
 
 type Room = { id: string; roomNumber: string; roomName?: string; status: string; category: { id: string; name: string; pricePerNight: string } };
 
@@ -39,7 +42,8 @@ const EMPTY_FINANCE: FinanceData = {
 type FilterOption = 'today' | 'week' | 'month' | 'bydate';
 
 export default function OverviewPage() {
-  const { token } = useAuth();
+  const router = useRouter();
+  const { token, user } = useAuth();
   const { t } = useTranslation();
   const [data, setData] = useState<DashboardData | null>(null);
   const [finance, setFinance] = useState<FinanceData | null>(null);
@@ -49,6 +53,14 @@ export default function OverviewPage() {
   const [loading, setLoading] = useState(true);
 
   const period = filter === 'bydate' ? 'month' : filter;
+
+  // Overview is MANAGER-only. Other roles go straight to their module.
+  useEffect(() => {
+    if (!user?.role) return;
+    if (!isManagerLevel(user.role)) {
+      router.replace(defaultDashboardRoute(user.role));
+    }
+  }, [user?.role, router]);
 
   const { financeFrom, financeTo } = (() => {
     const now = new Date();
