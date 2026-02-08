@@ -8,12 +8,24 @@ export async function api<T>(
     'Content-Type': 'application/json',
     ...options?.headers,
   };
-  const token = options?.token;
+  let token = options?.token;
+  if (!token && typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('hms-auth');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        token = parsed?.state?.token ?? null;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
   if (token && typeof token === 'string') {
     (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
   }
+  const { token: _t, ...fetchOptions } = options ?? {};
   const res = await fetch(`${API_URL}${path}`, {
-    ...options,
+    ...fetchOptions,
     headers,
   });
   const data = await res.json().catch(() => ({}));

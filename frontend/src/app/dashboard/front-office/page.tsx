@@ -1256,7 +1256,7 @@ function NewBookingForm({
   onDone: () => void;
 }) {
   const tokenFromStore = useAuth((s) => s.token);
-  const activeToken = token || tokenFromStore;
+  const activeToken = (token || tokenFromStore || '') as string;
   const [categoryId, setCategoryId] = useState('');
   const [roomId, setRoomId] = useState('');
   const [guestName, setGuestName] = useState('');
@@ -1289,10 +1289,6 @@ function NewBookingForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!roomId || nights < 1) return;
-    if (!activeToken) {
-      alert(t('auth.sessionExpired') || 'Session expired. Please log in again.');
-      return;
-    }
     setLoading(true);
     try {
       await api('/hotel/bookings', {
