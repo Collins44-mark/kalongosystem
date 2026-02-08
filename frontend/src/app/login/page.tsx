@@ -7,22 +7,37 @@ import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
 
+type LoginUser = { id: string; email: string; name?: string; businessId: string; role: string };
+type Worker = { id: string; fullName: string };
+
 export default function LoginPage() {
   const router = useRouter();
   const setAuth = useAuth((s) => s.setAuth);
+  const setAuthWithWorker = useAuth((s) => s.setAuthWithWorker);
+  const setPendingWorkerSelection = useAuth((s) => s.setPendingWorkerSelection);
+  const pendingWorkerSelection = useAuth((s) => s.pendingWorkerSelection);
   const { t } = useTranslation();
   const [businessId, setBusinessId] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [workerId, setWorkerId] = useState('');
+  const [loginUser, setLoginUser] = useState<LoginUser | null>(null);
+  const [loginToken, setLoginToken] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      const res = await api<{ accessToken?: string; access_token?: string; user: unknown }>('/auth/login', {
+      const res = await api<{
+        accessToken?: string;
+        access_token?: string;
+        user: LoginUser;
+        needsWorkerSelection?: boolean;
+        workers?: Worker[];
+      }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify({
           businessId: businessId.trim().toUpperCase(),
@@ -32,13 +47,95 @@ export default function LoginPage() {
       });
       const token = res.accessToken ?? res.access_token;
       if (!token) throw new Error('No token received from server');
-      setAuth(token, res.user as Parameters<typeof setAuth>[1]);
-      router.replace('/dashboard');
+      const user = res.user as LoginUser;
+
+      if (res.needsWorkerSelection && res.workers && res.workers.length > 0) {
+        setLoginToken(token);
+        setLoginUser(user);
+        setPendingWorkerSelection(res.workers);
+        setWorkerId(res.workers[0]?.id ?? '');
+      } else {
+        setAuth(token, user);
+        router.replace('/dashboard');
+      }
     } catch (err: unknown) {
       setError((err as Error).message || 'Login failed');
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleWorkerSelect(e: React.FormEvent) {
+    e.preventDefault();
+    if (!loginToken || !loginUser || !workerId) return;
+    setError('');
+    setLoading(true);
+    try {
+      const res = await api<{ accessToken: string; worker: { id: string; fullName: string } }>('/auth/select-worker', {
+        method: 'POST',
+        token: loginToken,
+        body: JSON.stringify({ workerId }),
+      });
+      setAuthWithWorker(res.accessToken, loginUser, res.worker);
+      setPendingWorkerSelection(null);
+      setLoginToken(null);
+      setLoginUser(null);
+      router.replace('/dashboard');
+    } catch (err: unknown) {
+      setError((err as Error).message || 'Failed to select worker');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function backToLogin() {
+    setPendingWorkerSelection(null);
+    setLoginToken(null);
+    setLoginUser(null);
+    setWorkerId('');
+    setError('');
+  }
+
+  // Worker selection screen (after login when role has workers)
+  if (pendingWorkerSelection && loginUser && loginToken) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <form onSubmit={handleWorkerSelect} className="w-full max-w-sm p-6 bg-white rounded-lg shadow-md">
+          <h1 className="text-xl font-semibold mb-2">{t('auth.selectWorker')}</h1>
+          <p className="text-sm text-slate-600 mb-4">{t('auth.selectWorkerHint')}</p>
+          {error && (
+            <div className="mb-4 p-2 text-sm text-red-600 bg-red-50 rounded">{error}</div>
+          )}
+          <div className="mb-4">
+            <label className="block text-sm text-slate-600 mb-1">{t('auth.worker')}</label>
+            <select
+              value={workerId}
+              onChange={(e) => setWorkerId(e.target.value)}
+              className="w-full px-3 py-2 border rounded"
+              required
+            >
+              {pendingWorkerSelection.workers.map((w) => (
+                <option key={w.id} value={w.id}>{w.fullName}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-2 bg-teal-600 text-white rounded hover:bg-teal-700 disabled:opacity-50"
+          >
+            {loading ? '...' : t('auth.continue')}
+          </button>
+          <button
+            type="button"
+            onClick={backToLogin}
+            className="w-full mt-2 py-2 text-slate-600 hover:text-slate-800"
+          >
+            {t('common.back')}
+          </button>
+        </form>
+      </div>
+    );
   }
 
   return (

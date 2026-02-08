@@ -47,6 +47,10 @@
   "auth.signUpLink": "Sign up",
   "auth.loginLink": "Login",
   "auth.sessionExpired": "Session expired. Please log in again.",
+  "auth.selectWorker": "Select Worker",
+  "auth.selectWorkerHint": "Your role has multiple workers. Select who is using the system.",
+  "auth.worker": "Worker",
+  "auth.continue": "Continue",
 
   "home.tagline": "Hotel Management System — Tanzania",
 
@@ -252,6 +256,16 @@
   "settings.system": "System",
   "settings.enableDragDrop": "Enable Drag & Drop Booking (Beta)",
   "settings.enableDragDropDesc": "Adds Calendar View in Front Office. Default off.",
+  "settings.staffWorkers": "Staff Workers (per Role)",
+  "settings.staffWorkersDesc": "Create workers under each role. Users select a worker when logging in.",
+  "settings.allRoles": "All roles",
+  "settings.addStaffWorker": "Add Worker",
+  "settings.block": "Block",
+  "settings.unblock": "Unblock",
+  "settings.activity": "Activity",
+  "settings.noStaffWorkers": "No staff workers yet.",
+  "settings.activityLogs": "Worker Activity Logs",
+  "settings.noActivityLogs": "No activity logs.",
 
   "payments.cash": "Cash",
   "payments.bank": "Bank",

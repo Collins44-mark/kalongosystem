@@ -5,12 +5,14 @@ export interface JwtPayload {
   email: string;
   businessId: string;
   role: string;
+  workerId?: string | null;
+  workerName?: string | null;
 }
 
 export const CurrentUser = createParamDecorator(
-  (data: keyof JwtPayload | undefined, ctx: ExecutionContext): JwtPayload | string => {
+  (data: keyof JwtPayload | undefined, ctx: ExecutionContext): JwtPayload | string | null | undefined => {
     const request = ctx.switchToHttp().getRequest();
     const user = request.user as JwtPayload;
-    return data ? user?.[data] : user;
+    return data ? (user?.[data] ?? null) : user;
   },
 );

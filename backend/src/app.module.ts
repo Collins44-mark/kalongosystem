@@ -13,6 +13,7 @@ import { HousekeepingModule } from './housekeeping/housekeeping.module';
 import { FinanceModule } from './finance/finance.module';
 import { WorkersModule } from './workers/workers.module';
 import { UsersModule } from './users/users.module';
+import { StaffWorkersModule } from './staff-workers/staff-workers.module';
 import { ReportsModule } from './reports/reports.module';
 import { OverviewModule } from './overview/overview.module';
 import { HealthModule } from './health/health.module';
@@ -33,6 +34,7 @@ import { HealthModule } from './health/health.module';
     FinanceModule,
     WorkersModule,
     UsersModule,
+    StaffWorkersModule,
     ReportsModule,
     OverviewModule,
     HealthModule,

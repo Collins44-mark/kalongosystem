@@ -25,6 +25,10 @@ type MeResponse = {
   role: string;
   language?: string;
   business: { id: string; name: string; code: string };
+  activeWorkerId?: string | null;
+  activeWorkerName?: string | null;
+  needsWorkerSelection?: boolean;
+  workers?: { id: string; fullName: string }[];
 };
 
 const SIDEBAR_LINKS: { href: string; labelKey: string; roles: string[] }[] = [
@@ -47,11 +51,13 @@ export default function DashboardLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { token, user, logout, _hasHydrated } = useAuth();
+  const { token, user, logout, setAuthWithWorker, _hasHydrated } = useAuth();
   const { t, locale, setLocale } = useTranslation();
   const [me, setMe] = useState<MeResponse | null>(null);
   const [meLoading, setMeLoading] = useState(true);
   const [langOpen, setLangOpen] = useState(false);
+  const [workerSelectId, setWorkerSelectId] = useState('');
+  const [workerSelectSaving, setWorkerSelectSaving] = useState(false);
 
   useEffect(() => {
     if (_hasHydrated && (!token || !user)) {
@@ -102,11 +108,64 @@ export default function DashboardLayout({
     }
   }
 
+  useEffect(() => {
+    if (me?.workers && me.workers.length > 0 && !workerSelectId) setWorkerSelectId(me.workers[0].id);
+  }, [me?.needsWorkerSelection, me?.workers]);
+
+  async function submitWorkerSelection() {
+    if (!token || !workerSelectId || !me?.workers?.length || !user) return;
+    setWorkerSelectSaving(true);
+    try {
+      const res = await api<{ accessToken: string; worker: { id: string; fullName: string } }>('/auth/select-worker', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ workerId: workerSelectId }),
+      });
+      setAuthWithWorker(res.accessToken, user, res.worker);
+      setMe((prev) => prev ? { ...prev, needsWorkerSelection: false, workers: [], activeWorkerId: res.worker.id, activeWorkerName: res.worker.fullName } : null);
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setWorkerSelectSaving(false);
+    }
+  }
+
   const roleForNav = roleForPermission(user?.role) || user?.role || '';
   const visibleLinks = SIDEBAR_LINKS.filter((l) => l.roles.includes(roleForNav));
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   if (!_hasHydrated || !token || !user) return null;
+
+  // Mandatory worker selection when role has workers
+  if (me?.needsWorkerSelection && me?.workers?.length) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="w-full max-w-sm p-6 bg-white rounded-lg shadow-md">
+          <h1 className="text-xl font-semibold mb-2">{t('auth.selectWorker')}</h1>
+          <p className="text-sm text-slate-600 mb-4">{t('auth.selectWorkerHint')}</p>
+          <select
+            value={workerSelectId}
+            onChange={(e) => setWorkerSelectId(e.target.value)}
+            className="w-full px-3 py-2 border rounded mb-4"
+          >
+            {me.workers.map((w) => (
+              <option key={w.id} value={w.id}>{w.fullName}</option>
+            ))}
+          </select>
+          <button
+            onClick={submitWorkerSelection}
+            disabled={workerSelectSaving}
+            className="w-full py-2 bg-teal-600 text-white rounded hover:bg-teal-700 disabled:opacity-50"
+          >
+            {workerSelectSaving ? '...' : t('auth.continue')}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const displayRole = (roleForNav || user?.role || '').replace(/_/g, ' ');
+  const displayWorker = (user?.activeWorkerName ?? me?.activeWorkerName) || '';
 
   return (
     <div className="flex min-h-screen bg-slate-50">
@@ -173,7 +232,7 @@ export default function DashboardLayout({
       <main className="flex-1 overflow-auto min-w-0">
         <header className="h-12 bg-white border-b flex items-center justify-between px-4 gap-2">
           <span className="text-xs sm:text-sm text-slate-600 truncate font-medium uppercase">
-            {roleForNav || user?.role || ''}
+            {displayWorker ? `${displayRole} | ${displayWorker}` : displayRole}
           </span>
           <div className="relative flex-shrink-0">
             <button

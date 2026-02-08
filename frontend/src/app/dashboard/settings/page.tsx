@@ -7,6 +7,7 @@ import { useTranslation } from '@/lib/i18n/context';
 import { isManagerLevel } from '@/lib/roles';
 import { UserRolesSection } from './UserRolesSection';
 import { SystemSettingsSection } from './SystemSettingsSection';
+import { StaffWorkersSection } from './StaffWorkersSection';
 
 type Subscription = { plan: string; status: string; trialEndsAt: string };
 type MeResponse = { email: string; role: string; business: { id: string; name: string; code: string } };
@@ -70,6 +71,7 @@ export default function SettingsPage() {
       {isManager && token && (
         <>
           <UserRolesSection token={token} t={t} />
+          <StaffWorkersSection token={token} t={t} />
           <SystemSettingsSection token={token} t={t} />
         </>
       )}

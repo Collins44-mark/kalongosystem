@@ -4,10 +4,12 @@ import { PassportModule } from '@nestjs/passport';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { StaffWorkersModule } from '../staff-workers/staff-workers.module';
 
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
+    StaffWorkersModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'hms-secret-change-in-production',
       signOptions: { expiresIn: '7d' },

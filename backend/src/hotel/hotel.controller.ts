@@ -104,7 +104,7 @@ export class HotelController {
       dto,
       user.sub,
     );
-    await this.hotel.logAudit(user.sub, user.role || 'MANAGER', user.businessId, 'category_created', 'room_category', cat.id);
+    await this.hotel.logAudit(user.sub, user.role || 'MANAGER', user.businessId, 'category_created', 'room_category', cat.id, undefined, user.workerId && user.workerName ? { workerId: user.workerId, workerName: user.workerName } : undefined);
     return {
       id: cat.id,
       name: cat.name,
@@ -147,7 +147,7 @@ export class HotelController {
       dto,
       user.sub,
     );
-    await this.hotel.logAudit(user.sub, user.role || 'MANAGER', user.businessId, 'room_created', 'room', room.id);
+    await this.hotel.logAudit(user.sub, user.role || 'MANAGER', user.businessId, 'room_created', 'room', room.id, undefined, user.workerId && user.workerName ? { workerId: user.workerId, workerName: user.workerName } : undefined);
     return room;
   }
 
@@ -217,7 +217,7 @@ export class HotelController {
       },
       user.sub,
     );
-    await this.hotel.logAudit(user.sub, user.role || 'USER', user.businessId, 'booking_created', 'booking', booking.id);
+    await this.hotel.logAudit(user.sub, user.role || 'USER', user.businessId, 'booking_created', 'booking', booking.id, undefined, user.workerId && user.workerName ? { workerId: user.workerId, workerName: user.workerName } : undefined);
     return booking;
   }
 
@@ -244,7 +244,7 @@ export class HotelController {
   @SkipRolesGuard()
   async checkIn(@CurrentUser() user: any, @Param('id') id: string) {
     const res = await this.hotel.checkIn(id, user.businessId, user.sub);
-    await this.hotel.logAudit(user.sub, user.role || 'USER', user.businessId, 'booking_checked_in', 'booking', id);
+    await this.hotel.logAudit(user.sub, user.role || 'USER', user.businessId, 'booking_checked_in', 'booking', id, undefined, user.workerId && user.workerName ? { workerId: user.workerId, workerName: user.workerName } : undefined);
     return res;
   }
 
@@ -252,7 +252,7 @@ export class HotelController {
   @SkipRolesGuard()
   async checkOut(@CurrentUser() user: any, @Param('id') id: string) {
     const res = await this.hotel.checkOut(id, user.businessId);
-    await this.hotel.logAudit(user.sub, user.role || 'USER', user.businessId, 'booking_checked_out', 'booking', id);
+    await this.hotel.logAudit(user.sub, user.role || 'USER', user.businessId, 'booking_checked_out', 'booking', id, undefined, user.workerId && user.workerName ? { workerId: user.workerId, workerName: user.workerName } : undefined);
     return res;
   }
 
@@ -261,7 +261,7 @@ export class HotelController {
   @Roles('MANAGER', 'ADMIN', 'OWNER')
   async cancelBooking(@CurrentUser() user: any, @Param('id') id: string) {
     const res = await this.hotel.cancelBooking(id, user.businessId);
-    await this.hotel.logAudit(user.sub, user.role || 'MANAGER', user.businessId, 'booking_cancelled', 'booking', id);
+    await this.hotel.logAudit(user.sub, user.role || 'MANAGER', user.businessId, 'booking_cancelled', 'booking', id, undefined, user.workerId && user.workerName ? { workerId: user.workerId, workerName: user.workerName } : undefined);
     return res;
   }
 
@@ -273,7 +273,7 @@ export class HotelController {
     @Body('roomId') roomId: string,
   ) {
     const res = await this.hotel.changeRoom(id, user.businessId, roomId, user.sub);
-    await this.hotel.logAudit(user.sub, user.role || 'USER', user.businessId, 'booking_room_changed', 'booking', id, { roomId });
+    await this.hotel.logAudit(user.sub, user.role || 'USER', user.businessId, 'booking_room_changed', 'booking', id, { roomId }, user.workerId && user.workerName ? { workerId: user.workerId, workerName: user.workerName } : undefined);
     return res;
   }
 
@@ -285,7 +285,7 @@ export class HotelController {
     @Body('checkOut') checkOut: string,
   ) {
     const res = await this.hotel.extendStay(id, user.businessId, new Date(checkOut));
-    await this.hotel.logAudit(user.sub, user.role || 'USER', user.businessId, 'booking_extended', 'booking', id);
+    await this.hotel.logAudit(user.sub, user.role || 'USER', user.businessId, 'booking_extended', 'booking', id, undefined, user.workerId && user.workerName ? { workerId: user.workerId, workerName: user.workerName } : undefined);
     return res;
   }
 
@@ -298,7 +298,7 @@ export class HotelController {
     @Body('status') status: string,
   ) {
     const res = await this.hotel.overrideStatus(id, user.businessId, status);
-    await this.hotel.logAudit(user.sub, user.role || 'MANAGER', user.businessId, 'booking_status_overridden', 'booking', id, { status });
+    await this.hotel.logAudit(user.sub, user.role || 'MANAGER', user.businessId, 'booking_status_overridden', 'booking', id, { status }, user.workerId && user.workerName ? { workerId: user.workerId, workerName: user.workerName } : undefined);
     return res;
   }
 
@@ -315,7 +315,7 @@ export class HotelController {
       { amount: dto.amount, paymentMode: dto.paymentMode },
       user.sub,
     );
-    await this.hotel.logAudit(user.sub, user.role || 'USER', user.businessId, 'payment_added', 'folio', id, { amount: dto.amount, paymentMode: dto.paymentMode });
+    await this.hotel.logAudit(user.sub, user.role || 'USER', user.businessId, 'payment_added', 'folio', id, { amount: dto.amount, paymentMode: dto.paymentMode }, user.workerId && user.workerName ? { workerId: user.workerId, workerName: user.workerName } : undefined);
     return res;
   }
 

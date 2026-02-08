@@ -46,6 +46,22 @@ model BusinessUser {
   @@map("business_users")
 }
 
+// Role-based staff workers (real people under a role). One role can have multiple workers.
+model StaffWorker {
+  id         String   @id @default(cuid())
+  businessId String
+  role       String   // MANAGER, FRONT_OFFICE, BAR, etc.
+  fullName   String
+  status     String   @default("ACTIVE") // ACTIVE, BLOCKED
+  createdAt  DateTime @default(now())
+  createdBy  String?
+  updatedAt  DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@map("staff_workers")
+}
+
 model Business {
   id           String   @id @default(cuid())
   businessId   String   @unique // e.g. HMS-49281 - unique tenant identifier
@@ -71,6 +87,7 @@ model Business {
   maintenanceRequests MaintenanceRequest[]
   expenses          Expense[]
   workers           Worker[]
+  staffWorkers      StaffWorker[]
   payrollRecords    PayrollRecord[]
   settings          BusinessSetting[]
 
@@ -184,15 +201,17 @@ model FolioPayment {
 }
 
 model AuditLog {
-  id         String   @id @default(cuid())
-  userId     String
-  role       String
-  businessId String
-  actionType String   // booking_created, booking_checked_in, etc.
-  entityType String?  // booking, folio, room, etc.
-  entityId   String?
-  metadata   String?  @db.Text // JSON string for extra data
-  createdAt  DateTime @default(now())
+  id          String   @id @default(cuid())
+  userId      String
+  role        String
+  businessId  String
+  workerId    String?  // Staff worker who performed action
+  workerName  String?  // e.g. "John Mtei" for display
+  actionType  String   // booking_created, booking_checked_in, etc.
+  entityType  String?  // booking, folio, room, etc.
+  entityId    String?
+  metadata    String?  @db.Text // JSON string for extra data
+  createdAt   DateTime @default(now())
 
   @@map("audit_logs")
 }

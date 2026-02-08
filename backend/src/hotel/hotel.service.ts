@@ -17,6 +17,7 @@ export class HotelService {
     entityType?: string,
     entityId?: string,
     metadata?: object,
+    worker?: { workerId: string; workerName: string },
   ) {
     try {
       await this.prisma.auditLog.create({
@@ -24,6 +25,8 @@ export class HotelService {
           userId,
           role,
           businessId,
+          workerId: worker?.workerId ?? null,
+          workerName: worker?.workerName ?? null,
           actionType,
           entityType,
           entityId,

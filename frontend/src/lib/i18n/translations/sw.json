@@ -47,6 +47,10 @@
   "auth.signUpLink": "Jisajili",
   "auth.loginLink": "Ingia",
   "auth.sessionExpired": "Kipindi kimeisha. Tafadhali ingia tena.",
+  "auth.selectWorker": "Chagua Mfanyakazi",
+  "auth.selectWorkerHint": "Jukumu lako lina wafanyakazi wengi. Chagua nani anatumia mfumo.",
+  "auth.worker": "Mfanyakazi",
+  "auth.continue": "Endelea",
 
   "home.tagline": "Mfumo wa Usimamizi wa Hoteli — Tanzania",
 
@@ -252,6 +256,16 @@
   "settings.system": "Mfumo",
   "settings.enableDragDrop": "Washa Drag & Drop Malipo (Beta)",
   "settings.enableDragDropDesc": "Inaongeza Mtazamo wa Kalenda katika Ofisi ya Mbele. Chaguo la chini ni lazimu.",
+  "settings.staffWorkers": "Wafanyakazi wa Jukumu",
+  "settings.staffWorkersDesc": "Unda wafanyakazi chini ya kila jukumu. Watumiaji wana chagua mfanyakazi wanapoingia.",
+  "settings.allRoles": "Majukumu yote",
+  "settings.addStaffWorker": "Ongeza Mfanyakazi",
+  "settings.block": "Zuia",
+  "settings.unblock": "Ruhusu",
+  "settings.activity": "Shughuli",
+  "settings.noStaffWorkers": "Hakuna wafanyakazi bado.",
+  "settings.activityLogs": "Kumbukumbu za Shughuli za Wafanyakazi",
+  "settings.noActivityLogs": "Hakuna kumbukumbu za shughuli.",
 
   "payments.cash": "Pesa taslimu",
   "payments.bank": "Benki",

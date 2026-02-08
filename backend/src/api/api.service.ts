@@ -1,11 +1,15 @@
 import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { StaffWorkersService } from '../staff-workers/staff-workers.service';
 
 @Injectable()
 export class ApiService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private staffWorkers: StaffWorkersService,
+  ) {}
 
-  async getMe(user: { sub: string; email: string; businessId: string; role: string; businessCode?: string }) {
+  async getMe(user: { sub: string; email: string; businessId: string; role: string; businessCode?: string; workerId?: string | null; workerName?: string | null }) {
     if (!user.businessId) throw new UnauthorizedException('No business context');
 
     const [business, dbUser] = await Promise.all([
@@ -19,6 +23,19 @@ export class ApiService {
 
     const role = ['ADMIN', 'OWNER'].includes(user.role || '') ? 'MANAGER' : user.role;
 
+    const activeWorkerId = user.workerId ?? null;
+    const activeWorkerName = user.workerName ?? null;
+    let needsWorkerSelection = false;
+    let workers: { id: string; fullName: string }[] = [];
+
+    if (!activeWorkerId) {
+      const roleWorkers = await this.staffWorkers.getActiveByRole(user.businessId, role);
+      if (roleWorkers.length > 0) {
+        needsWorkerSelection = true;
+        workers = roleWorkers.map((w) => ({ id: w.id, fullName: w.fullName }));
+      }
+    }
+
     return {
       email: user.email,
       role,
@@ -28,6 +45,10 @@ export class ApiService {
         name: business.name,
         code: business.businessId,
       },
+      activeWorkerId,
+      activeWorkerName,
+      needsWorkerSelection,
+      workers,
     };
   }
 
