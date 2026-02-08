@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
+import { isManagerLevel } from '@/lib/roles';
 
 type ReportType = 'revenue' | 'expenses' | 'pnl';
 type Sector = 'all' | 'bar' | 'restaurant' | 'hotel';
@@ -18,7 +19,7 @@ export default function ReportsPage() {
   const [data, setData] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const isManager = user?.role === 'MANAGER' || user?.role === 'ADMIN';
+  const isManager = isManagerLevel(user?.role);
 
   async function loadReport() {
     if (!token || !isManager) return;

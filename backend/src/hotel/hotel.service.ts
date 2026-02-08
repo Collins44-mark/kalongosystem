@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
+import { isManagerLevel } from '../common/utils/roles';
 
 const PAYMENT_MODES = ['CASH', 'BANK', 'MPESA', 'TIGOPESA', 'AIRTEL_MONEY'] as const;
 
@@ -185,8 +186,8 @@ export class HotelService {
   ) {
     const valid = ['VACANT', 'OCCUPIED', 'RESERVED', 'UNDER_MAINTENANCE'];
     if (!valid.includes(status)) throw new NotFoundException('Invalid status');
-    // Only MANAGER can set UNDER_MAINTENANCE
-    if (status === 'UNDER_MAINTENANCE' && role !== 'MANAGER' && role !== 'ADMIN') {
+    // Only manager-level can set UNDER_MAINTENANCE
+    if (status === 'UNDER_MAINTENANCE' && !isManagerLevel(role)) {
       throw new NotFoundException('Only manager can set room to maintenance');
     }
     return this.prisma.room.update({

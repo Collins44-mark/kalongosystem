@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY, SKIP_ROLES_KEY } from '../decorators/roles.decorator';
+import { hasRole } from '../utils/roles';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -23,20 +24,12 @@ export class RolesGuard implements CanActivate {
       context.getClass(),
     ]);
 
-    if (!requiredRoles || requiredRoles.length === 0) {
-      return true;
-    }
+    if (!requiredRoles || requiredRoles.length === 0) return true;
 
     const { user } = context.switchToHttp().getRequest();
-    const rawRole = (user?.role || '').toString().trim().toUpperCase();
-    // ADMIN and OWNER have manager-level (or higher) access
-    const role = ['ADMIN', 'OWNER'].includes(rawRole) ? 'MANAGER' : rawRole || null;
-    const hasRole = role && requiredRoles.some((r) => r.toUpperCase() === role);
+    if (!user) throw new ForbiddenException('Authentication required');
 
-    if (!hasRole) {
-      throw new ForbiddenException('Insufficient permissions');
-    }
-
-    return true;
+    if (hasRole(user.role, requiredRoles)) return true;
+    throw new ForbiddenException('Insufficient permissions');
   }
 }

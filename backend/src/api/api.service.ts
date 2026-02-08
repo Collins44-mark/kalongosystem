@@ -17,7 +17,7 @@ export class ApiService {
     ]);
     if (!business) throw new UnauthorizedException('Business not found');
 
-    const role = user.role === 'ADMIN' ? 'MANAGER' : user.role;
+    const role = ['ADMIN', 'OWNER'].includes(user.role || '') ? 'MANAGER' : user.role;
 
     return {
       email: user.email,

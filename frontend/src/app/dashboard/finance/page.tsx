@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
+import { isManagerLevel } from '@/lib/roles';
 
 type Dashboard = {
   totalRevenue: number;
@@ -30,7 +31,7 @@ export default function FinancePage() {
   const [salesHistory, setSalesHistory] = useState<SalesRow[]>([]);
   const [expenseDetail, setExpenseDetail] = useState<{ byCategory: Record<string, number>; expenses: ExpenseRow[] } | null>(null);
 
-  const isManager = user?.role === 'MANAGER' || user?.role === 'ADMIN';
+  const isManager = isManagerLevel(user?.role);
 
   const empty: Dashboard = {
     totalRevenue: 0,
@@ -231,7 +232,7 @@ export default function FinancePage() {
 
       {view === 'expenses' && !expenseDetail && <div className="text-slate-500">{t('finance.loadingExpenses')}</div>}
 
-      {(user?.role === 'MANAGER' || user?.role === 'ADMIN' || user?.role === 'FINANCE') && (
+      {(isManagerLevel(user?.role) || user?.role === 'FINANCE') && (
         <div className="bg-white border rounded p-4 max-w-md">
           <h2 className="font-medium mb-2">{t('finance.recordExpense')}</h2>
           <CreateExpenseForm token={token} t={t} onCreated={() => { setData(null); setView('cards'); setExpenseDetail(null); }} />

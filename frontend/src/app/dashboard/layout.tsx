@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
+import { roleForPermission } from '@/lib/roles';
 
 function MenuIcon({ open }: { open: boolean }) {
   return (
@@ -94,10 +95,8 @@ export default function DashboardLayout({
     }
   }
 
-  const role = ['ADMIN', 'OWNER'].includes(user?.role || '') ? 'MANAGER' : user?.role;
-  const visibleLinks = SIDEBAR_LINKS.filter((l) =>
-    l.roles.includes(role || '')
-  );
+  const roleForNav = roleForPermission(user?.role) || user?.role || '';
+  const visibleLinks = SIDEBAR_LINKS.filter((l) => l.roles.includes(roleForNav));
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   if (!_hasHydrated || !token || !user) return null;
@@ -167,7 +166,7 @@ export default function DashboardLayout({
       <main className="flex-1 overflow-auto min-w-0">
         <header className="h-12 bg-white border-b flex items-center justify-between px-4 gap-2">
           <span className="text-xs sm:text-sm text-slate-600 truncate">
-            {user.email} · {role}
+            {user.email} · {roleForNav || user?.role}
           </span>
           <div className="relative flex-shrink-0">
             <button

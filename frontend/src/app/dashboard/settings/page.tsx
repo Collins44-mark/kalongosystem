@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
+import { isManagerLevel } from '@/lib/roles';
 
 type Subscription = { plan: string; status: string; trialEndsAt: string };
 type MeResponse = { email: string; role: string; business: { id: string; name: string; code: string } };
@@ -32,7 +33,7 @@ export default function SettingsPage() {
       .finally(() => setMeLoading(false));
   }, [token]);
 
-  const isManager = user?.role === 'MANAGER' || user?.role === 'ADMIN';
+  const isManager = isManagerLevel(user?.role);
 
   return (
     <div className="space-y-6">
