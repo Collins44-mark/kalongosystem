@@ -40,4 +40,39 @@ export class ApiService {
     });
     return { language };
   }
+
+  /** Get business settings (e.g. enableDragDropBooking) */
+  async getSettings(businessId: string) {
+    const settings = await this.prisma.businessSetting.findMany({
+      where: { businessId },
+    });
+    const map: Record<string, unknown> = {};
+    for (const s of settings) {
+      try {
+        map[s.key] = s.value === 'true' ? true : s.value === 'false' ? false : JSON.parse(s.value);
+      } catch {
+        map[s.key] = s.value;
+      }
+    }
+    return { enableDragDropBooking: map['enableDragDropBooking'] === true };
+  }
+
+  /** Update business setting (MANAGER only) */
+  async updateSetting(businessId: string, key: string, value: unknown) {
+    const str = typeof value === 'boolean' ? String(value) : JSON.stringify(value);
+    const existing = await this.prisma.businessSetting.findFirst({
+      where: { businessId, key },
+    });
+    if (existing) {
+      await this.prisma.businessSetting.update({
+        where: { id: existing.id },
+        data: { value: str },
+      });
+    } else {
+      await this.prisma.businessSetting.create({
+        data: { businessId, key, value: str },
+      });
+    }
+    return { [key]: value };
+  }
 }

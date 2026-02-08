@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { AllowManagerGuard } from '../common/guards/allow-manager.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ApiService } from './api.service';
 
@@ -22,5 +23,22 @@ export class ApiController {
       return this.api.updateLanguage(user.sub, dto.language);
     }
     throw new BadRequestException('No update data');
+  }
+
+  @Get('settings')
+  async getSettings(@CurrentUser() user: { businessId: string }) {
+    return this.api.getSettings(user.businessId);
+  }
+
+  @Patch('settings')
+  @UseGuards(AllowManagerGuard)
+  async updateSettings(
+    @CurrentUser() user: { businessId: string },
+    @Body() dto: { enableDragDropBooking?: boolean },
+  ) {
+    if (typeof dto.enableDragDropBooking === 'boolean') {
+      return this.api.updateSetting(user.businessId, 'enableDragDropBooking', dto.enableDragDropBooking);
+    }
+    throw new BadRequestException('No valid setting to update');
   }
 }

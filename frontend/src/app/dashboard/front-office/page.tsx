@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
+import { CalendarView } from './CalendarView';
 
 type Room = { id: string; roomNumber: string; roomName?: string; status: string; category: { id: string; name: string; pricePerNight: string } };
 type Category = { id: string; name: string; pricePerNight: string };
@@ -49,6 +50,8 @@ export default function FrontOfficePage() {
   const [bookingDateFrom, setBookingDateFrom] = useState('');
   const [bookingDateTo, setBookingDateTo] = useState('');
   const [roomStatusFilter, setRoomStatusFilter] = useState<string>('all');
+  const [enableDragDropBooking, setEnableDragDropBooking] = useState(false);
+  const [roomsView, setRoomsView] = useState<'grid' | 'calendar'>('grid');
 
   const isManager = ['MANAGER', 'ADMIN', 'OWNER'].includes(user?.role || '');
 
@@ -97,6 +100,13 @@ export default function FrontOfficePage() {
     { id: 'new', labelKey: 'frontOffice.newBooking' },
   ];
   const tabs = isManager ? managerTabs : staffTabs;
+
+  useEffect(() => {
+    if (!token) return;
+    api<{ enableDragDropBooking?: boolean }>('/api/settings', { token })
+      .then((s) => setEnableDragDropBooking(s.enableDragDropBooking === true))
+      .catch(() => {});
+  }, [token]);
 
   useEffect(() => {
     if (!token) return;
@@ -239,14 +249,45 @@ export default function FrontOfficePage() {
       </div>
 
       {activeTab === 'rooms' && (
-        <RoomAvailability
-          rooms={rooms}
-          isManager={isManager}
-          roomStatusFilter={roomStatusFilter}
-          onFilterChange={setRoomStatusFilter}
-          categories={categories}
-          t={t}
-        />
+        <>
+          {enableDragDropBooking && (
+            <div className="flex gap-2 mb-3">
+              <button
+                type="button"
+                onClick={() => setRoomsView('grid')}
+                className={`px-3 py-1.5 rounded text-sm ${roomsView === 'grid' ? 'bg-teal-600 text-white' : 'bg-slate-200'}`}
+              >
+                {t('frontOffice.roomAvailability')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setRoomsView('calendar')}
+                className={`px-3 py-1.5 rounded text-sm ${roomsView === 'calendar' ? 'bg-teal-600 text-white' : 'bg-slate-200'}`}
+              >
+                {t('frontOffice.calendarView')}
+              </button>
+            </div>
+          )}
+          {roomsView === 'calendar' && enableDragDropBooking ? (
+            <CalendarView
+              token={token!}
+              rooms={rooms}
+              bookings={bookings}
+              isManager={isManager}
+              onAction={refresh}
+              t={t}
+            />
+          ) : (
+            <RoomAvailability
+              rooms={rooms}
+              isManager={isManager}
+              roomStatusFilter={roomStatusFilter}
+              onFilterChange={setRoomStatusFilter}
+              categories={categories}
+              t={t}
+            />
+          )}
+        </>
       )}
 
       {activeTab === 'setup' && isManager && (

@@ -168,6 +168,7 @@ export class AuthService {
       where: {
         userId: payload.sub,
         businessId: payload.businessId,
+        isDisabled: false,
       },
     });
     if (!bu) return null;

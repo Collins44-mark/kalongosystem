@@ -172,8 +172,8 @@ export default function DashboardLayout({
       )}
       <main className="flex-1 overflow-auto min-w-0">
         <header className="h-12 bg-white border-b flex items-center justify-between px-4 gap-2">
-          <span className="text-xs sm:text-sm text-slate-600 truncate">
-            {user.email} · {roleForNav || user?.role}
+          <span className="text-xs sm:text-sm text-slate-600 truncate font-medium uppercase">
+            {roleForNav || user?.role || ''}
           </span>
           <div className="relative flex-shrink-0">
             <button

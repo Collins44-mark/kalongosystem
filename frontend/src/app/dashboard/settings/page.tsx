@@ -5,6 +5,8 @@ import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
 import { isManagerLevel } from '@/lib/roles';
+import { UserRolesSection } from './UserRolesSection';
+import { SystemSettingsSection } from './SystemSettingsSection';
 
 type Subscription = { plan: string; status: string; trialEndsAt: string };
 type MeResponse = { email: string; role: string; business: { id: string; name: string; code: string } };
@@ -65,20 +67,11 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {isManager && (
-        <div className="bg-white border rounded p-4 max-w-md">
-          <h2 className="font-medium mb-2">{t('settings.staffUsers')}</h2>
-          <p className="text-sm text-slate-600 mb-3">
-            {t('settings.staffUsersDesc')}
-          </p>
-          <button
-            type="button"
-            disabled
-            className="px-4 py-2 bg-slate-200 text-slate-500 rounded cursor-not-allowed text-sm"
-          >
-            {t('settings.createStaffUser')}
-          </button>
-        </div>
+      {isManager && token && (
+        <>
+          <UserRolesSection token={token} t={t} />
+          <SystemSettingsSection token={token} t={t} />
+        </>
       )}
     </div>
   );

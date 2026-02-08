@@ -34,6 +34,7 @@ model BusinessUser {
   businessId String
   role       String   // MANAGER, FRONT_OFFICE, BAR, RESTAURANT, KITCHEN, HOUSEKEEPING, FINANCE
   branchId   String?  @default("main")
+  isDisabled Boolean  @default(false)
   createdAt  DateTime @default(now())
   createdBy  String?
   updatedAt  DateTime @updatedAt
@@ -71,8 +72,22 @@ model Business {
   expenses          Expense[]
   workers           Worker[]
   payrollRecords    PayrollRecord[]
+  settings          BusinessSetting[]
 
   @@map("businesses")
+}
+
+model BusinessSetting {
+  id          String   @id @default(cuid())
+  businessId  String
+  key         String   // e.g. enableDragDropBooking
+  value       String   @db.Text // JSON-serialized value
+  updatedAt   DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, key])
+  @@map("business_settings")
 }
 
 model Subscription {
