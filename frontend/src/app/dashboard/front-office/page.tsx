@@ -1310,11 +1310,7 @@ function NewBookingForm({
       onDone();
     } catch (e) {
       const err = e as Error & { status?: number };
-      if (err.status === 401) {
-        alert(t('auth.sessionExpired') || 'Session expired. Please log in again.');
-      } else {
-        alert(err.message);
-      }
+      alert(err.message);
     } finally {
       setLoading(false);
     }
