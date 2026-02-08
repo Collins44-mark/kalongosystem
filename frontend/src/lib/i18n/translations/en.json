@@ -45,6 +45,7 @@
   "auth.haveAccount": "Have an account?",
   "auth.signUpLink": "Sign up",
   "auth.loginLink": "Login",
+  "auth.sessionExpired": "Session expired. Please log in again.",
 
   "home.tagline": "Hotel Management System — Tanzania",
 

@@ -8,8 +8,9 @@ export async function api<T>(
     'Content-Type': 'application/json',
     ...options?.headers,
   };
-  if (options?.token) {
-    (headers as Record<string, string>)['Authorization'] = `Bearer ${options.token}`;
+  const token = options?.token;
+  if (token && typeof token === 'string') {
+    (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
   }
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
@@ -19,7 +20,9 @@ export async function api<T>(
   if (!res.ok) {
     const msg = data?.message;
     const errMsg = Array.isArray(msg) ? msg.join('. ') : (msg && typeof msg === 'string' ? msg : 'Request failed');
-    throw new Error(errMsg);
+    const err = new Error(errMsg) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
   }
   return data;
 }

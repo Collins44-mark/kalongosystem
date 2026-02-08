@@ -45,6 +45,7 @@
   "auth.haveAccount": "Una akaunti?",
   "auth.signUpLink": "Jisajili",
   "auth.loginLink": "Ingia",
+  "auth.sessionExpired": "Kipindi kimeisha. Tafadhali ingia tena.",
 
   "home.tagline": "Mfumo wa Usimamizi wa Hoteli — Tanzania",
 

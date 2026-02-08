@@ -22,7 +22,7 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      const res = await api<{ accessToken: string; user: unknown }>('/auth/login', {
+      const res = await api<{ accessToken?: string; access_token?: string; user: unknown }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify({
           businessId: businessId.trim().toUpperCase(),
@@ -30,7 +30,9 @@ export default function LoginPage() {
           password,
         }),
       });
-      setAuth(res.accessToken, res.user as Parameters<typeof setAuth>[1]);
+      const token = res.accessToken ?? res.access_token;
+      if (!token) throw new Error('No token received from server');
+      setAuth(token, res.user as Parameters<typeof setAuth>[1]);
       router.replace('/dashboard');
     } catch (err: unknown) {
       setError((err as Error).message || 'Login failed');

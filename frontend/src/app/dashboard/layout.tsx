@@ -67,9 +67,16 @@ export default function DashboardLayout({
     setMeLoading(true);
     api<MeResponse>('/api/me', { token })
       .then(setMe)
-      .catch(() => setMe(null))
+      .catch((e: unknown) => {
+        const err = e as Error & { status?: number };
+        if (err?.status === 401) {
+          logout();
+          router.replace('/login');
+        }
+        setMe(null);
+      })
       .finally(() => setMeLoading(false));
-  }, [token]);
+  }, [token, logout, router]);
 
   const hasSyncedLocaleFromMe = useRef(false);
   useEffect(() => {
