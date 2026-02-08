@@ -28,6 +28,10 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
   const [creating, setCreating] = useState(false);
   const [newUserTempPwd, setNewUserTempPwd] = useState<string | null>(null);
   const [resettingId, setResettingId] = useState<string | null>(null);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [editing, setEditing] = useState<UserRow | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editRole, setEditRole] = useState('');
 
   function load() {
     if (!token) return;
@@ -79,6 +83,7 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
   }
 
   async function toggleDisable(u: UserRow) {
+    setOpenMenu(null);
     if (!confirm(u.isDisabled ? t('settings.enableUserConfirm') : t('settings.disableUserConfirm'))) return;
     try {
       await api(`/users/${u.id}/disable`, {
@@ -92,12 +97,44 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
     }
   }
 
+  function startEdit(u: UserRow) {
+    setOpenMenu(null);
+    setEditing(u);
+    setEditName(u.name || u.email);
+    setEditRole(u.role);
+  }
+
+  async function saveEdit() {
+    if (!editing) return;
+    try {
+      await api(`/users/${editing.id}`, {
+        method: 'PATCH',
+        token,
+        body: JSON.stringify({ fullName: editName.trim(), role: editRole }),
+      });
+      setEditing(null);
+      load();
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  }
+
+  async function deleteUser(u: UserRow) {
+    setOpenMenu(null);
+    if (!confirm(t('settings.deleteUserConfirm'))) return;
+    try {
+      await api(`/users/${u.id}`, { method: 'DELETE', token });
+      load();
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  }
+
   const roleLabel = (r: string) => r.replace(/_/g, ' ');
 
   return (
     <div className="bg-white border rounded p-4 max-w-4xl">
       <h2 className="font-medium mb-2">{t('settings.userRoles')}</h2>
-      <p className="text-sm text-slate-600 mb-3">{t('settings.userRolesDesc')}</p>
       <div className="mb-3">
         <button
           type="button"
@@ -119,7 +156,7 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
                 <th className="text-left p-2">{t('settings.role')}</th>
                 <th className="text-left p-2">Email</th>
                 <th className="text-left p-2">{t('settings.status')}</th>
-                <th className="text-left p-2">{t('settings.actions')}</th>
+                <th className="text-left p-2 w-10"></th>
               </tr>
             </thead>
             <tbody>
@@ -129,22 +166,40 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
                   <td className="p-2 uppercase">{roleLabel(u.role)}</td>
                   <td className="p-2 text-slate-600 font-mono text-xs">{u.email}</td>
                   <td className="p-2">{u.isDisabled ? t('settings.disabled') : t('settings.active')}</td>
-                  <td className="p-2 flex flex-wrap gap-1">
-                    <button
-                      type="button"
-                      onClick={() => resetPassword(u.id)}
-                      disabled={resettingId === u.id}
-                      className="px-2 py-1 text-teal-600 hover:underline text-xs"
-                    >
-                      {resettingId === u.id ? '...' : t('settings.resetPassword')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => toggleDisable(u)}
-                      className={`px-2 py-1 text-xs ${u.isDisabled ? 'text-green-600' : 'text-amber-600'} hover:underline`}
-                    >
-                      {u.isDisabled ? t('settings.enableUser') : t('settings.disableUser')}
-                    </button>
+                  <td className="p-2">
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setOpenMenu(openMenu === u.id ? null : u.id)}
+                        className="p-1 rounded hover:bg-slate-100"
+                        aria-label="Actions"
+                      >
+                        <svg className="w-4 h-4 text-slate-500" fill="currentColor" viewBox="0 0 24 24">
+                          <circle cx="12" cy="6" r="1.5" />
+                          <circle cx="12" cy="12" r="1.5" />
+                          <circle cx="12" cy="18" r="1.5" />
+                        </svg>
+                      </button>
+                      {openMenu === u.id && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setOpenMenu(null)} aria-hidden />
+                          <div className="absolute right-0 top-full mt-0.5 py-1 bg-white border rounded-lg shadow-lg z-20 min-w-[140px]">
+                            <button onClick={() => startEdit(u)} className="block w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                              {t('common.edit')}
+                            </button>
+                            <button onClick={() => { setOpenMenu(null); resetPassword(u.id); }} disabled={resettingId === u.id} className="block w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                              {resettingId === u.id ? '...' : t('settings.resetPassword')}
+                            </button>
+                            <button onClick={() => toggleDisable(u)} className={`block w-full text-left px-3 py-2 text-sm ${u.isDisabled ? 'text-green-600' : 'text-amber-600'} hover:bg-slate-50`}>
+                              {u.isDisabled ? t('settings.enableUser') : t('settings.disableUser')}
+                            </button>
+                            <button onClick={() => deleteUser(u)} className="block w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50">
+                              {t('common.delete')}
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -207,6 +262,32 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {editing && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white p-4 rounded max-w-sm w-full mx-4">
+            <h3 className="font-medium mb-3">{t('common.edit')}</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm mb-1">{t('settings.fullName')}</label>
+                <input value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full px-3 py-2 border rounded" />
+              </div>
+              <div>
+                <label className="block text-sm mb-1">{t('settings.role')}</label>
+                <select value={editRole} onChange={(e) => setEditRole(e.target.value)} className="w-full px-3 py-2 border rounded">
+                  {ROLES.map((r) => (
+                    <option key={r} value={r}>{roleLabel(r)}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={saveEdit} className="px-4 py-2 bg-teal-600 text-white rounded">{t('common.save')}</button>
+              <button onClick={() => setEditing(null)} className="px-4 py-2 bg-slate-200 rounded">{t('common.cancel')}</button>
+            </div>
           </div>
         </div>
       )}

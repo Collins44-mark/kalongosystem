@@ -161,6 +161,46 @@ export class UsersService {
     return { temporaryPassword: tempPassword };
   }
 
+  async updateUser(
+    businessId: string,
+    businessUserId: string,
+    managerId: string,
+    managerRole: string,
+    data: { fullName?: string; role?: string },
+  ) {
+    if (managerRole !== 'MANAGER') throw new ForbiddenException('Only MANAGER can edit users');
+    const bu = await this.prisma.businessUser.findFirst({
+      where: { id: businessUserId, businessId },
+      include: { user: true },
+    });
+    if (!bu) throw new NotFoundException('User not found');
+    const updates: { name?: string } = {};
+    if (data.fullName !== undefined) updates.name = data.fullName.trim();
+    if (Object.keys(updates).length > 0) {
+      await this.prisma.user.update({ where: { id: bu.userId }, data: updates });
+    }
+    if (data.role !== undefined && ROLES.includes(data.role as any)) {
+      await this.prisma.businessUser.update({
+        where: { id: businessUserId },
+        data: { role: data.role },
+      });
+    }
+    await this.logAudit(managerId, managerRole, businessId, 'user_updated', 'user', bu.userId, data);
+    return this.listUsers(businessId, managerId).then((list) => list.find((u) => u.id === businessUserId));
+  }
+
+  async deleteUser(businessId: string, businessUserId: string, managerId: string, managerRole: string) {
+    if (managerRole !== 'MANAGER') throw new ForbiddenException('Only MANAGER can delete users');
+    const bu = await this.prisma.businessUser.findFirst({
+      where: { id: businessUserId, businessId },
+    });
+    if (!bu) throw new NotFoundException('User not found');
+    if (bu.userId === managerId) throw new ForbiddenException('Cannot delete yourself');
+    await this.prisma.businessUser.delete({ where: { id: businessUserId } });
+    await this.logAudit(managerId, managerRole, businessId, 'user_deleted', 'user', bu.userId);
+    return { success: true };
+  }
+
   async setDisabled(businessId: string, businessUserId: string, disabled: boolean, managerId: string, managerRole: string) {
     if (managerRole !== 'MANAGER') throw new ForbiddenException('Only MANAGER can disable users');
 

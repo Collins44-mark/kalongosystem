@@ -69,6 +69,43 @@ export class StaffWorkersService {
     return w;
   }
 
+  /** Update worker (fullName, role). MANAGER only. */
+  async update(
+    businessId: string,
+    workerId: string,
+    managerId: string,
+    managerRole: string,
+    data: { fullName?: string; role?: string },
+  ) {
+    if (managerRole !== 'MANAGER') throw new ForbiddenException('Only MANAGER can edit workers');
+    const existing = await this.prisma.staffWorker.findFirst({
+      where: { id: workerId, businessId },
+    });
+    if (!existing) throw new NotFoundException('Worker not found');
+    const updates: { fullName?: string; role?: string } = {};
+    if (data.fullName !== undefined) updates.fullName = data.fullName.trim();
+    if (data.role !== undefined && ROLES.includes(data.role as (typeof ROLES)[number])) updates.role = data.role;
+    if (Object.keys(updates).length === 0) return existing;
+    const updated = await this.prisma.staffWorker.update({
+      where: { id: workerId },
+      data: updates,
+    });
+    await this.logAudit(managerId, managerRole, businessId, 'staff_worker_updated', 'staff_worker', workerId);
+    return updated;
+  }
+
+  /** Delete worker. MANAGER only. */
+  async delete(businessId: string, workerId: string, managerId: string, managerRole: string) {
+    if (managerRole !== 'MANAGER') throw new ForbiddenException('Only MANAGER can delete workers');
+    const existing = await this.prisma.staffWorker.findFirst({
+      where: { id: workerId, businessId },
+    });
+    if (!existing) throw new NotFoundException('Worker not found');
+    await this.prisma.staffWorker.delete({ where: { id: workerId } });
+    await this.logAudit(managerId, managerRole, businessId, 'staff_worker_deleted', 'staff_worker', workerId);
+    return { success: true };
+  }
+
   /** Block or unblock worker. MANAGER only. */
   async setStatus(
     businessId: string,
@@ -79,17 +116,17 @@ export class StaffWorkersService {
   ) {
     if (managerRole !== 'MANAGER') throw new ForbiddenException('Only MANAGER can block workers');
 
-    const w = await this.prisma.staffWorker.findFirst({
+    const existing = await this.prisma.staffWorker.findFirst({
       where: { id: workerId, businessId },
     });
-    if (!w) throw new NotFoundException('Worker not found');
+    if (!existing) throw new NotFoundException('Worker not found');
 
-    const w = await this.prisma.staffWorker.update({
+    const updated = await this.prisma.staffWorker.update({
       where: { id: workerId },
       data: { status },
     });
     await this.logAudit(managerId, managerRole, businessId, `staff_worker_${status.toLowerCase()}`, 'staff_worker', workerId);
-    return w;
+    return updated;
   }
 
   /** Move worker to another role. MANAGER only. */
@@ -104,17 +141,17 @@ export class StaffWorkersService {
     if (!ROLES.includes(newRole as (typeof ROLES)[number]))
       throw new ForbiddenException('Invalid role');
 
-    const w = await this.prisma.staffWorker.findFirst({
+    const existing = await this.prisma.staffWorker.findFirst({
       where: { id: workerId, businessId },
     });
-    if (!w) throw new NotFoundException('Worker not found');
+    if (!existing) throw new NotFoundException('Worker not found');
 
-    const w = await this.prisma.staffWorker.update({
+    const updated = await this.prisma.staffWorker.update({
       where: { id: workerId },
       data: { role: newRole },
     });
     await this.logAudit(managerId, managerRole, businessId, 'staff_worker_role_changed', 'staff_worker', workerId);
-    return w;
+    return updated;
   }
 
   /** Get worker activity logs. MANAGER only. */

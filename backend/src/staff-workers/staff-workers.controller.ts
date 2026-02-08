@@ -1,10 +1,10 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { AllowManagerGuard } from '../common/guards/allow-manager.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { StaffWorkersService } from './staff-workers.service';
 
-@Controller('staff-workers')
+@Controller('api/staff-workers')
 @UseGuards(JwtAuthGuard)
 export class StaffWorkersController {
   constructor(private staffWorkers: StaffWorkersService) {}
@@ -25,6 +25,16 @@ export class StaffWorkersController {
     @Body() dto: { fullName: string; role: string },
   ) {
     return this.staffWorkers.create(user.businessId, dto, user.sub, user.role || 'MANAGER');
+  }
+
+  @Patch(':id')
+  @UseGuards(AllowManagerGuard)
+  async update(
+    @CurrentUser() user: { sub: string; businessId: string; role: string },
+    @Param('id') id: string,
+    @Body() dto: { fullName?: string; role?: string },
+  ) {
+    return this.staffWorkers.update(user.businessId, id, user.sub, user.role || 'MANAGER', dto);
   }
 
   @Patch(':id/block')
@@ -51,6 +61,15 @@ export class StaffWorkersController {
     @Body('role') newRole: string,
   ) {
     return this.staffWorkers.moveRole(user.businessId, id, newRole, user.sub, user.role || 'MANAGER');
+  }
+
+  @Delete(':id')
+  @UseGuards(AllowManagerGuard)
+  async delete(
+    @CurrentUser() user: { sub: string; businessId: string; role: string },
+    @Param('id') id: string,
+  ) {
+    return this.staffWorkers.delete(user.businessId, id, user.sub, user.role || 'MANAGER');
   }
 
   @Get('activity')

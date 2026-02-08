@@ -253,6 +253,8 @@
   "settings.noUsers": "No users yet.",
   "settings.disableUserConfirm": "Enable this user?",
   "settings.enableUserConfirm": "Disable this user? They will not be able to log in.",
+  "settings.deleteUserConfirm": "Delete this user? They will not be able to log in.",
+  "settings.deleteWorkerConfirm": "Delete this worker?",
   "settings.system": "System",
   "settings.enableDragDrop": "Enable Drag & Drop Booking (Beta)",
   "settings.enableDragDropDesc": "Adds Calendar View in Front Office. Default off.",

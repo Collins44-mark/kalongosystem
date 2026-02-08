@@ -253,6 +253,8 @@
   "settings.noUsers": "Hakuna watumiaji bado.",
   "settings.disableUserConfirm": "Washa mtumiaji huyu?",
   "settings.enableUserConfirm": "Zima mtumiaji huyu? Hawataweza kuingia.",
+  "settings.deleteUserConfirm": "Futa mtumiaji huyu? Hawataweza kuingia.",
+  "settings.deleteWorkerConfirm": "Futa mfanyakazi huyu?",
   "settings.system": "Mfumo",
   "settings.enableDragDrop": "Washa Drag & Drop Malipo (Beta)",
   "settings.enableDragDropDesc": "Inaongeza Mtazamo wa Kalenda katika Ofisi ya Mbele. Chaguo la chini ni lazimu.",

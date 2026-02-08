@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { SubscriptionGuard } from '../common/guards/subscription.guard';
 import { AllowManagerGuard } from '../common/guards/allow-manager.guard';
@@ -28,8 +28,22 @@ export class UsersController {
     return this.users.resetPassword(user.businessId, id, user.sub, user.role || 'MANAGER');
   }
 
+  @Patch(':id')
+  async update(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body() dto: { fullName?: string; role?: string },
+  ) {
+    return this.users.updateUser(user.businessId, id, user.sub as string, user.role || 'MANAGER', dto);
+  }
+
   @Patch(':id/disable')
   async disable(@CurrentUser() user: any, @Param('id') id: string, @Body('disabled') disabled: boolean) {
     return this.users.setDisabled(user.businessId, id, disabled === true, user.sub, user.role || 'MANAGER');
+  }
+
+  @Delete(':id')
+  async delete(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.users.deleteUser(user.businessId, id, user.sub as string, user.role || 'MANAGER');
   }
 }
