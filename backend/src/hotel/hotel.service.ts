@@ -298,31 +298,38 @@ export class HotelService {
 
   async getBookings(
     businessId: string,
-    branchId: string,
+    branchId: string | null,
     opts?: { scope?: 'all' | 'today' | 'mine'; userId?: string },
     dateRange?: { from: string; to: string },
   ) {
-    const where: Record<string, unknown> = { businessId, branchId };
+    const bid = branchId || 'main';
+    const where: Record<string, unknown> = { businessId, branchId: bid };
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const orConditions: Record<string, unknown>[] = [];
     if (dateRange?.from && dateRange?.to) {
       const from = new Date(dateRange.from);
       from.setHours(0, 0, 0, 0);
       const to = new Date(dateRange.to);
       to.setHours(23, 59, 59, 999);
-      where.OR = [
+      orConditions.push(
         { checkIn: { gte: from, lte: to } },
         { checkOut: { gte: from, lte: to } },
         { checkIn: { lte: from }, checkOut: { gte: to } },
-      ];
+      );
     } else if (opts?.scope === 'today') {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
-      where.OR = [
+      orConditions.push(
         { checkIn: { gte: today, lt: tomorrow } },
         { checkOut: { gte: today, lt: tomorrow } },
         { status: 'CHECKED_IN', checkIn: { lte: today }, checkOut: { gte: today } },
-      ];
+      );
+    }
+    // Always include currently in-house (CHECKED_IN) guests in results
+    orConditions.push({ status: 'CHECKED_IN', checkOut: { gte: today } });
+    if (orConditions.length > 0) {
+      where.OR = orConditions;
     }
     if (opts?.scope === 'mine' && opts?.userId) {
       where.createdBy = opts.userId;

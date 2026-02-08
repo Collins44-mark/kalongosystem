@@ -94,6 +94,7 @@ export default function FrontOfficePage() {
     { id: 'bookings', labelKey: 'frontOffice.bookings' },
     { id: 'history', labelKey: 'frontOffice.bookingHistory' },
     { id: 'folios', labelKey: 'frontOffice.activeFolios' },
+    { id: 'new', labelKey: 'frontOffice.newBooking' },
   ];
   const tabs = isManager ? managerTabs : staffTabs;
 
@@ -282,13 +283,13 @@ export default function FrontOfficePage() {
         />
       )}
 
-      {activeTab === 'new' && isManager && (
+      {activeTab === 'new' && (isManager || user?.role === 'FRONT_OFFICE') && (
         <NewBookingForm
           token={token!}
           categories={categories}
           rooms={rooms}
           t={t}
-          onDone={() => { setActiveTab(isManager ? 'bookings' : 'bookings'); refresh(); }}
+          onDone={() => { setActiveTab('folios'); refresh(); }}
         />
       )}
 
@@ -1000,6 +1001,9 @@ function BookingList({
 function ExtendStayModal({ booking, token, onDone, t }: { booking: Booking; token: string; onDone: () => void; t: (k: string) => string }) {
   const [show, setShow] = useState(false);
   const [checkOut, setCheckOut] = useState(booking.checkOut.slice(0, 10));
+  useEffect(() => {
+    setCheckOut(booking.checkOut.slice(0, 10));
+  }, [booking.checkOut]);
   const [loading, setLoading] = useState(false);
 
   async function submit() {
@@ -1206,7 +1210,7 @@ function FolioList({
               <div className="font-medium">{b.guestName} {b.guestPhone && `· ${b.guestPhone}`}</div>
               <div className="text-sm text-slate-600">Room {b.room.roomNumber} · {b.room.category?.name}</div>
               <div className="text-xs text-slate-500">
-                {new Date(b.checkIn).toLocaleDateString()} - {new Date(b.checkOut).toLocaleDateString()} · {b.folioNumber ?? b.id}
+                {new Date(b.checkIn).toLocaleDateString()} - {new Date(b.checkOut).toLocaleDateString()} · {b.nights} {t('frontOffice.nights')} · {b.folioNumber ?? b.id}
                 {b.servedBy && ` · Served by: ${b.servedBy}`}
               </div>
             </div>
@@ -1266,7 +1270,7 @@ function NewBookingForm({
   const [currency, setCurrency] = useState('TZS');
   const [paymentMode, setPaymentMode] = useState('');
   const [totalOverride, setTotalOverride] = useState<string>('');
-  const [checkInImmediately, setCheckInImmediately] = useState(false);
+  const [checkInImmediately, setCheckInImmediately] = useState(true);
   const [loading, setLoading] = useState(false);
 
   const category = categories.find((c) => c.id === categoryId);

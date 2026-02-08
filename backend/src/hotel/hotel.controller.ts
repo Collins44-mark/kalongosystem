@@ -237,7 +237,7 @@ export class HotelController {
         : 'today';
     const opts = s === 'all' ? undefined : { scope: s, userId: user.sub };
     const dateRange = from && to ? { from, to } : undefined;
-    return this.hotel.getBookings(user.businessId, user.branchId, opts, dateRange);
+    return this.hotel.getBookings(user.businessId, user.branchId || 'main', opts, dateRange);
   }
 
   @Post('bookings/:id/check-in')
