@@ -204,7 +204,7 @@ export class HotelController {
   ) {
     const booking = await this.hotel.createBooking(
       user.businessId,
-      user.branchId,
+      user.branchId || 'main',
       {
         ...dto,
         checkIn: new Date(dto.checkIn),

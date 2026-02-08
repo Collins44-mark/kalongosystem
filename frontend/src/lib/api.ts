@@ -16,6 +16,10 @@ export async function api<T>(
     headers,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.message || 'Request failed');
+  if (!res.ok) {
+    const msg = data?.message;
+    const errMsg = Array.isArray(msg) ? msg.join('. ') : (msg && typeof msg === 'string' ? msg : 'Request failed');
+    throw new Error(errMsg);
+  }
   return data;
 }

@@ -43,8 +43,17 @@ export function I18nProvider({
   const [dict, setDict] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    if (translations[locale]) {
+      setDict(translations[locale]);
+      return;
+    }
     loadTranslations(locale).then(setDict);
   }, [locale]);
+
+  useEffect(() => {
+    loadTranslations('en').then(() => {});
+    loadTranslations('sw').then(() => {});
+  }, []);
 
   const setLocale = useCallback(
     (newLocale: Locale) => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/store/auth';
@@ -70,14 +70,17 @@ export default function DashboardLayout({
       .finally(() => setMeLoading(false));
   }, [token]);
 
+  const hasSyncedLocaleFromMe = useRef(false);
   useEffect(() => {
-    if (me?.language && (me.language === 'en' || me.language === 'sw') && me.language !== locale) {
+    if (me?.language && (me.language === 'en' || me.language === 'sw') && !hasSyncedLocaleFromMe.current) {
       setLocale(me.language);
+      hasSyncedLocaleFromMe.current = true;
     }
-  }, [me?.language, locale, setLocale]);
+  }, [me?.language, setLocale]);
 
   async function changeLanguage(lang: 'en' | 'sw') {
     if (!token || lang === locale) return;
+    setLangOpen(false);
     try {
       await api('/api/me', {
         method: 'PATCH',
@@ -85,7 +88,7 @@ export default function DashboardLayout({
         body: JSON.stringify({ language: lang }),
       });
       setLocale(lang);
-      setLangOpen(false);
+      setMe((prev) => (prev ? { ...prev, language: lang } : null));
     } catch {
       /* ignore */
     }
