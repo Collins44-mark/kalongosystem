@@ -1,8 +1,19 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
 
 const ROLES = ['MANAGER', 'FRONT_OFFICE', 'FINANCE', 'HOUSEKEEPING', 'BAR', 'RESTAURANT', 'KITCHEN'] as const;
+
+/** Role short codes for email generation: <role_short>.<business_name>@gmail.com */
+const ROLE_SHORT_CODES: Record<string, string> = {
+  FRONT_OFFICE: 'fo',
+  FINANCE: 'fin',
+  BAR: 'bar',
+  RESTAURANT: 'res',
+  HOUSEKEEPING: 'hk',
+  MANAGER: 'mgr',
+  KITCHEN: 'kit',
+};
 
 /** RBAC permissions by role (module access) */
 export const ROLE_PERMISSIONS: Record<string, string[]> = {
@@ -45,14 +56,11 @@ export class UsersService {
     }
   }
 
-  /** Generate unique system email: role+random@businesscode.hms.local */
-  private async generateSystemEmail(role: string, businessCode: string): Promise<string> {
-    const slug = businessCode.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(0, 12) || 'biz';
-    const rand = Math.random().toString(36).slice(2, 8);
-    const local = `${role.toLowerCase()}+${rand}`;
-    const email = `${local}@${slug}.hms.local`;
-    const exists = await this.prisma.user.findUnique({ where: { email } });
-    return exists ? this.generateSystemEmail(role, businessCode + rand) : email;
+  /** Generate role email: <role_short>.<business_name>@gmail.com. No random strings, no .local. */
+  private generateRoleEmail(role: string, businessName: string): string {
+    const short = ROLE_SHORT_CODES[role] ?? role.toLowerCase().replace(/_/g, '').slice(0, 3);
+    const slug = businessName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'biz';
+    return `${short}.${slug}@gmail.com`;
   }
 
   /** Generate random temporary password (8 chars) */
@@ -97,7 +105,22 @@ export class UsersService {
     const business = await this.prisma.business.findUnique({ where: { id: businessId } });
     if (!business) throw new NotFoundException('Business not found');
 
-    const email = await this.generateSystemEmail(data.role, business.businessId);
+    // One user per role per business - role email is deterministic
+    const existingRoleUser = await this.prisma.businessUser.findFirst({
+      where: { businessId, role: data.role },
+    });
+    if (existingRoleUser) {
+      throw new ForbiddenException('Role email already exists for this business');
+    }
+
+    const email = this.generateRoleEmail(data.role, business.name);
+
+    // Check global uniqueness (email may exist from another business with same name)
+    const existingUser = await this.prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      throw new ConflictException('Role email already exists for this business');
+    }
+
     const tempPassword = this.generateTempPassword();
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
