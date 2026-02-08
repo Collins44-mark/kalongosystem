@@ -14,7 +14,9 @@ export class SubscriptionGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
-    if (!user?.businessId) return false;
+    if (!user?.businessId) {
+      throw new ForbiddenException('No business context. Please log in with a business.');
+    }
 
     const sub = await this.prisma.subscription.findUnique({
       where: { businessId: user.businessId },

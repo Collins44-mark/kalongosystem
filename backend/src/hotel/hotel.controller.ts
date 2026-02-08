@@ -183,6 +183,7 @@ export class HotelController {
   }
 
   @Put('rooms/:id/status')
+  @SkipRolesGuard()
   async updateRoomStatus(
     @CurrentUser() user: any,
     @Param('id') roomId: string,
@@ -198,6 +199,7 @@ export class HotelController {
   }
 
   @Post('bookings')
+  @SkipRolesGuard()
   async createBooking(
     @CurrentUser() user: any,
     @Body() dto: CreateBookingDto,
@@ -220,6 +222,7 @@ export class HotelController {
   }
 
   @Get('bookings')
+  @SkipRolesGuard()
   async getBookings(
     @CurrentUser() user: any,
     @Query('scope') scope?: 'all' | 'today' | 'mine',
@@ -238,6 +241,7 @@ export class HotelController {
   }
 
   @Post('bookings/:id/check-in')
+  @SkipRolesGuard()
   async checkIn(@CurrentUser() user: any, @Param('id') id: string) {
     const res = await this.hotel.checkIn(id, user.businessId, user.sub);
     await this.hotel.logAudit(user.sub, user.role || 'USER', user.businessId, 'booking_checked_in', 'booking', id);
@@ -245,6 +249,7 @@ export class HotelController {
   }
 
   @Post('bookings/:id/check-out')
+  @SkipRolesGuard()
   async checkOut(@CurrentUser() user: any, @Param('id') id: string) {
     const res = await this.hotel.checkOut(id, user.businessId);
     await this.hotel.logAudit(user.sub, user.role || 'USER', user.businessId, 'booking_checked_out', 'booking', id);
@@ -261,6 +266,7 @@ export class HotelController {
   }
 
   @Put('bookings/:id/room')
+  @SkipRolesGuard()
   async changeRoom(
     @CurrentUser() user: any,
     @Param('id') id: string,
@@ -272,6 +278,7 @@ export class HotelController {
   }
 
   @Put('bookings/:id/extend')
+  @SkipRolesGuard()
   async extendStay(
     @CurrentUser() user: any,
     @Param('id') id: string,
@@ -296,6 +303,7 @@ export class HotelController {
   }
 
   @Post('bookings/:id/payments')
+  @SkipRolesGuard()
   async addPayment(
     @CurrentUser() user: any,
     @Param('id') id: string,
@@ -312,6 +320,7 @@ export class HotelController {
   }
 
   @Get('bookings/:id/payments')
+  @SkipRolesGuard()
   async getPayments(
     @CurrentUser() user: any,
     @Param('id') id: string,
@@ -320,6 +329,7 @@ export class HotelController {
   }
 
   @Get('summary')
+  @SkipRolesGuard()
   async getSummary(@CurrentUser() user: any) {
     return this.hotel.getRoomSummary(user.businessId, user.branchId);
   }
