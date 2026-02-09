@@ -6,6 +6,7 @@
  */
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { notifyError, notifySuccess, notifyInfo } from '@/store/notifications';
 
 type UserRow = {
   id: string;
@@ -56,11 +57,12 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
         body: JSON.stringify({ fullName: fullName.trim(), role }),
       });
       setNewUserTempPwd(res.temporaryPassword);
+      notifySuccess(`User created. Temporary password: ${res.temporaryPassword}`);
       setFullName('');
       setRole('FRONT_OFFICE');
       load();
     } catch (e) {
-      alert((e as Error).message);
+      notifyError((e as Error).message);
     } finally {
       setCreating(false);
     }
@@ -73,10 +75,10 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
         method: 'POST',
         token,
       });
-      alert(`${t('settings.tempPassword')}: ${res.temporaryPassword}\n\n${t('settings.copyPassword')}`);
+      notifyInfo(`${t('settings.tempPassword')}: ${res.temporaryPassword}`);
       load();
     } catch (e) {
-      alert((e as Error).message);
+      notifyError((e as Error).message);
     } finally {
       setResettingId(null);
     }
@@ -91,9 +93,10 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
         token,
         body: JSON.stringify({ disabled: !u.isDisabled }),
       });
+      notifySuccess(u.isDisabled ? 'User enabled' : 'User disabled');
       load();
     } catch (e) {
-      alert((e as Error).message);
+      notifyError((e as Error).message);
     }
   }
 
@@ -113,9 +116,10 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
         body: JSON.stringify({ fullName: editName.trim(), role: editRole }),
       });
       setEditing(null);
+      notifySuccess('User updated');
       load();
     } catch (e) {
-      alert((e as Error).message);
+      notifyError((e as Error).message);
     }
   }
 
@@ -124,9 +128,10 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
     if (!confirm(t('settings.deleteUserConfirm'))) return;
     try {
       await api(`/users/${u.id}`, { method: 'DELETE', token });
+      notifySuccess('User deleted');
       load();
     } catch (e) {
-      alert((e as Error).message);
+      notifyError((e as Error).message);
     }
   }
 

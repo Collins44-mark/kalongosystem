@@ -6,6 +6,7 @@
  */
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { notifyError, notifySuccess } from '@/store/notifications';
 
 type StaffWorker = {
   id: string;
@@ -52,13 +53,14 @@ export function StaffWorkersSection({ token, t }: { token: string; t: (k: string
         token,
         body: JSON.stringify({ fullName: newFullName.trim(), role: newRole }),
       });
+      notifySuccess('Worker added');
       setNewFullName('');
       setShowCreate(false);
       const q = roleFilter ? `?role=${roleFilter}` : '';
       const list = await api<StaffWorker[]>(`/api/staff-workers${q}`, { token });
       setWorkers(list);
     } catch (e) {
-      alert((e as Error).message);
+      notifyError((e as Error).message);
     } finally {
       setCreating(false);
     }
@@ -71,11 +73,12 @@ export function StaffWorkersSection({ token, t }: { token: string; t: (k: string
         token,
         body: JSON.stringify({ blocked: w.status === 'ACTIVE' }),
       });
+      notifySuccess(w.status === 'ACTIVE' ? 'Worker blocked' : 'Worker unblocked');
       setWorkers((prev) =>
         prev.map((x) => (x.id === w.id ? { ...x, status: w.status === 'ACTIVE' ? 'BLOCKED' : 'ACTIVE' } : x))
       );
     } catch (e) {
-      alert((e as Error).message);
+      notifyError((e as Error).message);
     }
   }
 
@@ -86,11 +89,12 @@ export function StaffWorkersSection({ token, t }: { token: string; t: (k: string
         token,
         body: JSON.stringify({ role: newRole }),
       });
+      notifySuccess('Worker role updated');
       setWorkers((prev) =>
         prev.map((x) => (x.id === w.id ? { ...x, role: newRole } : x))
       );
     } catch (e) {
-      alert((e as Error).message);
+      notifyError((e as Error).message);
     }
   }
 
@@ -110,11 +114,12 @@ export function StaffWorkersSection({ token, t }: { token: string; t: (k: string
         body: JSON.stringify({ fullName: editName.trim(), role: editRole }),
       });
       setEditing(null);
+      notifySuccess('Worker updated');
       const q = roleFilter ? `?role=${roleFilter}` : '';
       const list = await api<StaffWorker[]>(`/api/staff-workers${q}`, { token });
       setWorkers(list);
     } catch (e) {
-      alert((e as Error).message);
+      notifyError((e as Error).message);
     }
   }
 
@@ -123,9 +128,10 @@ export function StaffWorkersSection({ token, t }: { token: string; t: (k: string
     if (!confirm(t('settings.deleteWorkerConfirm'))) return;
     try {
       await api(`/api/staff-workers/${w.id}`, { method: 'DELETE', token });
+      notifySuccess('Worker deleted');
       setWorkers((prev) => prev.filter((x) => x.id !== w.id));
     } catch (e) {
-      alert((e as Error).message);
+      notifyError((e as Error).message);
     }
   }
 
