@@ -23,18 +23,20 @@ export class ApiService {
 
     const role = ['ADMIN', 'OWNER'].includes(user.role || '') ? 'MANAGER' : user.role;
 
-    const activeWorkerId = user.workerId ?? null;
-    const activeWorkerName = user.workerName ?? null;
-    let needsWorkerSelection = false;
-    let workers: { id: string; fullName: string }[] = [];
+    const roleWorkers = await this.staffWorkers.getActiveByRole(user.businessId, role);
+    const workers: { id: string; fullName: string }[] = roleWorkers.map((w) => ({ id: w.id, fullName: w.fullName }));
 
-    if (!activeWorkerId) {
-      const roleWorkers = await this.staffWorkers.getActiveByRole(user.businessId, role);
-      if (roleWorkers.length > 0) {
-        needsWorkerSelection = true;
-        workers = roleWorkers.map((w) => ({ id: w.id, fullName: w.fullName }));
-      }
+    let activeWorkerId = user.workerId ?? null;
+    let activeWorkerName = user.workerName ?? null;
+
+    // If workers exist but selected worker is missing/blocked, force reselection.
+    const activeStillValid =
+      !activeWorkerId ? false : roleWorkers.some((w) => w.id === activeWorkerId);
+    if (workers.length > 0 && (!activeWorkerId || !activeStillValid)) {
+      activeWorkerId = null;
+      activeWorkerName = null;
     }
+    const needsWorkerSelection = workers.length > 0 && !activeWorkerId;
 
     return {
       email: user.email,

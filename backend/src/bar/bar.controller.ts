@@ -57,6 +57,31 @@ class CreateRestockDto {
 export class BarController {
   constructor(private bar: BarService) {}
 
+  private getRangeFromQuery(period?: string, from?: string, to?: string) {
+    const p = (period || 'today') as string;
+    const now = new Date();
+    if (p === 'week') {
+      const end = new Date(now);
+      const start = new Date(now);
+      start.setDate(start.getDate() - 7);
+      return { from: start, to: end };
+    }
+    if (p === 'month') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end = new Date(now);
+      return { from: start, to: end };
+    }
+    if (p === 'bydate' && from && to) {
+      const start = new Date(`${from}T00:00:00.000Z`);
+      const end = new Date(`${to}T23:59:59.999Z`);
+      return { from: start, to: end };
+    }
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const end = new Date(start);
+    end.setHours(23, 59, 59, 999);
+    return { from: start, to: end };
+  }
+
   /** Bar staff: list items (read-only prices) */
   @Get('items')
   @UseGuards(RolesGuard)
@@ -166,32 +191,7 @@ export class BarController {
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
-    const p = (period || 'today') as string;
-    const now = new Date();
-    const range = (() => {
-      if (p === 'week') {
-        const end = new Date(now);
-        const start = new Date(now);
-        start.setDate(start.getDate() - 7);
-        return { from: start, to: end };
-      }
-      if (p === 'month') {
-        const start = new Date(now.getFullYear(), now.getMonth(), 1);
-        const end = new Date(now);
-        return { from: start, to: end };
-      }
-      if (p === 'bydate' && from && to) {
-        // Use UTC boundaries for date-only inputs
-        const start = new Date(`${from}T00:00:00.000Z`);
-        const end = new Date(`${to}T23:59:59.999Z`);
-        return { from: start, to: end };
-      }
-      // today
-      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const end = new Date(start);
-      end.setHours(23, 59, 59, 999);
-      return { from: start, to: end };
-    })();
+    const range = this.getRangeFromQuery(period, from, to);
 
     const orders = await this.bar.listMyOrders(
       user.businessId,
@@ -212,6 +212,20 @@ export class BarController {
       }));
     }
     return orders;
+  }
+
+  /** MANAGER: bar order history */
+  @Get('orders')
+  @UseGuards(RolesGuard, AllowManagerGuard)
+  @Roles('MANAGER', 'ADMIN', 'OWNER')
+  async listOrders(
+    @CurrentUser() user: any,
+    @Query('period') period?: 'today' | 'week' | 'month' | 'bydate',
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    const range = this.getRangeFromQuery(period, from, to);
+    return this.bar.getOrders(user.businessId, user.branchId, range.from, range.to);
   }
 
   /** MANAGER: restock history */

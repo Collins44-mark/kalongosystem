@@ -124,7 +124,8 @@ export default function DashboardLayout({
         body: JSON.stringify({ workerId: workerSelectId }),
       });
       setAuthWithWorker(res.accessToken, user, res.worker);
-      setMe((prev) => prev ? { ...prev, needsWorkerSelection: false, workers: [], activeWorkerId: res.worker.id, activeWorkerName: res.worker.fullName } : null);
+      // Keep workers list so user can switch who is saving.
+      setMe((prev) => prev ? { ...prev, needsWorkerSelection: false, activeWorkerId: res.worker.id, activeWorkerName: res.worker.fullName } : null);
     } catch (e) {
       alert((e as Error).message);
     } finally {
@@ -147,6 +148,7 @@ export default function DashboardLayout({
   }
 
   const mustSelectWorker = Boolean(me?.needsWorkerSelection && me?.workers?.length);
+  const canSwitchWorker = Boolean(me?.workers?.length);
 
   const displayRole = (roleForNav || user?.role || '').replace(/_/g, ' ');
   const displayWorker = (user?.activeWorkerName ?? me?.activeWorkerName) || '';
@@ -226,7 +228,7 @@ export default function DashboardLayout({
             </span>
           </div>
           <div className="relative flex-shrink-0 flex items-center gap-2">
-            {mustSelectWorker && (
+            {canSwitchWorker && (
               <div className="hidden sm:flex items-center gap-2">
                 <select
                   value={workerSelectId}

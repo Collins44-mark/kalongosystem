@@ -20,6 +20,16 @@ type Restock = {
   items: { id: string; barItemId: string; stockBefore: number; quantityAdded: number; stockAfter: number; barItem: { name: string } }[];
 };
 
+type AdminOrder = {
+  id: string;
+  orderNumber: string;
+  paymentMethod: string;
+  totalAmount: string;
+  createdAt: string;
+  createdByWorkerName?: string | null;
+  items: { id: string; quantity: number; barItem: { name: string } }[];
+};
+
 export default function BarPage() {
   const { token, user } = useAuth();
   const { t } = useTranslation();
@@ -58,6 +68,21 @@ export default function BarPage() {
   const [newItemQty, setNewItemQty] = useState('');
   const [newItemMin, setNewItemMin] = useState('');
   const [addingItem, setAddingItem] = useState(false);
+  const [adminOrders, setAdminOrders] = useState<AdminOrder[]>([]);
+  const [adminOrdersLoading, setAdminOrdersLoading] = useState(false);
+  const [ordersPeriod, setOrdersPeriod] = useState<'today' | 'week' | 'month' | 'bydate'>('today');
+  const [ordersFrom, setOrdersFrom] = useState('');
+  const [ordersTo, setOrdersTo] = useState('');
+  const [autoTick, setAutoTick] = useState(0);
+
+  // Auto-refresh (every 15s) while tab is visible
+  useEffect(() => {
+    if (!token) return;
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') setAutoTick((t) => t + 1);
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [token]);
 
   useEffect(() => {
     if (!token) return;
@@ -65,28 +90,43 @@ export default function BarPage() {
       .then(setItems)
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
-  }, [token]);
+  }, [token, autoTick]);
 
   useEffect(() => {
     if (!token) return;
     api<RestockPermission>('/bar/restock-permission', { token })
       .then(setPerm)
       .catch(() => setPerm({ enabled: false }));
-  }, [token]);
+  }, [token, autoTick]);
 
   useEffect(() => {
     if (!token) return;
     api<AddItemPermission>('/bar/add-item-permission', { token })
       .then(setAddPerm)
       .catch(() => setAddPerm({ enabled: false }));
-  }, [token]);
+  }, [token, autoTick]);
 
   useEffect(() => {
     if (!token || !isAdmin) return;
     api<Restock[]>('/bar/restocks', { token })
       .then(setRestocks)
       .catch(() => setRestocks([]));
-  }, [token, isAdmin]);
+  }, [token, isAdmin, autoTick]);
+
+  useEffect(() => {
+    if (!token || !isAdmin) return;
+    setAdminOrdersLoading(true);
+    const params = new URLSearchParams();
+    params.set('period', ordersPeriod);
+    if (ordersPeriod === 'bydate' && ordersFrom && ordersTo) {
+      params.set('from', ordersFrom);
+      params.set('to', ordersTo);
+    }
+    api<AdminOrder[]>(`/bar/orders?${params}`, { token })
+      .then(setAdminOrders)
+      .catch(() => setAdminOrders([]))
+      .finally(() => setAdminOrdersLoading(false));
+  }, [token, isAdmin, ordersPeriod, ordersFrom, ordersTo, autoTick]);
 
   async function togglePermission(next: boolean) {
     if (!token) return;
@@ -127,6 +167,11 @@ export default function BarPage() {
   }
 
   function addToCart(item: BarItem) {
+    const stock = item.stock ?? 0;
+    if (stock <= 0) {
+      setMessage(t('bar.outOfStockCannotOrder'));
+      return;
+    }
     const existing = cart.find((c) => c.itemId === item.id);
     const price = parseFloat(item.price);
     if (existing) {
@@ -424,7 +469,8 @@ export default function BarPage() {
           </div>
 
           <div className="bg-white border rounded overflow-hidden">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[520px]">
               <thead className="bg-slate-50">
                 <tr>
                   <th className="text-left p-3">{t('bar.itemName')}</th>
@@ -438,14 +484,17 @@ export default function BarPage() {
                   const min = item.minQuantity;
                   const isOut = stock <= 0;
                   const isLow = min != null && stock > 0 && stock <= min;
+                  const disabled = isOut;
                   return (
                     <tr
                       key={item.id}
                       id={`bar-item-${item.id}`}
-                      className={`border-t cursor-pointer hover:bg-slate-50 ${
-                        isOut ? 'bg-red-50/40' : isLow ? 'bg-amber-50/40' : ''
-                      }`}
-                      onClick={() => addToCart(item)}
+                      className={`border-t ${
+                        disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-slate-50'
+                      } ${isOut ? 'bg-red-50/40' : isLow ? 'bg-amber-50/40' : ''}`}
+                      onClick={() => {
+                        if (!disabled) addToCart(item);
+                      }}
                       title={t('bar.tapToAdd')}
                     >
                       <td className="p-3 font-medium">
@@ -460,7 +509,8 @@ export default function BarPage() {
                   );
                 })}
               </tbody>
-            </table>
+              </table>
+            </div>
             {filteredItems.length === 0 && <div className="p-3 text-sm text-slate-500">{t('common.noItems')}</div>}
           </div>
         </div>
@@ -500,9 +550,94 @@ export default function BarPage() {
           )}
           {message && <p className="mt-2 text-sm text-green-600">{message}</p>}
 
-          {user?.role === 'BAR' && token && <MyOrders token={token} />}
+          {user?.role === 'BAR' && token && <MyOrders token={token} autoTick={autoTick} />}
         </div>
       </div>
+
+      {isAdmin && (
+        <div className="mt-8 bg-white border rounded p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h2 className="font-medium">{t('bar.orderHistory')}</h2>
+            <div className="flex items-center gap-2">
+              <select
+                value={ordersPeriod}
+                onChange={(e) => setOrdersPeriod(e.target.value as any)}
+                className="px-2 py-1 border rounded text-xs sm:text-sm"
+              >
+                <option value="today">{t('overview.today')}</option>
+                <option value="week">{t('overview.thisWeek')}</option>
+                <option value="month">{t('overview.thisMonth')}</option>
+                <option value="bydate">{t('overview.byDate')}</option>
+              </select>
+              {ordersPeriod === 'bydate' && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={ordersFrom}
+                    onChange={(e) => setOrdersFrom(e.target.value)}
+                    className="px-2 py-1 border rounded text-xs sm:text-sm"
+                  />
+                  <span className="text-slate-400 text-xs sm:text-sm">{t('common.to')}</span>
+                  <input
+                    type="date"
+                    value={ordersTo}
+                    onChange={(e) => setOrdersTo(e.target.value)}
+                    className="px-2 py-1 border rounded text-xs sm:text-sm"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white border rounded overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="text-left p-3">{t('common.date')}</th>
+                  <th className="text-left p-3">{t('bar.orderNo')}</th>
+                  <th className="text-left p-3">{t('bar.savedBy')}</th>
+                  <th className="text-left p-3">{t('bar.items')}</th>
+                  <th className="text-left p-3">{t('bar.payment')}</th>
+                  <th className="text-right p-3">{t('bar.totalAmount')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {adminOrdersLoading ? (
+                  <tr>
+                    <td className="p-3 text-slate-500" colSpan={6}>
+                      {t('common.loading')}
+                    </td>
+                  </tr>
+                ) : adminOrders.length === 0 ? (
+                  <tr>
+                    <td className="p-3 text-slate-500" colSpan={6}>
+                      {t('common.noItems')}
+                    </td>
+                  </tr>
+                ) : (
+                  adminOrders.map((o) => (
+                    <tr key={o.id} className="border-t align-top">
+                      <td className="p-3 whitespace-nowrap">{new Date(o.createdAt).toLocaleString()}</td>
+                      <td className="p-3 font-medium whitespace-nowrap">{o.orderNumber}</td>
+                      <td className="p-3 whitespace-nowrap">{o.createdByWorkerName || '-'}</td>
+                      <td className="p-3">
+                        <div className="text-slate-700">
+                          {(o.items || [])
+                            .map((it) => `${it.barItem?.name ?? ''} x${it.quantity}`)
+                            .filter(Boolean)
+                            .join(', ') || '-'}
+                        </div>
+                      </td>
+                      <td className="p-3 whitespace-nowrap">{o.paymentMethod}</td>
+                      <td className="p-3 text-right whitespace-nowrap">{formatTzs(parseFloat(o.totalAmount as any))}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {isAdmin && (
         <div className="mt-8 bg-white border rounded p-4">
@@ -668,7 +803,7 @@ function formatTzs(n: number) {
   return new Intl.NumberFormat('en-TZ', { style: 'currency', currency: 'TZS', maximumFractionDigits: 0 }).format(n);
 }
 
-function MyOrders({ token }: { token: string }) {
+function MyOrders({ token, autoTick }: { token: string; autoTick: number }) {
   const { t } = useTranslation();
   const [orders, setOrders] = useState<
     { id: string; orderNumber: string; paymentMethod: string; createdAt: string; items: { id: string; quantity: number; name: string }[] }[]
@@ -691,7 +826,7 @@ function MyOrders({ token }: { token: string }) {
       .then((res: any) => setOrders(res || []))
       .catch(() => setOrders([]))
       .finally(() => setLoading(false));
-  }, [token, filter, dateFrom, dateTo]);
+  }, [token, filter, dateFrom, dateTo, autoTick]);
 
   return (
     <div className="mt-6">
@@ -728,12 +863,13 @@ function MyOrders({ token }: { token: string }) {
         </div>
       </div>
       <div className="bg-white border rounded overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[680px]">
           <thead className="bg-slate-50">
             <tr>
               <th className="text-left p-3">{t('common.date')}</th>
               <th className="text-left p-3">{t('bar.orderNo')}</th>
-              <th className="text-right p-3">{t('bar.items')}</th>
+              <th className="text-left p-3">{t('bar.items')}</th>
               <th className="text-left p-3">{t('bar.payment')}</th>
             </tr>
           </thead>
@@ -755,13 +891,19 @@ function MyOrders({ token }: { token: string }) {
                 <tr key={o.id} className="border-t">
                   <td className="p-3">{new Date(o.createdAt).toLocaleString()}</td>
                   <td className="p-3 font-medium">{o.orderNumber}</td>
-                  <td className="p-3 text-right">{(o.items || []).reduce((s, it) => s + (it.quantity || 0), 0)}</td>
+                  <td className="p-3 text-slate-700">
+                    {(o.items || [])
+                      .map((it) => `${it.name} x${it.quantity}`)
+                      .filter(Boolean)
+                      .join(', ') || '-'}
+                  </td>
                   <td className="p-3">{o.paymentMethod}</td>
                 </tr>
               ))
             )}
           </tbody>
-        </table>
+          </table>
+        </div>
       </div>
     </div>
   );
