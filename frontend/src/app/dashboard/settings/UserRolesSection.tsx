@@ -28,7 +28,10 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
   const [role, setRole] = useState<string>('FRONT_OFFICE');
   const [creating, setCreating] = useState(false);
   const [newUserTempPwd, setNewUserTempPwd] = useState<string | null>(null);
+  const [password, setPassword] = useState('');
   const [resettingId, setResettingId] = useState<string | null>(null);
+  const [resetPwdFor, setResetPwdFor] = useState<UserRow | null>(null);
+  const [resetPasswordValue, setResetPasswordValue] = useState('');
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [editName, setEditName] = useState('');
@@ -49,17 +52,22 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!fullName.trim()) return;
+    if (!password.trim() || password.trim().length < 6) {
+      notifyError(t('settings.passwordMin'));
+      return;
+    }
     setCreating(true);
     try {
-      const res = await api<{ temporaryPassword: string }>('/users', {
+      const res = await api<{ password: string }>('/users', {
         method: 'POST',
         token,
-        body: JSON.stringify({ fullName: fullName.trim(), role }),
+        body: JSON.stringify({ fullName: fullName.trim(), role, password: password.trim() }),
       });
-      setNewUserTempPwd(res.temporaryPassword);
-      notifySuccess(`User created. Temporary password: ${res.temporaryPassword}`);
+      setNewUserTempPwd(res.password);
+      notifySuccess(`${t('settings.userCreated')} ${t('settings.passwordSet')}: ${res.password}`);
       setFullName('');
       setRole('FRONT_OFFICE');
+      setPassword('');
       load();
     } catch (e) {
       notifyError((e as Error).message);
@@ -71,11 +79,12 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
   async function resetPassword(id: string) {
     setResettingId(id);
     try {
-      const res = await api<{ temporaryPassword: string }>(`/users/${id}/reset-password`, {
+      const res = await api<{ password: string }>(`/users/${id}/reset-password`, {
         method: 'POST',
         token,
+        body: JSON.stringify({ password: resetPasswordValue.trim() }),
       });
-      notifyInfo(`${t('settings.tempPassword')}: ${res.temporaryPassword}`);
+      notifyInfo(`${t('settings.passwordSet')}: ${res.password}`);
       load();
     } catch (e) {
       notifyError((e as Error).message);
@@ -192,8 +201,15 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
                             <button onClick={() => startEdit(u)} className="block w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
                               {t('common.edit')}
                             </button>
-                            <button onClick={() => { setOpenMenu(null); resetPassword(u.id); }} disabled={resettingId === u.id} className="block w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-                              {resettingId === u.id ? '...' : t('settings.resetPassword')}
+                            <button
+                              onClick={() => {
+                                setOpenMenu(null);
+                                setResetPwdFor(u);
+                                setResetPasswordValue('');
+                              }}
+                              className="block w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                            >
+                              {t('settings.resetPassword')}
                             </button>
                             <button onClick={() => toggleDisable(u)} className={`block w-full text-left px-3 py-2 text-sm ${u.isDisabled ? 'text-green-600' : 'text-amber-600'} hover:bg-slate-50`}>
                               {u.isDisabled ? t('settings.enableUser') : t('settings.disableUser')}
@@ -257,6 +273,16 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
                     ))}
                   </select>
                 </div>
+                <div>
+                  <label className="block text-sm mb-1">{t('settings.password')}</label>
+                  <input
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full px-3 py-2 border rounded"
+                    placeholder={t('settings.passwordMin')}
+                    required
+                  />
+                </div>
                 <div className="flex gap-2">
                   <button type="submit" disabled={creating} className="flex-1 py-2 bg-teal-600 text-white rounded">
                     {creating ? '...' : t('common.create')}
@@ -267,6 +293,33 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {resetPwdFor && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white p-4 rounded max-w-sm w-full mx-4">
+            <h3 className="font-medium mb-3">{t('settings.resetPassword')}</h3>
+            <p className="text-xs text-slate-500 mb-2">{resetPwdFor.email}</p>
+            <input
+              value={resetPasswordValue}
+              onChange={(e) => setResetPasswordValue(e.target.value)}
+              className="w-full px-3 py-2 border rounded mb-3"
+              placeholder={t('settings.passwordMin')}
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => resetPassword(resetPwdFor.id)}
+                disabled={!resetPasswordValue.trim() || resetPasswordValue.trim().length < 6 || resettingId === resetPwdFor.id}
+                className="flex-1 py-2 bg-teal-600 text-white rounded disabled:opacity-50"
+              >
+                {resettingId === resetPwdFor.id ? '...' : t('common.save')}
+              </button>
+              <button onClick={() => setResetPwdFor(null)} className="flex-1 py-2 bg-slate-200 rounded">
+                {t('common.cancel')}
+              </button>
+            </div>
           </div>
         </div>
       )}

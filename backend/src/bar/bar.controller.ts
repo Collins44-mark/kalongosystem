@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { BarService } from './bar.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { SubscriptionGuard } from '../common/guards/subscription.guard';
@@ -75,21 +75,21 @@ export class BarController {
       user.branchId,
       dto.items,
       dto.paymentMethod,
-      user.sub,
+      { userId: user.sub, role: user.role, workerId: user.workerId, workerName: user.workerName },
     );
     return { orderId: order.id, orderNumber: order.orderNumber, message: 'Order confirmed' };
   }
 
-  /** Manager only: create bar item */
+  /** Create bar item: MANAGER always; BAR only when permitted */
   @Post('items')
   @UseGuards(RolesGuard)
-  @Roles('MANAGER')
+  @Roles('MANAGER', 'BAR')
   async createItem(@CurrentUser() user: any, @Body() dto: CreateItemDto) {
     return this.bar.createItem(
       user.businessId,
       user.branchId,
       dto,
-      user.sub,
+      { userId: user.sub, role: user.role, workerId: user.workerId, workerName: user.workerName },
     );
   }
 
@@ -118,6 +118,31 @@ export class BarController {
     );
   }
 
+  /** BAR + MANAGER: see if add-item is enabled for BAR role */
+  @Get('add-item-permission')
+  @UseGuards(RolesGuard)
+  @Roles('MANAGER', 'BAR')
+  async getAddItemPermission(@CurrentUser() user: any) {
+    return this.bar.getAddItemPermission(user.businessId);
+  }
+
+  /** MANAGER: enable/disable add-item permission (optional session expiry) */
+  @Patch('add-item-permission')
+  @UseGuards(RolesGuard, AllowManagerGuard)
+  @Roles('MANAGER', 'ADMIN', 'OWNER')
+  async setAddItemPermission(
+    @CurrentUser() user: any,
+    @Body('enabled') enabled: boolean,
+    @Body('expiresMinutes') expiresMinutes?: number,
+  ) {
+    return this.bar.setAddItemPermission(
+      user.businessId,
+      enabled === true,
+      { userId: user.sub, role: user.role || 'MANAGER', workerId: user.workerId, workerName: user.workerName },
+      typeof expiresMinutes === 'number' ? expiresMinutes : null,
+    );
+  }
+
   /** BAR: create restock only when enabled. MANAGER always allowed. */
   @Post('restocks')
   @UseGuards(RolesGuard)
@@ -129,6 +154,64 @@ export class BarController {
       { userId: user.sub, role: user.role, workerId: user.workerId, workerName: user.workerName },
       dto.items,
     );
+  }
+
+  /** BAR: order history for the active worker */
+  @Get('orders/my')
+  @UseGuards(RolesGuard)
+  @Roles('MANAGER', 'BAR')
+  async myOrders(
+    @CurrentUser() user: any,
+    @Query('period') period?: 'today' | 'week' | 'month' | 'bydate',
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    const p = (period || 'today') as string;
+    const now = new Date();
+    const range = (() => {
+      if (p === 'week') {
+        const end = new Date(now);
+        const start = new Date(now);
+        start.setDate(start.getDate() - 7);
+        return { from: start, to: end };
+      }
+      if (p === 'month') {
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        const end = new Date(now);
+        return { from: start, to: end };
+      }
+      if (p === 'bydate' && from && to) {
+        // Use UTC boundaries for date-only inputs
+        const start = new Date(`${from}T00:00:00.000Z`);
+        const end = new Date(`${to}T23:59:59.999Z`);
+        return { from: start, to: end };
+      }
+      // today
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const end = new Date(start);
+      end.setHours(23, 59, 59, 999);
+      return { from: start, to: end };
+    })();
+
+    const orders = await this.bar.listMyOrders(
+      user.businessId,
+      user.branchId,
+      { userId: user.sub, role: user.role, workerId: user.workerId, workerName: user.workerName },
+      range.from,
+      range.to,
+    );
+    // For BAR, return minimal fields (no aggregates across all sales).
+    if (user.role === 'BAR') {
+      return orders.map((o: any) => ({
+        id: o.id,
+        orderNumber: o.orderNumber,
+        paymentMethod: o.paymentMethod,
+        createdAt: o.createdAt,
+        createdByWorkerName: o.createdByWorkerName ?? null,
+        items: (o.items || []).map((it: any) => ({ id: it.id, quantity: it.quantity, name: it.barItem?.name })),
+      }));
+    }
+    return orders;
   }
 
   /** MANAGER: restock history */

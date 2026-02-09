@@ -18,14 +18,14 @@ export class UsersController {
   @Post()
   async create(
     @CurrentUser() user: any,
-    @Body() dto: { fullName: string; role: string },
+    @Body() dto: { fullName: string; role: string; password: string },
   ) {
     return this.users.createUser(user.businessId, user.sub, user.role || 'MANAGER', dto);
   }
 
   @Post(':id/reset-password')
-  async resetPassword(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.users.resetPassword(user.businessId, id, user.sub, user.role || 'MANAGER');
+  async resetPassword(@CurrentUser() user: any, @Param('id') id: string, @Body('password') password: string) {
+    return this.users.resetPassword(user.businessId, id, password, user.sub, user.role || 'MANAGER');
   }
 
   @Patch(':id')

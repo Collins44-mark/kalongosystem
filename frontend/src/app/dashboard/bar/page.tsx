@@ -9,6 +9,7 @@ import { useSearchParams } from 'next/navigation';
 
 type BarItem = { id: string; name: string; price: string; stock: number | null; minQuantity: number | null };
 type RestockPermission = { enabled: boolean; expiresAt?: string | null; approvedByWorkerName?: string | null };
+type AddItemPermission = { enabled: boolean; expiresAt?: string | null; approvedByWorkerName?: string | null };
 type Restock = {
   id: string;
   createdAt: string;
@@ -30,6 +31,7 @@ export default function BarPage() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
   const [perm, setPerm] = useState<RestockPermission>({ enabled: false });
+  const [addPerm, setAddPerm] = useState<AddItemPermission>({ enabled: false });
   const [showRestock, setShowRestock] = useState(false);
   const [restockQty, setRestockQty] = useState<Record<string, string>>({});
   const [savingRestock, setSavingRestock] = useState(false);
@@ -38,6 +40,8 @@ export default function BarPage() {
   const [filter, setFilter] = useState<'all' | 'low' | 'normal' | 'out'>('all');
   const [permSaving, setPermSaving] = useState(false);
   const [permMinutes, setPermMinutes] = useState<string>(''); // '' = manual until turned off
+  const [addPermSaving, setAddPermSaving] = useState(false);
+  const [addPermMinutes, setAddPermMinutes] = useState<string>(''); // '' = manual until turned off
   const isAdmin = isManagerLevel(user?.role);
   // Allow deep-linking from Overview, e.g. /dashboard/bar?filter=low
   useEffect(() => {
@@ -71,6 +75,13 @@ export default function BarPage() {
   }, [token]);
 
   useEffect(() => {
+    if (!token) return;
+    api<AddItemPermission>('/bar/add-item-permission', { token })
+      .then(setAddPerm)
+      .catch(() => setAddPerm({ enabled: false }));
+  }, [token]);
+
+  useEffect(() => {
     if (!token || !isAdmin) return;
     api<Restock[]>('/bar/restocks', { token })
       .then(setRestocks)
@@ -93,6 +104,25 @@ export default function BarPage() {
       setMessage((e as Error).message);
     } finally {
       setPermSaving(false);
+    }
+  }
+
+  async function toggleAddItemPermission(next: boolean) {
+    if (!token) return;
+    setAddPermSaving(true);
+    try {
+      const expiresMinutes = addPermMinutes ? Number(addPermMinutes) : null;
+      const res = await api<AddItemPermission>('/bar/add-item-permission', {
+        method: 'PATCH',
+        token,
+        body: JSON.stringify({ enabled: next, expiresMinutes }),
+      });
+      setAddPerm(res);
+      setMessage(next ? t('bar.addItemPermissionEnabled') : t('bar.addItemPermissionDisabled'));
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setAddPermSaving(false);
     }
   }
 
@@ -280,37 +310,74 @@ export default function BarPage() {
 
       {isAdmin && (
         <div className="bg-white border rounded p-4 mb-6 max-w-xl">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="font-medium">{t('bar.restockPermission')}</div>
-              <div className="text-xs text-slate-500">
-                {perm.enabled ? t('bar.permissionOn') : t('bar.permissionOff')}
-                {perm.expiresAt ? ` · ${t('bar.expires')} ${new Date(perm.expiresAt).toLocaleString()}` : ''}
+          <div className="font-medium mb-3">{t('bar.permissions')}</div>
+
+          <div className="space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium">{t('bar.restockPermission')}</div>
+                <div className="text-xs text-slate-500">
+                  {perm.enabled ? t('bar.permissionOn') : t('bar.permissionOff')}
+                  {perm.expiresAt ? ` · ${t('bar.expires')} ${new Date(perm.expiresAt).toLocaleString()}` : ''}
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <label className="text-xs text-slate-600">{t('bar.permissionDuration')}</label>
+                  <select
+                    value={permMinutes}
+                    onChange={(e) => setPermMinutes(e.target.value)}
+                    className="px-2 py-1 border rounded text-xs"
+                    disabled={permSaving}
+                  >
+                    <option value="">{t('bar.untilOff')}</option>
+                    <option value="15">15 min</option>
+                    <option value="30">30 min</option>
+                    <option value="60">60 min</option>
+                  </select>
+                </div>
               </div>
+              <label className="flex items-center gap-2 text-sm pt-0.5">
+                <input
+                  type="checkbox"
+                  checked={perm.enabled}
+                  disabled={permSaving}
+                  onChange={(e) => togglePermission(e.target.checked)}
+                />
+                <span>{t('common.confirm')}</span>
+              </label>
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={perm.enabled}
-                disabled={permSaving}
-                onChange={(e) => togglePermission(e.target.checked)}
-              />
-              <span>{t('common.confirm')}</span>
-            </label>
-          </div>
-          <div className="mt-3 flex items-center gap-2">
-            <label className="text-xs text-slate-600">{t('bar.permissionDuration')}</label>
-            <select
-              value={permMinutes}
-              onChange={(e) => setPermMinutes(e.target.value)}
-              className="px-2 py-1 border rounded text-xs"
-              disabled={permSaving}
-            >
-              <option value="">{t('bar.untilOff')}</option>
-              <option value="15">15 min</option>
-              <option value="30">30 min</option>
-              <option value="60">60 min</option>
-            </select>
+
+            <div className="flex items-start justify-between gap-3 border-t pt-4">
+              <div>
+                <div className="text-sm font-medium">{t('bar.addItemPermission')}</div>
+                <div className="text-xs text-slate-500">
+                  {addPerm.enabled ? t('bar.permissionOn') : t('bar.permissionOff')}
+                  {addPerm.expiresAt ? ` · ${t('bar.expires')} ${new Date(addPerm.expiresAt).toLocaleString()}` : ''}
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <label className="text-xs text-slate-600">{t('bar.permissionDuration')}</label>
+                  <select
+                    value={addPermMinutes}
+                    onChange={(e) => setAddPermMinutes(e.target.value)}
+                    className="px-2 py-1 border rounded text-xs"
+                    disabled={addPermSaving}
+                  >
+                    <option value="">{t('bar.untilOff')}</option>
+                    <option value="15">15 min</option>
+                    <option value="30">30 min</option>
+                    <option value="60">60 min</option>
+                  </select>
+                </div>
+              </div>
+              <label className="flex items-center gap-2 text-sm pt-0.5">
+                <input
+                  type="checkbox"
+                  checked={addPerm.enabled}
+                  disabled={addPermSaving}
+                  onChange={(e) => toggleAddItemPermission(e.target.checked)}
+                />
+                <span>{t('common.confirm')}</span>
+              </label>
+            </div>
           </div>
         </div>
       )}
@@ -333,7 +400,7 @@ export default function BarPage() {
         <div>
           <div className="flex items-center justify-between mb-2">
             <h2 className="font-medium">{t('bar.items')}</h2>
-            {isAdmin && (
+            {isAdmin ? (
               <button
                 type="button"
                 onClick={() => setShowAddItem(true)}
@@ -341,7 +408,19 @@ export default function BarPage() {
               >
                 {t('bar.addItem')}
               </button>
-            )}
+            ) : user?.role === 'BAR' ? (
+              <button
+                type="button"
+                disabled={!addPerm.enabled}
+                onClick={() => setShowAddItem(true)}
+                className={`px-3 py-1.5 rounded text-sm border ${
+                  addPerm.enabled ? 'bg-white hover:border-teal-500' : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                }`}
+                title={addPerm.enabled ? t('bar.addItem') : t('bar.waitingForPermission')}
+              >
+                {t('bar.addItem')}
+              </button>
+            ) : null}
           </div>
 
           <div className="bg-white border rounded overflow-hidden">
@@ -420,6 +499,8 @@ export default function BarPage() {
             </>
           )}
           {message && <p className="mt-2 text-sm text-green-600">{message}</p>}
+
+          {user?.role === 'BAR' && token && <MyOrders token={token} />}
         </div>
       </div>
 
@@ -506,14 +587,35 @@ export default function BarPage() {
             <div className="text-sm text-slate-600 mb-3">
               {new Date(selectedRestock.createdAt).toLocaleString()} · {t('bar.restockedBy')}: {selectedRestock.createdByRole}{selectedRestock.createdByWorkerName ? ` / ${selectedRestock.createdByWorkerName}` : ''}
             </div>
-            <div className="space-y-2">
-              {selectedRestock.items.map((it) => (
-                <div key={it.id} className="grid grid-cols-4 gap-2 text-sm border-b py-2">
-                  <div className="col-span-2 font-medium">{it.barItem.name}</div>
-                  <div className="text-slate-600">{it.stockBefore} → {it.stockAfter}</div>
-                  <div className="text-right text-teal-700">+{it.quantityAdded}</div>
-                </div>
-              ))}
+            <div className="bg-white border rounded overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="text-left p-3">{t('bar.itemName')}</th>
+                    <th className="text-right p-3">{t('bar.before')}</th>
+                    <th className="text-right p-3">{t('bar.added')}</th>
+                    <th className="text-right p-3">{t('bar.after')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedRestock.items.map((it) => (
+                    <tr key={it.id} className="border-t">
+                      <td className="p-3 font-medium">{it.barItem.name}</td>
+                      <td className="p-3 text-right text-slate-700">{it.stockBefore}</td>
+                      <td className="p-3 text-right text-teal-700">+{it.quantityAdded}</td>
+                      <td className="p-3 text-right text-slate-900">{it.stockAfter}</td>
+                    </tr>
+                  ))}
+                  <tr className="border-t bg-slate-50">
+                    <td className="p-3 font-semibold">{t('bar.total')}</td>
+                    <td className="p-3" />
+                    <td className="p-3 text-right font-semibold text-teal-700">
+                      +{selectedRestock.items.reduce((sum, x) => sum + x.quantityAdded, 0)}
+                    </td>
+                    <td className="p-3" />
+                  </tr>
+                </tbody>
+              </table>
             </div>
             <button onClick={() => setSelectedRestock(null)} className="mt-4 px-4 py-2 bg-slate-200 rounded">
               {t('common.close')}
@@ -564,4 +666,103 @@ export default function BarPage() {
 
 function formatTzs(n: number) {
   return new Intl.NumberFormat('en-TZ', { style: 'currency', currency: 'TZS', maximumFractionDigits: 0 }).format(n);
+}
+
+function MyOrders({ token }: { token: string }) {
+  const { t } = useTranslation();
+  const [orders, setOrders] = useState<
+    { id: string; orderNumber: string; paymentMethod: string; createdAt: string; items: { id: string; quantity: number; name: string }[] }[]
+  >([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<'today' | 'week' | 'month' | 'bydate'>('today');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  useEffect(() => {
+    if (!token) return;
+    setLoading(true);
+    const params = new URLSearchParams();
+    params.set('period', filter);
+    if (filter === 'bydate' && dateFrom && dateTo) {
+      params.set('from', dateFrom);
+      params.set('to', dateTo);
+    }
+    api(`/bar/orders/my?${params}`, { token })
+      .then((res: any) => setOrders(res || []))
+      .catch(() => setOrders([]))
+      .finally(() => setLoading(false));
+  }, [token, filter, dateFrom, dateTo]);
+
+  return (
+    <div className="mt-6">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+        <h3 className="font-medium">{t('bar.myOrders')}</h3>
+        <div className="flex items-center gap-2">
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value as any)}
+            className="px-2 py-1 border rounded text-xs sm:text-sm"
+          >
+            <option value="today">{t('overview.today')}</option>
+            <option value="week">{t('overview.thisWeek')}</option>
+            <option value="month">{t('overview.thisMonth')}</option>
+            <option value="bydate">{t('overview.byDate')}</option>
+          </select>
+          {filter === 'bydate' && (
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="px-2 py-1 border rounded text-xs sm:text-sm"
+              />
+              <span className="text-slate-400 text-xs sm:text-sm">{t('common.to')}</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="px-2 py-1 border rounded text-xs sm:text-sm"
+              />
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="bg-white border rounded overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50">
+            <tr>
+              <th className="text-left p-3">{t('common.date')}</th>
+              <th className="text-left p-3">{t('bar.orderNo')}</th>
+              <th className="text-right p-3">{t('bar.items')}</th>
+              <th className="text-left p-3">{t('bar.payment')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td className="p-3 text-slate-500" colSpan={4}>
+                  {t('common.loading')}
+                </td>
+              </tr>
+            ) : orders.length === 0 ? (
+              <tr>
+                <td className="p-3 text-slate-500" colSpan={4}>
+                  {t('common.noItems')}
+                </td>
+              </tr>
+            ) : (
+              orders.map((o) => (
+                <tr key={o.id} className="border-t">
+                  <td className="p-3">{new Date(o.createdAt).toLocaleString()}</td>
+                  <td className="p-3 font-medium">{o.orderNumber}</td>
+                  <td className="p-3 text-right">{(o.items || []).reduce((s, it) => s + (it.quantity || 0), 0)}</td>
+                  <td className="p-3">{o.paymentMethod}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }

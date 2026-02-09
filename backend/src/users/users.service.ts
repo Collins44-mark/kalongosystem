@@ -63,10 +63,10 @@ export class UsersService {
     return `${short}.${slug}@gmail.com`;
   }
 
-  /** Generate random temporary password (8 chars) */
-  private generateTempPassword(): string {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-    return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  private validatePassword(password: string) {
+    const p = (password || '').trim();
+    if (p.length < 6) throw new ForbiddenException('Password must be at least 6 characters');
+    return p;
   }
 
   async listUsers(businessId: string, managerId: string) {
@@ -97,7 +97,7 @@ export class UsersService {
     businessId: string,
     createdBy: string,
     createdByRole: string,
-    data: { fullName: string; role: string },
+    data: { fullName: string; role: string; password: string },
   ) {
     if (!ROLES.includes(data.role as any)) throw new ForbiddenException('Invalid role');
     if (createdByRole !== 'MANAGER') throw new ForbiddenException('Only MANAGER can create users');
@@ -121,8 +121,8 @@ export class UsersService {
       throw new ConflictException('Role email already exists for this business');
     }
 
-    const tempPassword = this.generateTempPassword();
-    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    const password = this.validatePassword(data.password);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const [user, bu] = await this.prisma.$transaction(async (tx) => {
       const u = await tx.user.create({
@@ -157,12 +157,12 @@ export class UsersService {
       name: user.name,
       role: bu.role,
       email: user.email,
-      temporaryPassword: tempPassword,
+      password,
       isDisabled: false,
     };
   }
 
-  async resetPassword(businessId: string, businessUserId: string, managerId: string, managerRole: string) {
+  async resetPassword(businessId: string, businessUserId: string, password: string, managerId: string, managerRole: string) {
     if (managerRole !== 'MANAGER') throw new ForbiddenException('Only MANAGER can reset passwords');
 
     const bu = await this.prisma.businessUser.findFirst({
@@ -171,8 +171,8 @@ export class UsersService {
     });
     if (!bu) throw new NotFoundException('User not found');
 
-    const tempPassword = this.generateTempPassword();
-    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    const nextPassword = this.validatePassword(password);
+    const hashedPassword = await bcrypt.hash(nextPassword, 10);
 
     await this.prisma.user.update({
       where: { id: bu.userId },
@@ -181,7 +181,7 @@ export class UsersService {
 
     await this.logAudit(managerId, managerRole, businessId, 'password_reset', 'user', bu.userId);
 
-    return { temporaryPassword: tempPassword };
+    return { password: nextPassword };
   }
 
   async updateUser(

@@ -146,33 +146,7 @@ export default function DashboardLayout({
     return null;
   }
 
-  // Mandatory worker selection when role has workers
-  if (me?.needsWorkerSelection && me?.workers?.length) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="w-full max-w-sm p-6 bg-white rounded-lg shadow-md">
-          <h1 className="text-xl font-semibold mb-2">{t('auth.selectWorker')}</h1>
-          <p className="text-sm text-slate-600 mb-4">{t('auth.selectWorkerHint')}</p>
-          <select
-            value={workerSelectId}
-            onChange={(e) => setWorkerSelectId(e.target.value)}
-            className="w-full px-3 py-2 border rounded mb-4"
-          >
-            {me.workers.map((w) => (
-              <option key={w.id} value={w.id}>{w.fullName}</option>
-            ))}
-          </select>
-          <button
-            onClick={submitWorkerSelection}
-            disabled={workerSelectSaving}
-            className="w-full py-2 bg-teal-600 text-white rounded hover:bg-teal-700 disabled:opacity-50"
-          >
-            {workerSelectSaving ? '...' : t('auth.continue')}
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const mustSelectWorker = Boolean(me?.needsWorkerSelection && me?.workers?.length);
 
   const displayRole = (roleForNav || user?.role || '').replace(/_/g, ' ');
   const displayWorker = (user?.activeWorkerName ?? me?.activeWorkerName) || '';
@@ -251,7 +225,27 @@ export default function DashboardLayout({
               {displayWorker ? `${displayRole} | ${displayWorker}` : displayRole}
             </span>
           </div>
-          <div className="relative flex-shrink-0">
+          <div className="relative flex-shrink-0 flex items-center gap-2">
+            {mustSelectWorker && (
+              <div className="hidden sm:flex items-center gap-2">
+                <select
+                  value={workerSelectId}
+                  onChange={(e) => setWorkerSelectId(e.target.value)}
+                  className="px-2 py-1 border rounded text-xs sm:text-sm"
+                >
+                  {me?.workers?.map((w) => (
+                    <option key={w.id} value={w.id}>{w.fullName}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={submitWorkerSelection}
+                  disabled={workerSelectSaving}
+                  className="px-3 py-1.5 bg-teal-600 text-white rounded text-xs sm:text-sm disabled:opacity-50"
+                >
+                  {workerSelectSaving ? '...' : t('auth.continue')}
+                </button>
+              </div>
+            )}
             <button
               onClick={() => setLangOpen(!langOpen)}
               className="px-2 py-1 text-xs sm:text-sm text-slate-600 hover:bg-slate-100 rounded flex items-center gap-1"
@@ -276,7 +270,34 @@ export default function DashboardLayout({
             )}
           </div>
         </header>
-        <div className="p-4 sm:p-6">{children}</div>
+        <div className="p-4 sm:p-6">
+          {mustSelectWorker ? (
+            <div className="max-w-md bg-white border rounded p-4">
+              <h2 className="font-medium">{t('auth.selectWorker')}</h2>
+              <p className="text-sm text-slate-600 mt-1">{t('auth.selectWorkerHint')}</p>
+              <div className="mt-3 flex gap-2">
+                <select
+                  value={workerSelectId}
+                  onChange={(e) => setWorkerSelectId(e.target.value)}
+                  className="flex-1 px-3 py-2 border rounded text-sm"
+                >
+                  {me?.workers?.map((w) => (
+                    <option key={w.id} value={w.id}>{w.fullName}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={submitWorkerSelection}
+                  disabled={workerSelectSaving}
+                  className="px-4 py-2 bg-teal-600 text-white rounded text-sm disabled:opacity-50"
+                >
+                  {workerSelectSaving ? '...' : t('auth.continue')}
+                </button>
+              </div>
+            </div>
+          ) : (
+            children
+          )}
+        </div>
       </main>
     </div>
   );

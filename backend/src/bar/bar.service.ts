@@ -35,13 +35,24 @@ export class BarService {
     });
   }
 
-  /** Admin only - create bar item */
+  // ==========================
+  // Permissions (BAR)
+  // Stored in business_settings:
+  // - barRestockPermission (JSON)
+  // - barAddItemPermission (JSON)
+  // ==========================
+
   async createItem(
     businessId: string,
     branchId: string,
     data: { name: string; price: number; quantity: number; minQuantity?: number },
-    createdBy: string,
+    createdBy: { userId: string; role: string; workerId?: string | null; workerName?: string | null },
   ) {
+    if (createdBy.role === 'BAR') {
+      const perm = await this.getAddItemPermission(businessId);
+      if (!perm.enabled) throw new ForbiddenException('Add item not permitted');
+    }
+
     const name = data.name.trim();
     const qty = Number(data.quantity);
     if (!name) throw new BadRequestException('Name required');
@@ -56,20 +67,28 @@ export class BarService {
           quantity: qty,
           minQuantity: data.minQuantity ?? 5,
           unitPrice: new Decimal(0),
-          createdBy,
+          createdBy: createdBy.userId,
         },
       });
 
-      return tx.barItem.create({
+      const item = await tx.barItem.create({
         data: {
           businessId,
           branchId,
           name,
           price: new Decimal(data.price),
           inventoryItemId: inv.id,
-          createdBy,
+          createdBy: createdBy.userId,
         },
       });
+
+      await this.logAudit(businessId, createdBy, 'bar_item_created', 'bar_item', item.id, {
+        name,
+        price: data.price,
+        quantity: qty,
+      });
+
+      return item;
     });
   }
 
@@ -79,7 +98,7 @@ export class BarService {
     branchId: string,
     items: { barItemId: string; quantity: number }[],
     paymentMethod: string,
-    createdById: string,
+    createdBy: { userId: string; role: string; workerId?: string | null; workerName?: string | null },
   ) {
     let total = 0;
     const orderItems: { barItemId: string; quantity: number; unitPrice: number; totalPrice: number }[] = [];
@@ -118,7 +137,10 @@ export class BarService {
         orderNumber,
         paymentMethod,
         totalAmount: new Decimal(total),
-        createdById,
+        createdById: createdBy.userId,
+        createdByRole: createdBy.role,
+        createdByWorkerId: createdBy.workerId ?? null,
+        createdByWorkerName: createdBy.workerName ?? null,
         items: {
           create: orderItems.map((o) => ({
             barItemId: o.barItemId,
@@ -144,13 +166,14 @@ export class BarService {
       }
     }
 
+    await this.logAudit(businessId, createdBy, 'bar_order_created', 'bar_order', order.id, {
+      orderNumber,
+      paymentMethod,
+      items: orderItems.map((i) => ({ barItemId: i.barItemId, quantity: i.quantity })),
+    });
+
     return order;
   }
-
-  // ==========================
-  // Restock permission (BAR)
-  // Stored in business_settings key: barRestockPermission (JSON)
-  // ==========================
 
   async getRestockPermission(businessId: string) {
     const s = await this.prisma.businessSetting.findFirst({
@@ -204,6 +227,60 @@ export class BarService {
       await this.prisma.businessSetting.create({ data: { businessId, key: 'barRestockPermission', value } });
     }
     return this.getRestockPermission(businessId);
+  }
+
+  async getAddItemPermission(businessId: string) {
+    const s = await this.prisma.businessSetting.findFirst({
+      where: { businessId, key: 'barAddItemPermission' },
+    });
+    if (!s) return { enabled: false };
+    let val: any = null;
+    try {
+      val = JSON.parse(s.value);
+    } catch {
+      val = null;
+    }
+    const enabled = val?.enabled === true;
+    const expiresAt = val?.expiresAt ? new Date(val.expiresAt) : null;
+    const active = enabled && (!expiresAt || expiresAt.getTime() > Date.now());
+    return {
+      enabled: active,
+      expiresAt: expiresAt ? expiresAt.toISOString() : null,
+      approvedById: val?.approvedById ?? null,
+      approvedByRole: val?.approvedByRole ?? null,
+      approvedByWorkerName: val?.approvedByWorkerName ?? null,
+      approvedAt: val?.approvedAt ?? null,
+    };
+  }
+
+  async setAddItemPermission(
+    businessId: string,
+    enabled: boolean,
+    approvedBy: { userId: string; role: string; workerId?: string | null; workerName?: string | null },
+    expiresMinutes?: number | null,
+  ) {
+    const payload = {
+      enabled: enabled === true,
+      approvedById: approvedBy.userId,
+      approvedByRole: approvedBy.role,
+      approvedByWorkerId: approvedBy.workerId ?? null,
+      approvedByWorkerName: approvedBy.workerName ?? null,
+      approvedAt: new Date().toISOString(),
+      expiresAt:
+        enabled && expiresMinutes && expiresMinutes > 0
+          ? new Date(Date.now() + expiresMinutes * 60_000).toISOString()
+          : null,
+    };
+    const value = JSON.stringify(payload);
+    const existing = await this.prisma.businessSetting.findFirst({
+      where: { businessId, key: 'barAddItemPermission' },
+    });
+    if (existing) {
+      await this.prisma.businessSetting.update({ where: { id: existing.id }, data: { value } });
+    } else {
+      await this.prisma.businessSetting.create({ data: { businessId, key: 'barAddItemPermission', value } });
+    }
+    return this.getAddItemPermission(businessId);
   }
 
   private async logAudit(
@@ -349,6 +426,31 @@ export class BarService {
     );
 
     return restock;
+  }
+
+  async listMyOrders(
+    businessId: string,
+    branchId: string,
+    actor: { userId: string; role: string; workerId?: string | null; workerName?: string | null },
+    from?: Date,
+    to?: Date,
+  ) {
+    // Prefer worker-level filtering when available.
+    const where: any = { businessId, branchId };
+    if (actor.workerId) where.createdByWorkerId = actor.workerId;
+    else where.createdById = actor.userId;
+    if (from || to) {
+      where.createdAt = {};
+      if (from) where.createdAt.gte = from;
+      if (to) where.createdAt.lte = to;
+    }
+
+    return this.prisma.barOrder.findMany({
+      where,
+      include: { items: { include: { barItem: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
   }
 
   async listRestocks(businessId: string, branchId: string) {

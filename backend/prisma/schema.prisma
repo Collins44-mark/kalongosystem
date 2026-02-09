@@ -281,6 +281,9 @@ model BarOrder {
   paymentMethod String   // CASH, MOBILE_MONEY, BANK
   totalAmount   Decimal  @db.Decimal(12, 2)
   createdById   String
+  createdByRole String?  // BAR, MANAGER (for reporting)
+  createdByWorkerId   String? // Selected staff worker id
+  createdByWorkerName String? // Selected staff worker name
   createdAt     DateTime @default(now())
 
   business Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
