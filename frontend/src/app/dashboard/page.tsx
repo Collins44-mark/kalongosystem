@@ -309,7 +309,7 @@ export default function OverviewPage() {
       </Link>
 
       {/* Inventory & Business Health */}
-      <Link href="/dashboard/bar" className="block">
+      <Link href="/dashboard/bar?filter=low" className="block">
         <div className="bg-white rounded-xl shadow-md border border-slate-100 p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-6 hover:border-teal-200 transition-colors">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-full bg-red-500 text-white flex items-center justify-center font-bold text-lg shadow-sm">
@@ -338,22 +338,24 @@ export default function OverviewPage() {
 
       {/* Inventory Alerts Detail */}
       {lowStockCount > 0 && (
-        <div className="bg-white rounded-xl shadow-md border border-slate-100 p-5">
-          <h3 className="font-semibold text-slate-800 mb-3">{t('overview.lowStockItems')}</h3>
-          <div className="space-y-2">
-            {displayData.inventoryAlerts.lowStock.map((item) => (
-              <div
-                key={item.id}
-                className={`text-sm py-2 ${item.severity === 'RED' ? 'text-red-600' : 'text-amber-600'}`}
-              >
-                {item.name}: {item.quantity} ({t('common.min')}: {item.minQuantity})
-              </div>
-            ))}
+        <Link href="/dashboard/bar?filter=low" className="block">
+          <div className="bg-white rounded-xl shadow-md border border-slate-100 p-5 hover:border-teal-200 transition-colors">
+            <h3 className="font-semibold text-slate-800 mb-3">{t('overview.lowStockItems')}</h3>
+            <div className="space-y-2">
+              {displayData.inventoryAlerts.lowStock.map((item) => (
+                <div
+                  key={item.id}
+                  className={`text-sm py-2 ${item.severity === 'RED' ? 'text-red-600' : 'text-amber-600'}`}
+                >
+                  {item.name}: {item.quantity} ({t('common.min')}: {item.minQuantity})
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-sm text-slate-600">
+              {t('overview.valueAtRisk')}: {formatTzs(displayData.inventoryAlerts.totalValueAtRisk)}
+            </p>
           </div>
-          <p className="mt-3 text-sm text-slate-600">
-            {t('overview.valueAtRisk')}: {formatTzs(displayData.inventoryAlerts.totalValueAtRisk)}
-          </p>
-        </div>
+        </Link>
       )}
 
       {/* Performance Graph */}

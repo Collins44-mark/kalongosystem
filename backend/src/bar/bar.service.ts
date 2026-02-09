@@ -283,10 +283,39 @@ export class BarService {
           where: { id: it.barItemId, businessId },
         });
         if (!barItem) throw new NotFoundException(`Bar item ${it.barItemId} not found`);
-        if (!barItem.inventoryItemId) throw new BadRequestException(`Bar item ${barItem.name} has no stock tracking`);
+        // Auto-link old bar items to inventory so they can be restocked.
+        // Strategy: reuse existing inventory item named "BAR:<name>" if present, otherwise create one.
+        let inventoryItemId = barItem.inventoryItemId;
+        if (!inventoryItemId) {
+          const invExisting = await tx.inventoryItem.findFirst({
+            where: { businessId, branchId, name: `BAR:${barItem.name}` },
+            select: { id: true },
+          });
+          if (invExisting) {
+            inventoryItemId = invExisting.id;
+          } else {
+            const invCreated = await tx.inventoryItem.create({
+              data: {
+                businessId,
+                branchId,
+                name: `BAR:${barItem.name}`,
+                quantity: 0,
+                minQuantity: 5,
+                unitPrice: new Decimal(0),
+                createdBy: actor.userId,
+              },
+              select: { id: true },
+            });
+            inventoryItemId = invCreated.id;
+          }
+          await tx.barItem.update({
+            where: { id: barItem.id },
+            data: { inventoryItemId },
+          });
+        }
 
         const inv = await tx.inventoryItem.findFirst({
-          where: { id: barItem.inventoryItemId, businessId, branchId },
+          where: { id: inventoryItemId, businessId, branchId },
         });
         if (!inv) throw new NotFoundException('Inventory item not found');
 

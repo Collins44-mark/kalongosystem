@@ -5,6 +5,7 @@ import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
 import { isManagerLevel } from '@/lib/roles';
+import { useSearchParams } from 'next/navigation';
 
 type BarItem = { id: string; name: string; price: string; stock: number | null; minQuantity: number | null };
 type RestockPermission = { enabled: boolean; expiresAt?: string | null; approvedByWorkerName?: string | null };
@@ -21,6 +22,7 @@ type Restock = {
 export default function BarPage() {
   const { token, user } = useAuth();
   const { t } = useTranslation();
+  const searchParams = useSearchParams();
   const [items, setItems] = useState<BarItem[]>([]);
   const [cart, setCart] = useState<{ itemId: string; name: string; price: number; qty: number }[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'MOBILE_MONEY' | 'BANK'>('CASH');
@@ -37,6 +39,15 @@ export default function BarPage() {
   const [permSaving, setPermSaving] = useState(false);
   const [permMinutes, setPermMinutes] = useState<string>(''); // '' = manual until turned off
   const isAdmin = isManagerLevel(user?.role);
+  // Allow deep-linking from Overview, e.g. /dashboard/bar?filter=low
+  useEffect(() => {
+    const f = (searchParams?.get('filter') || '').toLowerCase();
+    if (f === 'low' || f === 'out' || f === 'normal' || f === 'all') {
+      setFilter(f as typeof filter);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   const [showAddItem, setShowAddItem] = useState(false);
   const [newItemName, setNewItemName] = useState('');
   const [newItemPrice, setNewItemPrice] = useState('');
@@ -124,17 +135,22 @@ export default function BarPage() {
   if (loading) return <div>{t('common.loading')}</div>;
 
   const totalItems = items.length;
-  // Only count tracked stock items for low/out metrics
-  const outOfStock = items.filter((i) => i.stock != null && i.stock <= 0).length;
-  const lowStock = items.filter((i) => i.stock != null && i.minQuantity != null && i.stock > 0 && i.stock <= i.minQuantity).length;
+  // Treat missing stock tracking as 0 so admins can restock/link old items.
+  const outOfStock = items.filter((i) => (i.stock ?? 0) <= 0).length;
+  const lowStock = items.filter((i) => {
+    const stock = i.stock ?? 0;
+    const min = i.minQuantity ?? null;
+    return stock > 0 && min != null && stock <= min;
+  }).length;
 
   const filteredItems = items.filter((i) => {
-    if (filter === 'out') return i.stock != null && i.stock <= 0;
-    if (filter === 'low') return i.stock != null && i.minQuantity != null && i.stock > 0 && i.stock <= i.minQuantity;
+    const stock = i.stock ?? 0;
+    const min = i.minQuantity ?? null;
+    if (filter === 'out') return stock <= 0;
+    if (filter === 'low') return stock > 0 && min != null && stock <= min;
     if (filter === 'normal') {
-      if (i.stock == null) return true; // untracked treated as normal
-      if (i.minQuantity == null) return i.stock > 0;
-      return i.stock > i.minQuantity;
+      if (min == null) return stock > 0;
+      return stock > min;
     }
     return true;
   });
@@ -247,18 +263,18 @@ export default function BarPage() {
 
       {isAdmin && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-          <div className="bg-white border rounded p-4">
+          <button type="button" onClick={() => setFilter('all')} className="bg-white border rounded p-4 text-left hover:border-teal-300">
             <div className="text-xs text-slate-500">{t('bar.totalItems')}</div>
             <div className="text-xl font-semibold">{totalItems}</div>
-          </div>
-          <div className="bg-white border rounded p-4">
+          </button>
+          <button type="button" onClick={() => setFilter('low')} className="bg-white border rounded p-4 text-left hover:border-amber-300">
             <div className="text-xs text-slate-500">{t('bar.lowStock')}</div>
             <div className="text-xl font-semibold text-amber-700">{lowStock}</div>
-          </div>
-          <div className="bg-white border rounded p-4">
+          </button>
+          <button type="button" onClick={() => setFilter('out')} className="bg-white border rounded p-4 text-left hover:border-red-300">
             <div className="text-xs text-slate-500">{t('bar.outOfStock')}</div>
             <div className="text-xl font-semibold text-red-700">{outOfStock}</div>
-          </div>
+          </button>
         </div>
       )}
 
@@ -339,23 +355,27 @@ export default function BarPage() {
               </thead>
               <tbody>
                 {filteredItems.map((item) => {
-                  const stock = item.stock;
+                  const stock = item.stock ?? 0;
                   const min = item.minQuantity;
-                  const isOut = stock != null && stock <= 0;
-                  const isLow = stock != null && min != null && stock > 0 && stock <= min;
+                  const isOut = stock <= 0;
+                  const isLow = min != null && stock > 0 && stock <= min;
                   return (
                     <tr
                       key={item.id}
+                      id={`bar-item-${item.id}`}
                       className={`border-t cursor-pointer hover:bg-slate-50 ${
                         isOut ? 'bg-red-50/40' : isLow ? 'bg-amber-50/40' : ''
                       }`}
                       onClick={() => addToCart(item)}
                       title={t('bar.tapToAdd')}
                     >
-                      <td className="p-3 font-medium">{item.name}</td>
+                      <td className="p-3 font-medium">
+                        <div className="truncate">{item.name}</div>
+                        {item.stock == null && <div className="text-xs text-slate-500">{t('bar.noStockTracking')}</div>}
+                      </td>
                       <td className="p-3 text-slate-600">{formatTzs(parseFloat(item.price))}</td>
                       <td className={`p-3 text-right ${isOut ? 'text-red-700 font-medium' : isLow ? 'text-amber-700 font-medium' : 'text-slate-700'}`}>
-                        {stock == null ? '-' : stock}
+                        {stock}
                       </td>
                     </tr>
                   );
@@ -449,7 +469,8 @@ export default function BarPage() {
                   <div className="min-w-0">
                     <div className="text-sm font-medium truncate">{it.name}</div>
                     <div className="text-xs text-slate-500">
-                      {t('bar.stock')}: {it.stock == null ? t('bar.noStockTracking') : it.stock}
+                      {t('bar.stock')}: {it.stock == null ? 0 : it.stock}
+                      {it.stock == null ? ` · ${t('bar.noStockTracking')}` : ''}
                     </div>
                   </div>
                   <input
@@ -459,7 +480,6 @@ export default function BarPage() {
                     onChange={(e) => setRestockQty((p) => ({ ...p, [it.id]: e.target.value }))}
                     className="w-24 px-2 py-1 border rounded text-sm"
                     placeholder="0"
-                    disabled={it.stock == null}
                   />
                 </div>
               ))}
