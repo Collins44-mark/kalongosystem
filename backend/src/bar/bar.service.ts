@@ -39,17 +39,37 @@ export class BarService {
   async createItem(
     businessId: string,
     branchId: string,
-    data: { name: string; price: number },
+    data: { name: string; price: number; quantity: number; minQuantity?: number },
     createdBy: string,
   ) {
-    return this.prisma.barItem.create({
-      data: {
-        businessId,
-        branchId,
-        name: data.name,
-        price: new Decimal(data.price),
-        createdBy,
-      },
+    const name = data.name.trim();
+    const qty = Number(data.quantity);
+    if (!name) throw new BadRequestException('Name required');
+    if (isNaN(qty) || qty < 0) throw new BadRequestException('Invalid quantity');
+
+    return this.prisma.$transaction(async (tx) => {
+      const inv = await tx.inventoryItem.create({
+        data: {
+          businessId,
+          branchId,
+          name: `BAR:${name}`,
+          quantity: qty,
+          minQuantity: data.minQuantity ?? 5,
+          unitPrice: new Decimal(0),
+          createdBy,
+        },
+      });
+
+      return tx.barItem.create({
+        data: {
+          businessId,
+          branchId,
+          name,
+          price: new Decimal(data.price),
+          inventoryItemId: inv.id,
+          createdBy,
+        },
+      });
     });
   }
 

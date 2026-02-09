@@ -37,6 +37,12 @@ export default function BarPage() {
   const [permSaving, setPermSaving] = useState(false);
   const [permMinutes, setPermMinutes] = useState<string>(''); // '' = manual until turned off
   const isAdmin = isManagerLevel(user?.role);
+  const [showAddItem, setShowAddItem] = useState(false);
+  const [newItemName, setNewItemName] = useState('');
+  const [newItemPrice, setNewItemPrice] = useState('');
+  const [newItemQty, setNewItemQty] = useState('');
+  const [newItemMin, setNewItemMin] = useState('');
+  const [addingItem, setAddingItem] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -171,6 +177,46 @@ export default function BarPage() {
     }
   }
 
+  async function saveNewItem() {
+    if (!token) return;
+    if (!newItemName.trim()) {
+      setMessage(t('bar.enterItemName'));
+      return;
+    }
+    const price = Number(newItemPrice);
+    const qty = Number(newItemQty);
+    const minQ = newItemMin ? Number(newItemMin) : undefined;
+    if (!isFinite(price) || price < 0) {
+      setMessage(t('bar.invalidPrice'));
+      return;
+    }
+    if (!isFinite(qty) || qty < 0) {
+      setMessage(t('bar.invalidQuantity'));
+      return;
+    }
+    setAddingItem(true);
+    setMessage('');
+    try {
+      await api('/bar/items', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ name: newItemName.trim(), price, quantity: qty, minQuantity: minQ }),
+      });
+      setShowAddItem(false);
+      setNewItemName('');
+      setNewItemPrice('');
+      setNewItemQty('');
+      setNewItemMin('');
+      setMessage(t('bar.itemAdded'));
+      const refreshed = await api<BarItem[]>('/bar/items', { token });
+      setItems(refreshed);
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setAddingItem(false);
+    }
+  }
+
   return (
     <div>
       <h1 className="text-xl font-semibold mb-4">{t('bar.title')}</h1>
@@ -246,6 +292,15 @@ export default function BarPage() {
               <option value="30">30 min</option>
               <option value="60">60 min</option>
             </select>
+          </div>
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={() => setShowAddItem(true)}
+              className="px-3 py-2 bg-teal-600 text-white rounded text-sm"
+            >
+              {t('bar.addItem')}
+            </button>
           </div>
         </div>
       )}
@@ -423,6 +478,43 @@ export default function BarPage() {
             <button onClick={() => setSelectedRestock(null)} className="mt-4 px-4 py-2 bg-slate-200 rounded">
               {t('common.close')}
             </button>
+          </div>
+        </div>
+      )}
+
+      {showAddItem && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded max-w-sm w-full p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-medium">{t('bar.addItem')}</h3>
+              <button onClick={() => setShowAddItem(false)} className="text-slate-500">✕</button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm mb-1">{t('bar.itemName')}</label>
+                <input value={newItemName} onChange={(e) => setNewItemName(e.target.value)} className="w-full px-3 py-2 border rounded" />
+              </div>
+              <div>
+                <label className="block text-sm mb-1">{t('bar.itemPrice')}</label>
+                <input type="number" min="0" value={newItemPrice} onChange={(e) => setNewItemPrice(e.target.value)} className="w-full px-3 py-2 border rounded" />
+              </div>
+              <div>
+                <label className="block text-sm mb-1">{t('bar.itemQuantity')}</label>
+                <input type="number" min="0" value={newItemQty} onChange={(e) => setNewItemQty(e.target.value)} className="w-full px-3 py-2 border rounded" />
+              </div>
+              <div>
+                <label className="block text-sm mb-1">{t('bar.minStock')}</label>
+                <input type="number" min="0" value={newItemMin} onChange={(e) => setNewItemMin(e.target.value)} className="w-full px-3 py-2 border rounded" placeholder="5" />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={saveNewItem} disabled={addingItem} className="px-4 py-2 bg-teal-600 text-white rounded">
+                {addingItem ? '...' : t('common.save')}
+              </button>
+              <button onClick={() => setShowAddItem(false)} className="px-4 py-2 bg-slate-200 rounded">
+                {t('common.cancel')}
+              </button>
+            </div>
           </div>
         </div>
       )}

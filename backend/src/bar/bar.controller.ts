@@ -30,6 +30,13 @@ class CreateItemDto {
   @IsNumber()
   @Min(0)
   price: number;
+  @IsNumber()
+  @Min(0)
+  quantity: number;
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  minQuantity?: number;
 }
 
 class RestockItemDto {
