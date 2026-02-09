@@ -124,15 +124,18 @@ export default function BarPage() {
   if (loading) return <div>{t('common.loading')}</div>;
 
   const totalItems = items.length;
-  const outOfStock = items.filter((i) => (i.stock ?? 0) <= 0).length;
-  const lowStock = items.filter((i) => (i.stock ?? 0) > 0 && i.minQuantity != null && (i.stock ?? 0) <= i.minQuantity).length;
+  // Only count tracked stock items for low/out metrics
+  const outOfStock = items.filter((i) => i.stock != null && i.stock <= 0).length;
+  const lowStock = items.filter((i) => i.stock != null && i.minQuantity != null && i.stock > 0 && i.stock <= i.minQuantity).length;
 
   const filteredItems = items.filter((i) => {
-    const stock = i.stock ?? 0;
-    const min = i.minQuantity ?? 0;
-    if (filter === 'out') return stock <= 0;
-    if (filter === 'low') return stock > 0 && i.minQuantity != null && stock <= min;
-    if (filter === 'normal') return i.minQuantity != null ? stock > min : stock > 0;
+    if (filter === 'out') return i.stock != null && i.stock <= 0;
+    if (filter === 'low') return i.stock != null && i.minQuantity != null && i.stock > 0 && i.stock <= i.minQuantity;
+    if (filter === 'normal') {
+      if (i.stock == null) return true; // untracked treated as normal
+      if (i.minQuantity == null) return i.stock > 0;
+      return i.stock > i.minQuantity;
+    }
     return true;
   });
 
@@ -293,15 +296,6 @@ export default function BarPage() {
               <option value="60">60 min</option>
             </select>
           </div>
-          <div className="mt-4">
-            <button
-              type="button"
-              onClick={() => setShowAddItem(true)}
-              className="px-3 py-2 bg-teal-600 text-white rounded text-sm"
-            >
-              {t('bar.addItem')}
-            </button>
-          </div>
         </div>
       )}
 
@@ -321,28 +315,54 @@ export default function BarPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <h2 className="font-medium mb-2">{t('bar.items')}</h2>
-          <div className="grid grid-cols-2 gap-2">
-            {filteredItems.map((item) => {
-              const stock = item.stock ?? 0;
-              const min = item.minQuantity ?? null;
-              const isOut = item.stock != null && stock <= 0;
-              const isLow = item.stock != null && min != null && stock > 0 && stock <= min;
-              return (
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="font-medium">{t('bar.items')}</h2>
+            {isAdmin && (
               <button
-                key={item.id}
-                onClick={() => addToCart(item)}
-                className="p-4 bg-white border rounded text-left hover:border-teal-500"
+                type="button"
+                onClick={() => setShowAddItem(true)}
+                className="px-3 py-1.5 bg-teal-600 text-white rounded text-sm"
               >
-                <div className="font-medium">{item.name}</div>
-                <div className="text-sm text-slate-600">{formatTzs(parseFloat(item.price))}</div>
-                {item.stock != null && (
-                  <div className={`text-xs mt-1 ${isOut ? 'text-red-700' : isLow ? 'text-amber-700' : 'text-slate-500'}`}>
-                    {t('bar.stock')}: {stock}{min != null ? ` (min ${min})` : ''}
-                  </div>
-                )}
+                {t('bar.addItem')}
               </button>
-            )})}
+            )}
+          </div>
+
+          <div className="bg-white border rounded overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="text-left p-3">{t('bar.itemName')}</th>
+                  <th className="text-left p-3">{t('bar.itemPrice')}</th>
+                  <th className="text-right p-3">{t('bar.stock')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredItems.map((item) => {
+                  const stock = item.stock;
+                  const min = item.minQuantity;
+                  const isOut = stock != null && stock <= 0;
+                  const isLow = stock != null && min != null && stock > 0 && stock <= min;
+                  return (
+                    <tr
+                      key={item.id}
+                      className={`border-t cursor-pointer hover:bg-slate-50 ${
+                        isOut ? 'bg-red-50/40' : isLow ? 'bg-amber-50/40' : ''
+                      }`}
+                      onClick={() => addToCart(item)}
+                      title={t('bar.tapToAdd')}
+                    >
+                      <td className="p-3 font-medium">{item.name}</td>
+                      <td className="p-3 text-slate-600">{formatTzs(parseFloat(item.price))}</td>
+                      <td className={`p-3 text-right ${isOut ? 'text-red-700 font-medium' : isLow ? 'text-amber-700 font-medium' : 'text-slate-700'}`}>
+                        {stock == null ? '-' : stock}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {filteredItems.length === 0 && <div className="p-3 text-sm text-slate-500">{t('common.noItems')}</div>}
           </div>
         </div>
         <div>

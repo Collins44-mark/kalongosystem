@@ -192,6 +192,7 @@
   "bar.addItem": "Ongeza kitu",
   "bar.itemName": "Jina la kitu",
   "bar.itemPrice": "Bei",
+  "bar.tapToAdd": "Gusa kuongeza",
   "bar.itemQuantity": "Kiasi",
   "bar.minStock": "Stock ya chini",
   "bar.itemAdded": "Kitu kimeongezwa",

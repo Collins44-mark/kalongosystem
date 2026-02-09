@@ -192,6 +192,7 @@
   "bar.addItem": "Add item",
   "bar.itemName": "Item name",
   "bar.itemPrice": "Price",
+  "bar.tapToAdd": "Tap to add",
   "bar.itemQuantity": "Quantity",
   "bar.minStock": "Min stock",
   "bar.itemAdded": "Item added",

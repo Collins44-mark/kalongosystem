@@ -89,6 +89,16 @@ export class BarService {
         where: { id: it.barItemId, businessId },
       });
       if (!item) throw new NotFoundException(`Bar item ${it.barItemId} not found`);
+      // Prevent negative stock for tracked items
+      if (item.inventoryItemId) {
+        const inv = await this.prisma.inventoryItem.findFirst({
+          where: { id: item.inventoryItemId, businessId, branchId },
+          select: { quantity: true },
+        });
+        if (inv && inv.quantity < it.quantity) {
+          throw new BadRequestException(`Insufficient stock for ${item.name}`);
+        }
+      }
       const unitPrice = Number(item.price);
       const totalPrice = unitPrice * it.quantity;
       total += totalPrice;
