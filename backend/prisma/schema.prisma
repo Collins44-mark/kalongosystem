@@ -315,6 +315,8 @@ model RestaurantItem {
   branchId      String   @default("main")
   name          String
   price         Decimal  @db.Decimal(12, 2)
+  category      String?  // Optional grouping (e.g. "Breakfast", "Main", "Drinks")
+  isEnabled     Boolean  @default(true)
   inventoryItemId String?
   createdAt     DateTime @default(now())
   createdBy     String?
@@ -334,6 +336,9 @@ model RestaurantOrder {
   paymentMethod String
   totalAmount   Decimal  @db.Decimal(12, 2)
   createdById   String
+  createdByRole String?  // RESTAURANT, MANAGER (for accountability)
+  createdByWorkerId   String?
+  createdByWorkerName String?
   createdAt     DateTime @default(now())
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
 
@@ -6,9 +6,36 @@ import { Decimal } from '@prisma/client/runtime/library';
 export class RestaurantService {
   constructor(private prisma: PrismaService) {}
 
-  async getItems(businessId: string, branchId: string) {
+  private async logAudit(
+    businessId: string,
+    actor: { userId: string; role: string; workerId?: string | null; workerName?: string | null },
+    actionType: string,
+    entityType?: string,
+    entityId?: string,
+    metadata?: object,
+  ) {
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          businessId,
+          userId: actor.userId,
+          role: actor.role,
+          workerId: actor.workerId ?? null,
+          workerName: actor.workerName ?? null,
+          actionType,
+          entityType,
+          entityId,
+          metadata: metadata ? JSON.stringify(metadata) : null,
+        },
+      });
+    } catch {
+      /* non-fatal */
+    }
+  }
+
+  async getItems(businessId: string, branchId: string, includeDisabled = false) {
     return this.prisma.restaurantItem.findMany({
-      where: { businessId, branchId },
+      where: { businessId, branchId, ...(includeDisabled ? {} : { isEnabled: true }) },
       orderBy: { name: 'asc' },
     });
   }
@@ -16,18 +43,50 @@ export class RestaurantService {
   async createItem(
     businessId: string,
     branchId: string,
-    data: { name: string; price: number },
-    createdBy: string,
+    data: { name: string; price: number; category?: string | null; isEnabled?: boolean },
+    createdBy: { userId: string; role: string; workerId?: string | null; workerName?: string | null },
   ) {
-    return this.prisma.restaurantItem.create({
+    if (createdBy.role !== 'MANAGER') throw new ForbiddenException('Only MANAGER can manage menu');
+    const item = await this.prisma.restaurantItem.create({
       data: {
         businessId,
         branchId,
-        name: data.name,
+        name: data.name.trim(),
         price: new Decimal(data.price),
-        createdBy,
+        category: data.category ? data.category.trim() : null,
+        isEnabled: data.isEnabled ?? true,
+        createdBy: createdBy.userId,
       },
     });
+    await this.logAudit(businessId, createdBy, 'restaurant_item_created', 'restaurant_item', item.id, {
+      name: item.name,
+      category: item.category,
+      isEnabled: item.isEnabled,
+    });
+    return item;
+  }
+
+  async updateItem(
+    businessId: string,
+    branchId: string,
+    itemId: string,
+    data: { name?: string; price?: number; category?: string | null; isEnabled?: boolean },
+    actor: { userId: string; role: string },
+  ) {
+    if (actor.role !== 'MANAGER') throw new ForbiddenException('Only MANAGER can manage menu');
+    const existing = await this.prisma.restaurantItem.findFirst({ where: { id: itemId, businessId, branchId } });
+    if (!existing) throw new NotFoundException('Item not found');
+    const updated = await this.prisma.restaurantItem.update({
+      where: { id: itemId },
+      data: {
+        ...(data.name !== undefined ? { name: data.name.trim() } : {}),
+        ...(data.price !== undefined ? { price: new Decimal(data.price) } : {}),
+        ...(data.category !== undefined ? { category: data.category ? data.category.trim() : null } : {}),
+        ...(data.isEnabled !== undefined ? { isEnabled: data.isEnabled } : {}),
+      },
+    });
+    await this.logAudit(businessId, { userId: actor.userId, role: actor.role }, 'restaurant_item_updated', 'restaurant_item', itemId);
+    return updated;
   }
 
   async createOrder(
@@ -35,14 +94,19 @@ export class RestaurantService {
     branchId: string,
     items: { restaurantItemId: string; quantity: number }[],
     paymentMethod: string,
-    createdById: string,
+    createdBy: { userId: string; role: string; workerId?: string | null; workerName?: string | null },
   ) {
+    // Enforce worker accountability for Restaurant staff
+    if (createdBy.role === 'RESTAURANT' && (!createdBy.workerId || !createdBy.workerName)) {
+      throw new ForbiddenException('Select worker before creating order');
+    }
+
     let total = 0;
     const orderItems: { restaurantItemId: string; quantity: number; unitPrice: number; totalPrice: number }[] = [];
 
     for (const it of items) {
       const item = await this.prisma.restaurantItem.findFirst({
-        where: { id: it.restaurantItemId, businessId },
+        where: { id: it.restaurantItemId, businessId, branchId, isEnabled: true },
       });
       if (!item) throw new NotFoundException(`Restaurant item ${it.restaurantItemId} not found`);
       const unitPrice = Number(item.price);
@@ -64,7 +128,10 @@ export class RestaurantService {
         orderNumber,
         paymentMethod,
         totalAmount: new Decimal(total),
-        createdById,
+        createdById: createdBy.userId,
+        createdByRole: createdBy.role,
+        createdByWorkerId: createdBy.workerId ?? null,
+        createdByWorkerName: createdBy.workerName ?? null,
         items: {
           create: orderItems.map((o) => ({
             restaurantItemId: o.restaurantItemId,
@@ -89,16 +156,33 @@ export class RestaurantService {
       }
     }
 
+    await this.logAudit(businessId, createdBy, 'restaurant_order_created', 'restaurant_order', order.id, {
+      orderNumber,
+      paymentMethod,
+      items: orderItems.map((i) => ({ restaurantItemId: i.restaurantItemId, quantity: i.quantity })),
+    });
+
     return order;
   }
 
-  async getOrders(businessId: string, branchId: string, from?: Date, to?: Date) {
+  async getOrders(
+    businessId: string,
+    branchId: string,
+    opts: {
+      from?: Date;
+      to?: Date;
+      workerId?: string;
+      paymentMethod?: string;
+    } = {},
+  ) {
     const where: any = { businessId, branchId };
-    if (from || to) {
+    if (opts.from || opts.to) {
       where.createdAt = {};
-      if (from) where.createdAt.gte = from;
-      if (to) where.createdAt.lte = to;
+      if (opts.from) where.createdAt.gte = opts.from;
+      if (opts.to) where.createdAt.lte = opts.to;
     }
+    if (opts.workerId) where.createdByWorkerId = opts.workerId;
+    if (opts.paymentMethod) where.paymentMethod = opts.paymentMethod;
     return this.prisma.restaurantOrder.findMany({
       where,
       include: { items: { include: { restaurantItem: true } } },

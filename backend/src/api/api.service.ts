@@ -23,6 +23,24 @@ export class ApiService {
 
     const role = ['ADMIN', 'OWNER'].includes(user.role || '') ? 'MANAGER' : user.role;
 
+    // Managers/admins do not use worker selector.
+    if (role === 'MANAGER') {
+      return {
+        email: user.email,
+        role,
+        language: dbUser?.language ?? 'en',
+        business: {
+          id: business.id,
+          name: business.name,
+          code: business.businessId,
+        },
+        activeWorkerId: null,
+        activeWorkerName: null,
+        needsWorkerSelection: false,
+        workers: [],
+      };
+    }
+
     const roleWorkers = await this.staffWorkers.getActiveByRole(user.businessId, role);
     const workers: { id: string; fullName: string }[] = roleWorkers.map((w) => ({ id: w.id, fullName: w.fullName }));
 

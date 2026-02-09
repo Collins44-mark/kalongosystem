@@ -126,8 +126,9 @@ export class AuthService {
     if (!valid) throw new UnauthorizedException('Invalid credentials');
 
     const role = ['ADMIN', 'OWNER'].includes(bu.role || '') ? 'MANAGER' : bu.role;
-    const workers = await this.staffWorkers.getActiveByRole(bu.business.id, role);
-    const needsWorkerSelection = workers.length > 0;
+    // Worker selection is for non-admin roles only.
+    const workers = role === 'MANAGER' ? [] : await this.staffWorkers.getActiveByRole(bu.business.id, role);
+    const needsWorkerSelection = role !== 'MANAGER' && workers.length > 0;
 
     const payload: Record<string, unknown> = {
       sub: user.id,
@@ -149,7 +150,7 @@ export class AuthService {
         businessId: bu.business.businessId,
         role,
       },
-      needsWorkerSelection: needsWorkerSelection && workers.length > 0,
+      needsWorkerSelection,
       workers: needsWorkerSelection ? workers.map((w) => ({ id: w.id, fullName: w.fullName })) : [],
     };
   }

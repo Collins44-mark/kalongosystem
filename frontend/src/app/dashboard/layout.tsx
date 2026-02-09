@@ -148,7 +148,7 @@ export default function DashboardLayout({
   }
 
   const mustSelectWorker = Boolean(me?.needsWorkerSelection && me?.workers?.length);
-  const canSwitchWorker = Boolean(me?.workers?.length);
+  const canSwitchWorker = Boolean(me?.workers?.length) && !isAdmin;
 
   const displayRole = (roleForNav || user?.role || '').replace(/_/g, ' ');
   const displayWorker = (user?.activeWorkerName ?? me?.activeWorkerName) || '';
@@ -229,11 +229,11 @@ export default function DashboardLayout({
           </div>
           <div className="relative flex-shrink-0 flex items-center gap-2">
             {canSwitchWorker && (
-              <div className="hidden sm:flex items-center gap-2">
+              <div className="flex items-center gap-2">
                 <select
                   value={workerSelectId}
                   onChange={(e) => setWorkerSelectId(e.target.value)}
-                  className="px-2 py-1 border rounded text-xs sm:text-sm"
+                  className="px-2 py-1 border rounded text-xs sm:text-sm max-w-[160px]"
                 >
                   {me?.workers?.map((w) => (
                     <option key={w.id} value={w.id}>{w.fullName}</option>
