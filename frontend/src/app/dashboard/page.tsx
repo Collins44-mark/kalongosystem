@@ -251,24 +251,6 @@ export default function OverviewPage() {
         </div>
       </div>
 
-      {/* Quick links to modules */}
-      <div className="bg-white rounded-xl shadow-md border border-slate-100 p-4">
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <h2 className="font-semibold text-slate-800">{t('nav.modules')}</h2>
-          <div className="text-xs text-slate-500">{t('overview.tapToOpen')}</div>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          <ModuleLink href="/dashboard/front-office" label={t('nav.frontOffice')} />
-          <ModuleLink href="/dashboard/bar" label={t('nav.bar')} />
-          <ModuleLink href="/dashboard/restaurant" label={t('nav.restaurant')} />
-          <ModuleLink href="/dashboard/housekeeping" label={t('nav.housekeeping')} />
-          <ModuleLink href="/dashboard/finance" label={t('nav.finance')} />
-          <ModuleLink href="/dashboard/reports" label={t('nav.reports')} />
-          <ModuleLink href="/dashboard/workers" label={t('nav.workers')} />
-          <ModuleLink href="/dashboard/settings" label={t('nav.settings')} />
-        </div>
-      </div>
-
       {/* Room Status Cards */}
       <Link href="/dashboard/front-office" className="block">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -415,15 +397,4 @@ function formatTzs(n: number) {
     currency: 'TZS',
     maximumFractionDigits: 0,
   }).format(n);
-}
-
-function ModuleLink({ href, label }: { href: string; label: string }) {
-  return (
-    <Link
-      href={href}
-      className="px-3 py-3 rounded-lg border bg-white hover:border-teal-300 hover:bg-teal-50/30 transition-colors text-sm font-medium text-slate-800"
-    >
-      {label}
-    </Link>
-  );
 }

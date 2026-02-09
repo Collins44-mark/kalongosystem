@@ -27,7 +27,6 @@
   "nav.reports": "Ripoti",
   "nav.settings": "Mipangilio",
   "nav.logout": "Ondoka",
-  "nav.modules": "Moduli",
   "nav.toggleMenu": "Fungua/funga menyu",
   "nav.language": "Lugha",
   "nav.english": "English",
@@ -57,7 +56,6 @@
 
   "overview.title": "Mapitio",
   "overview.showingData": "Inaonyesha data ya:",
-  "overview.tapToOpen": "Gusa kufungua",
   "overview.today": "Leo",
   "overview.thisWeek": "Wiki Hii",
   "overview.thisMonth": "Mwezi Huu",
