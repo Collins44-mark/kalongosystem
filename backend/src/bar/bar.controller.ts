@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { BarService } from './bar.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { SubscriptionGuard } from '../common/guards/subscription.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { AllowManagerGuard } from '../common/guards/allow-manager.guard';
 import { IsArray, IsIn, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 class OrderItemDto {
@@ -29,6 +30,19 @@ class CreateItemDto {
   @IsNumber()
   @Min(0)
   price: number;
+}
+
+class RestockItemDto {
+  @IsString()
+  barItemId: string;
+  @IsNumber()
+  @Min(1)
+  quantityAdded: number;
+}
+
+class CreateRestockDto {
+  @IsArray()
+  items: RestockItemDto[];
 }
 
 @Controller('bar')
@@ -70,5 +84,59 @@ export class BarController {
       dto,
       user.sub,
     );
+  }
+
+  /** BAR + MANAGER: see if restock is enabled for BAR role */
+  @Get('restock-permission')
+  @UseGuards(RolesGuard)
+  @Roles('MANAGER', 'BAR')
+  async getRestockPermission(@CurrentUser() user: any) {
+    return this.bar.getRestockPermission(user.businessId);
+  }
+
+  /** MANAGER: enable/disable restock permission (optional session expiry) */
+  @Patch('restock-permission')
+  @UseGuards(RolesGuard, AllowManagerGuard)
+  @Roles('MANAGER', 'ADMIN', 'OWNER')
+  async setRestockPermission(
+    @CurrentUser() user: any,
+    @Body('enabled') enabled: boolean,
+    @Body('expiresMinutes') expiresMinutes?: number,
+  ) {
+    return this.bar.setRestockPermission(
+      user.businessId,
+      enabled === true,
+      { userId: user.sub, role: user.role || 'MANAGER', workerId: user.workerId, workerName: user.workerName },
+      typeof expiresMinutes === 'number' ? expiresMinutes : null,
+    );
+  }
+
+  /** BAR: create restock only when enabled. MANAGER always allowed. */
+  @Post('restocks')
+  @UseGuards(RolesGuard)
+  @Roles('MANAGER', 'BAR')
+  async createRestock(@CurrentUser() user: any, @Body() dto: CreateRestockDto) {
+    return this.bar.createRestock(
+      user.businessId,
+      user.branchId,
+      { userId: user.sub, role: user.role, workerId: user.workerId, workerName: user.workerName },
+      dto.items,
+    );
+  }
+
+  /** MANAGER: restock history */
+  @Get('restocks')
+  @UseGuards(RolesGuard, AllowManagerGuard)
+  @Roles('MANAGER', 'ADMIN', 'OWNER')
+  async listRestocks(@CurrentUser() user: any) {
+    return this.bar.listRestocks(user.businessId, user.branchId);
+  }
+
+  /** MANAGER: restock detail */
+  @Get('restocks/:id')
+  @UseGuards(RolesGuard, AllowManagerGuard)
+  @Roles('MANAGER', 'ADMIN', 'OWNER')
+  async getRestock(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.bar.getRestock(user.businessId, id);
   }
 }

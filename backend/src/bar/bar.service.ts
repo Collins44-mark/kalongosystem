@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
 
@@ -7,9 +7,31 @@ export class BarService {
   constructor(private prisma: PrismaService) {}
 
   async getItems(businessId: string, branchId: string) {
-    return this.prisma.barItem.findMany({
+    const items = await this.prisma.barItem.findMany({
       where: { businessId, branchId },
+      include: { },
       orderBy: { name: 'asc' },
+    });
+
+    const invIds = items.map((i) => i.inventoryItemId).filter(Boolean) as string[];
+    const inv = invIds.length
+      ? await this.prisma.inventoryItem.findMany({
+          where: { id: { in: invIds } },
+          select: { id: true, quantity: true, minQuantity: true },
+        })
+      : [];
+    const invMap = new Map(inv.map((i) => [i.id, i]));
+
+    return items.map((it) => {
+      const ii = it.inventoryItemId ? invMap.get(it.inventoryItemId) : null;
+      return {
+        id: it.id,
+        name: it.name,
+        price: String(it.price),
+        inventoryItemId: it.inventoryItemId,
+        stock: ii ? ii.quantity : null,
+        minQuantity: ii ? ii.minQuantity : null,
+      };
     });
   }
 
@@ -93,6 +115,199 @@ export class BarService {
     }
 
     return order;
+  }
+
+  // ==========================
+  // Restock permission (BAR)
+  // Stored in business_settings key: barRestockPermission (JSON)
+  // ==========================
+
+  async getRestockPermission(businessId: string) {
+    const s = await this.prisma.businessSetting.findFirst({
+      where: { businessId, key: 'barRestockPermission' },
+    });
+    if (!s) return { enabled: false };
+    let val: any = null;
+    try {
+      val = JSON.parse(s.value);
+    } catch {
+      val = null;
+    }
+    const enabled = val?.enabled === true;
+    const expiresAt = val?.expiresAt ? new Date(val.expiresAt) : null;
+    const active = enabled && (!expiresAt || expiresAt.getTime() > Date.now());
+    return {
+      enabled: active,
+      expiresAt: expiresAt ? expiresAt.toISOString() : null,
+      approvedById: val?.approvedById ?? null,
+      approvedByRole: val?.approvedByRole ?? null,
+      approvedByWorkerName: val?.approvedByWorkerName ?? null,
+      approvedAt: val?.approvedAt ?? null,
+    };
+  }
+
+  async setRestockPermission(
+    businessId: string,
+    enabled: boolean,
+    approvedBy: { userId: string; role: string; workerId?: string | null; workerName?: string | null },
+    expiresMinutes?: number | null,
+  ) {
+    const payload = {
+      enabled: enabled === true,
+      approvedById: approvedBy.userId,
+      approvedByRole: approvedBy.role,
+      approvedByWorkerId: approvedBy.workerId ?? null,
+      approvedByWorkerName: approvedBy.workerName ?? null,
+      approvedAt: new Date().toISOString(),
+      expiresAt:
+        enabled && expiresMinutes && expiresMinutes > 0
+          ? new Date(Date.now() + expiresMinutes * 60_000).toISOString()
+          : null,
+    };
+    const value = JSON.stringify(payload);
+    const existing = await this.prisma.businessSetting.findFirst({
+      where: { businessId, key: 'barRestockPermission' },
+    });
+    if (existing) {
+      await this.prisma.businessSetting.update({ where: { id: existing.id }, data: { value } });
+    } else {
+      await this.prisma.businessSetting.create({ data: { businessId, key: 'barRestockPermission', value } });
+    }
+    return this.getRestockPermission(businessId);
+  }
+
+  private async logAudit(
+    businessId: string,
+    user: { userId: string; role: string; workerId?: string | null; workerName?: string | null },
+    actionType: string,
+    entityType?: string,
+    entityId?: string,
+    metadata?: object,
+  ) {
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          businessId,
+          userId: user.userId,
+          role: user.role,
+          workerId: user.workerId ?? null,
+          workerName: user.workerName ?? null,
+          actionType,
+          entityType,
+          entityId,
+          metadata: metadata ? JSON.stringify(metadata) : null,
+        },
+      });
+    } catch {
+      /* non-fatal */
+    }
+  }
+
+  async createRestock(
+    businessId: string,
+    branchId: string,
+    actor: { userId: string; role: string; workerId?: string | null; workerName?: string | null },
+    items: { barItemId: string; quantityAdded: number }[],
+  ) {
+    if (!Array.isArray(items) || items.length === 0) throw new BadRequestException('No items');
+    if (actor.role === 'BAR') {
+      const perm = await this.getRestockPermission(businessId);
+      if (!perm.enabled) throw new ForbiddenException('Restock not permitted');
+    }
+
+    const perm = await this.getRestockPermission(businessId);
+    const approvedBy =
+      actor.role === 'BAR'
+        ? {
+            userId: perm.approvedById as string,
+            role: (perm.approvedByRole as string) || 'MANAGER',
+            workerName: (perm.approvedByWorkerName as string) || null,
+          }
+        : { userId: actor.userId, role: actor.role, workerName: actor.workerName ?? null };
+
+    if (actor.role === 'BAR' && !approvedBy.userId) throw new ForbiddenException('Missing approval');
+
+    const restock = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.barRestock.create({
+        data: {
+          businessId,
+          branchId,
+          createdById: actor.userId,
+          createdByRole: actor.role,
+          createdByWorkerId: actor.workerId ?? null,
+          createdByWorkerName: actor.workerName ?? null,
+          approvedById: approvedBy.userId,
+          approvedByRole: approvedBy.role,
+          approvedByWorkerId: null,
+          approvedByWorkerName: approvedBy.workerName ?? null,
+          approvedAt: new Date(),
+        },
+      });
+
+      for (const it of items) {
+        if (!it?.barItemId) continue;
+        const qty = Number(it.quantityAdded);
+        if (!qty || qty < 1) continue;
+
+        const barItem = await tx.barItem.findFirst({
+          where: { id: it.barItemId, businessId },
+        });
+        if (!barItem) throw new NotFoundException(`Bar item ${it.barItemId} not found`);
+        if (!barItem.inventoryItemId) throw new BadRequestException(`Bar item ${barItem.name} has no stock tracking`);
+
+        const inv = await tx.inventoryItem.findFirst({
+          where: { id: barItem.inventoryItemId, businessId, branchId },
+        });
+        if (!inv) throw new NotFoundException('Inventory item not found');
+
+        const before = inv.quantity;
+        const after = before + qty;
+        await tx.inventoryItem.update({
+          where: { id: inv.id },
+          data: { quantity: { increment: qty } },
+        });
+        await tx.barRestockItem.create({
+          data: {
+            restockId: created.id,
+            barItemId: barItem.id,
+            inventoryItemId: inv.id,
+            stockBefore: before,
+            quantityAdded: qty,
+            stockAfter: after,
+          },
+        });
+      }
+      return created;
+    });
+
+    await this.logAudit(
+      businessId,
+      actor,
+      'bar_restock_created',
+      'bar_restock',
+      restock.id,
+      { approvedById: approvedBy.userId, approvedByRole: approvedBy.role },
+    );
+
+    return restock;
+  }
+
+  async listRestocks(businessId: string, branchId: string) {
+    return this.prisma.barRestock.findMany({
+      where: { businessId, branchId },
+      include: { items: { include: { barItem: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+  }
+
+  async getRestock(businessId: string, restockId: string) {
+    const r = await this.prisma.barRestock.findFirst({
+      where: { id: restockId, businessId },
+      include: { items: { include: { barItem: true } } },
+    });
+    if (!r) throw new NotFoundException('Restock not found');
+    return r;
   }
 
   /** Admin only - get sales */

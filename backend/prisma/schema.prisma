@@ -80,6 +80,7 @@ model Business {
   bookings          Booking[]
   barItems          BarItem[]
   barOrders         BarOrder[]
+  barRestocks       BarRestock[]
   restaurantItems   RestaurantItem[]
   restaurantOrders  RestaurantOrder[]
   inventoryItems    InventoryItem[]
@@ -231,8 +232,45 @@ model BarItem {
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   orders   BarOrderItem[]
+  restockItems BarRestockItem[]
 
   @@map("bar_items")
+}
+
+model BarRestock {
+  id               String   @id @default(cuid())
+  businessId        String
+  branchId          String   @default("main")
+  createdAt         DateTime @default(now())
+  createdById       String
+  createdByRole     String
+  createdByWorkerId   String?
+  createdByWorkerName String?
+  approvedById        String
+  approvedByRole      String
+  approvedByWorkerId   String?
+  approvedByWorkerName String?
+  approvedAt          DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  items    BarRestockItem[]
+
+  @@map("bar_restocks")
+}
+
+model BarRestockItem {
+  id            String @id @default(cuid())
+  restockId     String
+  barItemId     String
+  inventoryItemId String?
+  stockBefore   Int
+  quantityAdded Int
+  stockAfter    Int
+
+  restock BarRestock @relation(fields: [restockId], references: [id], onDelete: Cascade)
+  barItem  BarItem   @relation(fields: [barItemId], references: [id], onDelete: Restrict)
+
+  @@map("bar_restock_items")
 }
 
 model BarOrder {
