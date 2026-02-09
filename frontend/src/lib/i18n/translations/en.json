@@ -27,6 +27,7 @@
   "nav.reports": "Reports",
   "nav.settings": "Settings",
   "nav.logout": "Logout",
+  "nav.modules": "Modules",
   "nav.toggleMenu": "Toggle menu",
   "nav.language": "Language",
   "nav.english": "English",
@@ -56,6 +57,7 @@
 
   "overview.title": "Overview",
   "overview.showingData": "Showing data for:",
+  "overview.tapToOpen": "Tap to open",
   "overview.today": "Today",
   "overview.thisWeek": "This Week",
   "overview.thisMonth": "This Month",

@@ -42,7 +42,6 @@ const SIDEBAR_LINKS: { href: string; labelKey: string; roles: string[] }[] = [
   { href: '/dashboard/housekeeping', labelKey: 'nav.housekeeping', roles: ['MANAGER', 'HOUSEKEEPING'] },
   { href: '/dashboard/finance', labelKey: 'nav.finance', roles: ['MANAGER', 'FINANCE'] },
   { href: '/dashboard/workers', labelKey: 'nav.workers', roles: ['MANAGER'] },
-  { href: '/dashboard/inventory', labelKey: 'nav.inventory', roles: ['MANAGER'] },
   { href: '/dashboard/reports', labelKey: 'nav.reports', roles: ['MANAGER'] },
   { href: '/dashboard/settings', labelKey: 'nav.settings', roles: ['MANAGER'] },
 ];

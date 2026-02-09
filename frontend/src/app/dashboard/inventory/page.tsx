@@ -4,16 +4,27 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
+import { useRouter } from 'next/navigation';
+import { isManagerLevel } from '@/lib/roles';
 
 type Item = { id: string; name: string; quantity: number; minQuantity: number; unitPrice: string };
 
 export default function InventoryPage() {
-  const { token } = useAuth();
+  const router = useRouter();
+  const { token, user } = useAuth();
   const { t } = useTranslation();
   const [items, setItems] = useState<Item[]>([]);
   const [lowStock, setLowStock] = useState<Item[]>([]);
   const [valueAtRisk, setValueAtRisk] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  // Inventory page removed from admin flow: use Bar as the items listing.
+  useEffect(() => {
+    if (!user?.role) return;
+    if (isManagerLevel(user.role)) {
+      router.replace('/dashboard/bar');
+    }
+  }, [user?.role, router]);
 
   useEffect(() => {
     if (!token) return;
@@ -29,6 +40,10 @@ export default function InventoryPage() {
       })
       .finally(() => setLoading(false));
   }, [token]);
+
+  if (isManagerLevel(user?.role)) {
+    return <div className="text-slate-500">{t('common.loading')}</div>;
+  }
 
   if (loading) return <div>{t('common.loading')}</div>;
 
