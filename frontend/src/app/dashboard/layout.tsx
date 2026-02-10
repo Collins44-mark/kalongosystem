@@ -61,6 +61,27 @@ export default function DashboardLayout({
   const [workerSelectId, setWorkerSelectId] = useState('');
   const [workerSelectSaving, setWorkerSelectSaving] = useState(false);
 
+  async function fetchMe(opts?: { silent?: boolean }) {
+    if (!token) {
+      setMeLoading(false);
+      return;
+    }
+    if (!opts?.silent) setMeLoading(true);
+    try {
+      const res = await api<MeResponse>('/api/me', { token });
+      setMe(res);
+    } catch (e: unknown) {
+      const err = e as Error & { status?: number };
+      if (err?.status === 401) {
+        logout();
+        router.replace('/login');
+      }
+      setMe(null);
+    } finally {
+      if (!opts?.silent) setMeLoading(false);
+    }
+  }
+
   useEffect(() => {
     if (_hasHydrated && (!token || !user)) {
       router.replace('/login');
@@ -68,23 +89,26 @@ export default function DashboardLayout({
   }, [_hasHydrated, token, user, router]);
 
   useEffect(() => {
-    if (!token) {
-      setMeLoading(false);
-      return;
-    }
-    setMeLoading(true);
-    api<MeResponse>('/api/me', { token })
-      .then(setMe)
-      .catch((e: unknown) => {
-        const err = e as Error & { status?: number };
-        if (err?.status === 401) {
-          logout();
-          router.replace('/login');
-        }
-        setMe(null);
-      })
-      .finally(() => setMeLoading(false));
-  }, [token, logout, router]);
+    fetchMe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  // Auto-refresh session state (role/worker status, workers list) without manual refresh.
+  useEffect(() => {
+    if (!token) return;
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchMe({ silent: true });
+    }, 15000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchMe({ silent: true });
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
   const hasSyncedLocaleFromMe = useRef(false);
   useEffect(() => {
@@ -111,8 +135,12 @@ export default function DashboardLayout({
   }
 
   useEffect(() => {
-    if (me?.workers && me.workers.length > 0 && !workerSelectId) setWorkerSelectId(me.workers[0].id);
-  }, [me?.needsWorkerSelection, me?.workers]);
+    if (!me?.workers?.length) return;
+    // Keep selection valid when workers list changes.
+    if (!workerSelectId || !me.workers.some((w) => w.id === workerSelectId)) {
+      setWorkerSelectId(me.workers[0].id);
+    }
+  }, [me?.workers, workerSelectId]);
 
   async function submitWorkerSelection() {
     if (!token || !workerSelectId || !me?.workers?.length || !user) return;

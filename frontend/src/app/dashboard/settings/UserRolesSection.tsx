@@ -49,6 +49,22 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
     load();
   }, [token]);
 
+  // Auto-refresh list so changes from other devices appear.
+  useEffect(() => {
+    if (!token) return;
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') load();
+    }, 15000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') load();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [token]);
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!fullName.trim()) return;

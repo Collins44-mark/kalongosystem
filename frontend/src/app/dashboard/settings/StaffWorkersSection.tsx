@@ -34,13 +34,35 @@ export function StaffWorkersSection({ token, t }: { token: string; t: (k: string
   const [editName, setEditName] = useState('');
   const [editRole, setEditRole] = useState('');
 
-  useEffect(() => {
+  function load() {
     if (!token) return;
     const q = roleFilter ? `?role=${roleFilter}` : '';
     api<StaffWorker[]>(`/api/staff-workers${q}`, { token })
       .then(setWorkers)
       .catch(() => setWorkers([]))
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, roleFilter]);
+
+  // Auto-refresh list so status/role changes from other devices appear.
+  useEffect(() => {
+    if (!token) return;
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') load();
+    }, 15000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') load();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, roleFilter]);
 
   async function createWorker(e: React.FormEvent) {
