@@ -5,6 +5,7 @@ import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
 import { isManagerLevel } from '@/lib/roles';
+import { useSearch } from '@/store/search';
 
 type Dashboard = {
   totalRevenue: number;
@@ -22,6 +23,7 @@ type View = 'cards' | 'revenue' | 'revenue-sector' | 'expenses';
 export default function FinancePage() {
   const { token, user } = useAuth();
   const { t } = useTranslation();
+  const searchQuery = useSearch((s) => s.query);
   const [data, setData] = useState<Dashboard | null>(null);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -85,6 +87,33 @@ export default function FinancePage() {
 
   if (loading && !data) return <div className="text-slate-500">{t('common.loading')}</div>;
   const d = data ?? empty;
+  const q = (searchQuery || '').trim().toLowerCase();
+
+  const displayedSales =
+    !q
+      ? salesHistory
+      : salesHistory.filter((r) => {
+          const txt = `${r.orderId} ${r.paymentMode} ${r.staff} ${r.amount} ${r.date}`.toLowerCase();
+          return txt.includes(q);
+        });
+
+  const displayedExpenses =
+    !q || !expenseDetail
+      ? expenseDetail?.expenses ?? []
+      : expenseDetail.expenses.filter((e) => {
+          const txt = `${e.category} ${e.amount} ${e.date} ${e.notes ?? ''}`.toLowerCase();
+          return txt.includes(q);
+        });
+
+  const displayedByCategory =
+    !expenseDetail
+      ? {}
+      : !q
+        ? expenseDetail.byCategory
+        : displayedExpenses.reduce<Record<string, number>>((acc, e) => {
+            acc[e.category] = (acc[e.category] || 0) + (e.amount || 0);
+            return acc;
+          }, {});
 
   const params = new URLSearchParams();
   if (from) params.set('from', from);
@@ -162,7 +191,7 @@ export default function FinancePage() {
         <div className="space-y-4">
           <h2 className="font-medium capitalize">{selectedSector} – {t('finance.revenueSummary')}</h2>
           <p className="text-sm text-slate-600">
-            Total: {formatTzs(salesHistory.reduce((s, r) => s + r.amount, 0))}
+            Total: {formatTzs(displayedSales.reduce((s, r) => s + r.amount, 0))}
           </p>
           <div className="bg-white border rounded overflow-hidden">
             <table className="w-full text-sm">
@@ -176,7 +205,7 @@ export default function FinancePage() {
                 </tr>
               </thead>
               <tbody>
-                {salesHistory.map((r) => (
+                {displayedSales.map((r) => (
                   <tr key={r.id} className="border-t">
                     <td className="p-3">{new Date(r.date).toLocaleDateString()}</td>
                     <td className="p-3">{r.orderId}</td>
@@ -187,7 +216,7 @@ export default function FinancePage() {
                 ))}
               </tbody>
             </table>
-            {salesHistory.length === 0 && <p className="p-4 text-slate-500">{t('finance.noSales')}</p>}
+            {displayedSales.length === 0 && <p className="p-4 text-slate-500">{t('finance.noSales')}</p>}
           </div>
         </div>
       )}
@@ -196,7 +225,7 @@ export default function FinancePage() {
         <div className="space-y-4">
           <h2 className="font-medium">{t('finance.expensesByCategory')}</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {Object.entries(expenseDetail.byCategory).map(([cat, amt]) => (
+            {Object.entries(displayedByCategory).map(([cat, amt]) => (
               <div key={cat} className="bg-white border rounded p-4">
                 <div className="text-sm text-slate-500">{cat}</div>
                 <div className="font-semibold">{formatTzs(amt)}</div>
@@ -215,7 +244,7 @@ export default function FinancePage() {
                 </tr>
               </thead>
               <tbody>
-                {expenseDetail.expenses.map((e) => (
+                {displayedExpenses.map((e) => (
                   <tr key={e.id} className="border-t">
                     <td className="p-3">{new Date(e.date).toLocaleDateString()}</td>
                     <td className="p-3">{e.category}</td>
@@ -225,7 +254,7 @@ export default function FinancePage() {
                 ))}
               </tbody>
             </table>
-            {expenseDetail.expenses.length === 0 && <p className="p-4 text-slate-500">{t('finance.noExpenses')}</p>}
+            {displayedExpenses.length === 0 && <p className="p-4 text-slate-500">{t('finance.noExpenses')}</p>}
           </div>
         </div>
       )}

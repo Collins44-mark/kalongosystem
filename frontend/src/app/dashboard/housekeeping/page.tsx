@@ -4,12 +4,14 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
+import { useSearch } from '@/store/search';
 
 type Room = { id: string; roomNumber: string; status: string; category: { name: string } };
 
 export default function HousekeepingPage() {
   const { token } = useAuth();
   const { t } = useTranslation();
+  const searchQuery = useSearch((s) => s.query);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -35,12 +37,19 @@ export default function HousekeepingPage() {
   }
 
   if (loading) return <div>{t('common.loading')}</div>;
+  const q = (searchQuery || '').trim().toLowerCase();
+  const displayed = !q
+    ? rooms
+    : rooms.filter((r) => {
+        const txt = `${r.roomNumber} ${r.status} ${r.category?.name ?? ''}`.toLowerCase();
+        return txt.includes(q);
+      });
 
   return (
     <div>
       <h1 className="text-xl font-semibold mb-4">{t('housekeeping.title')}</h1>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {rooms.map((r) => (
+        {displayed.map((r) => (
           <div key={r.id} className="bg-white border rounded p-4">
             <div className="font-medium">{r.roomNumber}</div>
             <div className="text-sm text-slate-600">{r.category.name}</div>

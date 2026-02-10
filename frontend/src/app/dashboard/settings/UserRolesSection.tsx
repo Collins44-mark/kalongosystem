@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { notifyError, notifySuccess, notifyInfo } from '@/store/notifications';
+import { useSearch } from '@/store/search';
 
 type UserRow = {
   id: string;
@@ -21,6 +22,7 @@ type UserRow = {
 const ROLES = ['MANAGER', 'FRONT_OFFICE', 'FINANCE', 'HOUSEKEEPING', 'BAR', 'RESTAURANT', 'KITCHEN'] as const;
 
 export function UserRolesSection({ token, t }: { token: string; t: (k: string) => string }) {
+  const searchQuery = useSearch((s) => s.query);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -48,6 +50,14 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
   useEffect(() => {
     load();
   }, [token]);
+
+  const q = (searchQuery || '').trim().toLowerCase();
+  const displayedUsers = !q
+    ? users
+    : users.filter((u) => {
+        const txt = `${u.name ?? ''} ${u.role} ${u.email} ${u.isDisabled ? 'disabled' : 'active'}`.toLowerCase();
+        return txt.includes(q);
+      });
 
   // Auto-refresh list so changes from other devices appear.
   useEffect(() => {
@@ -190,7 +200,7 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => (
+              {displayedUsers.map((u) => (
                 <tr key={u.id} className="border-b border-slate-100">
                   <td className="p-2">{u.name || u.email}</td>
                   <td className="p-2 uppercase">{roleLabel(u.role)}</td>
@@ -242,7 +252,7 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
               ))}
             </tbody>
           </table>
-          {users.length === 0 && <p className="text-slate-500 py-4">{t('settings.noUsers')}</p>}
+          {displayedUsers.length === 0 && <p className="text-slate-500 py-4">{t('settings.noUsers')}</p>}
         </div>
       )}
 

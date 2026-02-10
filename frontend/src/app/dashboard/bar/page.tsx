@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
 import { isManagerLevel } from '@/lib/roles';
 import { useSearchParams } from 'next/navigation';
+import { useSearch } from '@/store/search';
 
 type BarItem = { id: string; name: string; price: string; stock: number | null; minQuantity: number | null };
 type RestockPermission = { enabled: boolean; expiresAt?: string | null; approvedByWorkerName?: string | null };
@@ -34,6 +35,7 @@ export default function BarPage() {
   const { token, user } = useAuth();
   const { t } = useTranslation();
   const searchParams = useSearchParams();
+  const searchQuery = useSearch((s) => s.query);
   const [items, setItems] = useState<BarItem[]>([]);
   const [cart, setCart] = useState<{ itemId: string; name: string; price: number; qty: number }[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'MOBILE_MONEY' | 'BANK'>('CASH');
@@ -209,6 +211,8 @@ export default function BarPage() {
 
   if (loading) return <div>{t('common.loading')}</div>;
 
+  const q = (searchQuery || '').trim().toLowerCase();
+
   const totalItems = items.length;
   // Treat missing stock tracking as 0 so admins can restock/link old items.
   const outOfStock = items.filter((i) => (i.stock ?? 0) <= 0).length;
@@ -218,7 +222,12 @@ export default function BarPage() {
     return stock > 0 && min != null && stock <= min;
   }).length;
 
-  const filteredItems = items.filter((i) => {
+  const filteredItems = items
+    .filter((i) => {
+      if (!q) return true;
+      return (i.name || '').toLowerCase().includes(q);
+    })
+    .filter((i) => {
     const stock = i.stock ?? 0;
     const min = i.minQuantity ?? null;
     if (filter === 'out') return stock <= 0;
@@ -229,6 +238,14 @@ export default function BarPage() {
     }
     return true;
   });
+
+  const adminOrdersFiltered = !q
+    ? adminOrders
+    : adminOrders.filter((o) => {
+        const itemsTxt = (o.items || []).map((it) => `${it.barItem?.name ?? ''} x${it.quantity}`).join(', ');
+        const txt = `${o.orderNumber} ${o.paymentMethod} ${o.createdByWorkerName ?? ''} ${itemsTxt}`.toLowerCase();
+        return txt.includes(q);
+      });
 
   const restocksByDay = restocks.reduce<Record<string, Restock[]>>((acc, r) => {
     const day = new Date(r.createdAt).toISOString().slice(0, 10);
@@ -608,14 +625,14 @@ export default function BarPage() {
                       {t('common.loading')}
                     </td>
                   </tr>
-                ) : adminOrders.length === 0 ? (
+                ) : adminOrdersFiltered.length === 0 ? (
                   <tr>
                     <td className="p-3 text-slate-500" colSpan={6}>
                       {t('common.noItems')}
                     </td>
                   </tr>
                 ) : (
-                  adminOrders.map((o) => (
+                  adminOrdersFiltered.map((o) => (
                     <tr key={o.id} className="border-t align-top">
                       <td className="p-3 whitespace-nowrap">{new Date(o.createdAt).toLocaleString()}</td>
                       <td className="p-3 font-medium whitespace-nowrap">{o.orderNumber}</td>
@@ -805,6 +822,7 @@ function formatTzs(n: number) {
 
 function MyOrders({ token, autoTick }: { token: string; autoTick: number }) {
   const { t } = useTranslation();
+  const searchQuery = useSearch((s) => s.query);
   const [orders, setOrders] = useState<
     { id: string; orderNumber: string; paymentMethod: string; createdAt: string; items: { id: string; quantity: number; name: string }[] }[]
   >([]);
@@ -827,6 +845,15 @@ function MyOrders({ token, autoTick }: { token: string; autoTick: number }) {
       .catch(() => setOrders([]))
       .finally(() => setLoading(false));
   }, [token, filter, dateFrom, dateTo, autoTick]);
+
+  const q = (searchQuery || '').trim().toLowerCase();
+  const displayed = !q
+    ? orders
+    : orders.filter((o) => {
+        const itemsTxt = (o.items || []).map((it) => `${it.name} x${it.quantity}`).join(', ');
+        const txt = `${o.orderNumber} ${o.paymentMethod} ${itemsTxt}`.toLowerCase();
+        return txt.includes(q);
+      });
 
   return (
     <div className="mt-6">
@@ -880,14 +907,14 @@ function MyOrders({ token, autoTick }: { token: string; autoTick: number }) {
                   {t('common.loading')}
                 </td>
               </tr>
-            ) : orders.length === 0 ? (
+            ) : displayed.length === 0 ? (
               <tr>
                 <td className="p-3 text-slate-500" colSpan={4}>
                   {t('common.noItems')}
                 </td>
               </tr>
             ) : (
-              orders.map((o) => (
+              displayed.map((o) => (
                 <tr key={o.id} className="border-t">
                   <td className="p-3">{new Date(o.createdAt).toLocaleString()}</td>
                   <td className="p-3 font-medium">{o.orderNumber}</td>

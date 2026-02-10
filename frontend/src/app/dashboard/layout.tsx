@@ -10,6 +10,7 @@ import { roleForPermission } from '@/lib/roles';
 import { defaultDashboardRoute, isOverviewAllowed } from '@/lib/homeRoute';
 import { isManagerLevel } from '@/lib/roles';
 import { NotificationsPanel } from '@/components/NotificationsPanel';
+import { HeaderSearch } from '@/components/HeaderSearch';
 
 function MenuIcon({ open }: { open: boolean }) {
   return (
@@ -250,12 +251,24 @@ export default function DashboardLayout({
       <main className="flex-1 overflow-auto min-w-0">
         <header className="h-12 sm:h-12 bg-white border-b flex items-center justify-between px-3 sm:px-4 gap-2">
           <div className="flex items-center gap-2 min-w-0">
+            <button
+              type="button"
+              onClick={() => router.push(defaultDashboardRoute(user.role))}
+              className="p-1.5 rounded hover:bg-slate-100 text-slate-600 flex-shrink-0"
+              aria-label={t('common.back')}
+              title={t('common.back')}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
             {isAdmin && <NotificationsPanel />}
             <span className="text-xs sm:text-sm text-slate-600 truncate font-medium uppercase">
               {displayWorker ? `${displayRole} | ${displayWorker}` : displayRole}
             </span>
           </div>
           <div className="relative flex-shrink-0 flex items-center gap-2">
+            <HeaderSearch />
             {canSwitchWorker && (
               <div className="flex items-center gap-2">
                 <select

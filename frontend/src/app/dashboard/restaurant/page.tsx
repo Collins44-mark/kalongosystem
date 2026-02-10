@@ -5,6 +5,7 @@ import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
 import { isManagerLevel } from '@/lib/roles';
+import { useSearch } from '@/store/search';
 
 type RestaurantItem = { id: string; name: string; price: string; category?: string | null; isEnabled?: boolean };
 type OrderRow = {
@@ -20,6 +21,7 @@ export default function RestaurantPage() {
   const { token, user } = useAuth();
   const { t } = useTranslation();
   const isAdmin = isManagerLevel(user?.role);
+  const searchQuery = useSearch((s) => s.query);
   const [items, setItems] = useState<RestaurantItem[]>([]);
   const [cart, setCart] = useState<{ itemId: string; name: string; price: number; qty: number }[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'BANK' | 'MPESA' | 'TIGOPESA' | 'AIRTEL_MONEY'>('CASH');
@@ -36,6 +38,7 @@ export default function RestaurantPage() {
   const [filterWorkerId, setFilterWorkerId] = useState('');
   const [filterPayment, setFilterPayment] = useState('');
   const [workers, setWorkers] = useState<StaffWorker[]>([]);
+  const q = (searchQuery || '').trim().toLowerCase();
 
   // Auto-refresh (every 15s) while tab is visible
   useEffect(() => {
@@ -122,13 +125,27 @@ export default function RestaurantPage() {
 
   if (loading) return <div>{t('common.loading')}</div>;
 
-  const grouped = items.reduce<Record<string, RestaurantItem[]>>((acc, it) => {
+  const displayedItems = !q
+    ? items
+    : items.filter((it) => {
+        const txt = `${it.name ?? ''} ${it.category ?? ''}`.toLowerCase();
+        return txt.includes(q);
+      });
+
+  const grouped = displayedItems.reduce<Record<string, RestaurantItem[]>>((acc, it) => {
     const cat = (it.category || t('restaurant.uncategorized')).trim();
     acc[cat] = acc[cat] || [];
     acc[cat].push(it);
     return acc;
   }, {});
   const categories = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
+  const displayedHistory = !q
+    ? history
+    : history.filter((o) => {
+        const itemsTxt = (o.items || []).map((it) => `${it.name} x${it.quantity}`).join(', ');
+        const txt = `${o.paymentMethod} ${o.servedBy ?? ''} ${itemsTxt}`.toLowerCase();
+        return txt.includes(q);
+      });
 
   return (
     <div>
@@ -269,12 +286,12 @@ export default function RestaurantPage() {
                 <tr>
                   <td className="p-3 text-slate-500" colSpan={5}>{t('common.loading')}</td>
                 </tr>
-              ) : history.length === 0 ? (
+              ) : displayedHistory.length === 0 ? (
                 <tr>
                   <td className="p-3 text-slate-500" colSpan={5}>{t('common.noItems')}</td>
                 </tr>
               ) : (
-                history.map((o) => (
+                displayedHistory.map((o) => (
                   <tr key={o.id} className="border-t align-top">
                     <td className="p-3 whitespace-nowrap">{new Date(o.createdAt).toLocaleString()}</td>
                     <td className="p-3 text-slate-700">

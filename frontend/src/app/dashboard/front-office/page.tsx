@@ -5,6 +5,7 @@ import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
 import { CalendarView } from './CalendarView';
+import { useSearch } from '@/store/search';
 
 type Room = { id: string; roomNumber: string; roomName?: string; status: string; category: { id: string; name: string; pricePerNight: string } };
 type Category = { id: string; name: string; pricePerNight: string };
@@ -41,6 +42,7 @@ const PAYMENT_MODES = [
 export default function FrontOfficePage() {
   const { token, user } = useAuth();
   const { t } = useTranslation();
+  const searchQuery = useSearch((s) => s.query);
   const [categories, setCategories] = useState<Category[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -183,9 +185,27 @@ export default function FrontOfficePage() {
 
   if (loading) return <div className="text-slate-500">{t('common.loading')}</div>;
 
-  const activeFolios = bookings.filter((b) => b.status === 'CHECKED_IN');
-  const historyBookings = bookings.filter((b) => b.status === 'CHECKED_OUT' || b.status === 'CANCELLED');
-  const activeBookings = bookings.filter((b) => ['CONFIRMED', 'CHECKED_IN', 'RESERVED'].includes(b.status));
+  const q = (searchQuery || '').trim().toLowerCase();
+  const matchesBooking = (b: Booking) => {
+    if (!q) return true;
+    const parts = [
+      b.guestName,
+      b.guestPhone ?? '',
+      b.room?.roomNumber ?? '',
+      b.room?.roomName ?? '',
+      b.status ?? '',
+      b.paymentMode ?? '',
+      b.folioNumber ?? '',
+      b.servedBy ?? '',
+    ]
+      .join(' ')
+      .toLowerCase();
+    return parts.includes(q);
+  };
+
+  const activeFolios = bookings.filter((b) => b.status === 'CHECKED_IN').filter(matchesBooking);
+  const historyBookings = bookings.filter((b) => b.status === 'CHECKED_OUT' || b.status === 'CANCELLED').filter(matchesBooking);
+  const activeBookings = bookings.filter((b) => ['CONFIRMED', 'CHECKED_IN', 'RESERVED'].includes(b.status)).filter(matchesBooking);
 
   return (
     <div className="min-w-0">
@@ -193,9 +213,7 @@ export default function FrontOfficePage() {
       {isManager && (
         <p className="text-xs sm:text-sm text-slate-500 mb-2">{t('frontOffice.supervisoryView')}</p>
       )}
-      {!isManager && (
-        <p className="text-xs sm:text-sm text-slate-500 mb-2">{t('frontOffice.operationalView')}</p>
-      )}
+      {!isManager && null}
 
       {(activeTab === 'bookings' || activeTab === 'history') && (
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
@@ -919,6 +937,7 @@ function BookingList({
   t: (k: string) => string;
 }) {
   const vacantRooms = rooms.filter((r) => r.status === 'VACANT');
+  const isHistory = bookings.length > 0 && bookings.every((b) => b.status === 'CHECKED_OUT' || b.status === 'CANCELLED');
 
   async function checkIn(id: string) {
     try {
@@ -968,6 +987,58 @@ function BookingList({
     } catch (e) {
       alert((e as Error).message);
     }
+  }
+
+  if (isHistory) {
+    return (
+      <div className="bg-white border rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-[900px] w-full text-sm">
+            <thead className="bg-slate-50 border-b">
+              <tr className="text-left text-slate-600">
+                <th className="p-3 font-medium">{t('frontOffice.guestName')}</th>
+                <th className="p-3 font-medium">{t('frontOffice.room')}</th>
+                <th className="p-3 font-medium">{t('frontOffice.checkIn')}</th>
+                <th className="p-3 font-medium">{t('frontOffice.checkOut')}</th>
+                <th className="p-3 font-medium">{t('frontOffice.nights')}</th>
+                <th className="p-3 font-medium">{t('frontOffice.total')}</th>
+                <th className="p-3 font-medium">{t('frontOffice.status')}</th>
+                <th className="p-3 font-medium">{t('frontOffice.folio')}</th>
+                <th className="p-3 font-medium">{t('frontOffice.servedBy')}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {bookings.map((b) => (
+                <tr key={b.id} className="hover:bg-slate-50">
+                  <td className="p-3">
+                    <div className="font-medium text-slate-800">{b.guestName}</div>
+                    {b.guestPhone && <div className="text-xs text-slate-500">{b.guestPhone}</div>}
+                  </td>
+                  <td className="p-3">
+                    <div className="font-medium">{b.room.roomNumber}</div>
+                    {b.room.roomName && <div className="text-xs text-slate-500">{b.room.roomName}</div>}
+                  </td>
+                  <td className="p-3 text-slate-700">{new Date(b.checkIn).toLocaleDateString()}</td>
+                  <td className="p-3 text-slate-700">{new Date(b.checkOut).toLocaleDateString()}</td>
+                  <td className="p-3 text-slate-700">{b.nights}</td>
+                  <td className="p-3 font-medium">{formatTzs(parseFloat(b.totalAmount))}</td>
+                  <td className="p-3">
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
+                      b.status === 'CANCELLED' ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-700'
+                    }`}>
+                      {b.status}
+                    </span>
+                  </td>
+                  <td className="p-3 text-slate-700">{b.folioNumber ?? b.id}</td>
+                  <td className="p-3 text-slate-700">{b.servedBy ?? '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {bookings.length === 0 && <p className="text-slate-500 p-4">{t('frontOffice.noBookings')}</p>}
+      </div>
+    );
   }
 
   return (
