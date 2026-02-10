@@ -20,11 +20,32 @@ export class HousekeepingService {
     businessId: string,
     roomId: string,
     status: string,
+    actor?: { userId: string; role: string; workerId?: string | null; workerName?: string | null },
   ) {
-    return this.prisma.room.update({
+    const res = await this.prisma.room.update({
       where: { id: roomId, businessId },
       data: { status },
     });
+    if (actor?.userId) {
+      try {
+        await this.prisma.auditLog.create({
+          data: {
+            userId: actor.userId,
+            role: actor.role,
+            businessId,
+            workerId: actor.workerId ?? null,
+            workerName: actor.workerName ?? null,
+            actionType: 'room_status_updated',
+            entityType: 'room',
+            entityId: roomId,
+            metadata: JSON.stringify({ status }),
+          },
+        });
+      } catch {
+        // ignore audit failures
+      }
+    }
+    return res;
   }
 
   /** Submit maintenance or expense request - housekeeping cannot approve */

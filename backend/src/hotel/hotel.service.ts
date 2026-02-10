@@ -9,6 +9,23 @@ const PAYMENT_MODES = ['CASH', 'BANK', 'MPESA', 'TIGOPESA', 'AIRTEL_MONEY'] as c
 export class HotelService {
   constructor(private prisma: PrismaService) {}
 
+  private computePaymentSummary(totalAmount: Decimal, payments: { amount: Decimal }[]) {
+    const total = Number(totalAmount);
+    const paid = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
+    const balance = Math.max(0, total - paid);
+    const paymentStatus =
+      paid <= 0
+        ? 'UNPAID'
+        : balance <= 0
+          ? 'FULLY_PAID'
+          : 'PARTIALLY_PAID';
+    return {
+      paidAmount: paid,
+      balance,
+      paymentStatus,
+    };
+  }
+
   async logAudit(
     userId: string,
     role: string,
@@ -214,8 +231,11 @@ export class HotelService {
       currency?: string;
       paymentMode?: string;
       checkInImmediately?: boolean;
+      paidAmount?: number;
     },
     createdBy: string,
+    createdByRole?: string,
+    createdByWorker?: { workerId: string; workerName: string },
   ) {
     const room = await this.prisma.room.findFirst({
       where: { id: data.roomId, businessId },
@@ -223,41 +243,76 @@ export class HotelService {
     });
     if (!room) throw new NotFoundException('Room not found');
 
-    const totalAmount = data.totalAmount != null && data.totalAmount >= 0
-      ? data.totalAmount
-      : Number(room.category.pricePerNight) * data.nights;
+    const canOverrideTotal = isManagerLevel(createdByRole);
+    const totalAmount =
+      canOverrideTotal && data.totalAmount != null && data.totalAmount >= 0
+        ? data.totalAmount
+        : Number(room.category.pricePerNight) * data.nights;
     const folioNumber = `FOL-${Date.now()}`;
 
     // When checkInImmediately: create as active folio (CHECKED_IN) and room OCCUPIED
     const status = data.checkInImmediately ? 'CHECKED_IN' : 'CONFIRMED';
     const roomStatus = data.checkInImmediately ? 'OCCUPIED' : 'RESERVED';
 
-    const booking = await this.prisma.booking.create({
-      data: {
-        businessId,
-        branchId,
-        roomId: data.roomId,
-        guestName: data.guestName,
-        guestPhone: data.guestPhone,
-        checkIn: data.checkIn,
-        checkOut: data.checkOut,
-        nights: data.nights,
-        totalAmount: new Decimal(totalAmount),
-        currency: data.currency || 'TZS',
-        paymentMode: data.paymentMode,
-        status,
-        folioNumber,
-        createdBy,
-      },
-      include: { room: { include: { category: true } } },
+    const initialPaid = data.paidAmount != null ? Number(data.paidAmount) : 0;
+    if (initialPaid < 0) throw new NotFoundException('Invalid paid amount');
+    if (initialPaid > 0 && !PAYMENT_MODES.includes((data.paymentMode || '') as any)) {
+      throw new NotFoundException('Invalid payment mode');
+    }
+    if (initialPaid > totalAmount) {
+      throw new NotFoundException('Paid amount cannot exceed total amount');
+    }
+
+    const booking = await this.prisma.$transaction(async (tx) => {
+      const b = await tx.booking.create({
+        data: {
+          businessId,
+          branchId,
+          roomId: data.roomId,
+          guestName: data.guestName,
+          guestPhone: data.guestPhone,
+          checkIn: data.checkIn,
+          checkOut: data.checkOut,
+          nights: data.nights,
+          totalAmount: new Decimal(totalAmount),
+          currency: data.currency || 'TZS',
+          paymentMode: data.paymentMode,
+          status,
+          folioNumber,
+          createdBy,
+        },
+        include: { room: { include: { category: true } } },
+      });
+
+      await tx.room.update({
+        where: { id: data.roomId },
+        data: { status: roomStatus },
+      });
+
+      if (initialPaid > 0) {
+        await tx.folioPayment.create({
+          data: {
+            bookingId: b.id,
+            amount: new Decimal(initialPaid),
+            paymentMode: data.paymentMode!,
+            createdBy,
+            createdByRole: createdByRole || null,
+            createdByWorkerId: createdByWorker?.workerId ?? null,
+            createdByWorkerName: createdByWorker?.workerName ?? null,
+          },
+        });
+      }
+      return b;
     });
 
-    await this.prisma.room.update({
-      where: { id: data.roomId },
-      data: { status: roomStatus },
-    });
-
-    return booking;
+    const payments = initialPaid > 0 ? [{ amount: new Decimal(initialPaid) }] : [];
+    const summary = this.computePaymentSummary(new Decimal(totalAmount), payments);
+    return {
+      ...booking,
+      paidAmount: summary.paidAmount.toFixed(2),
+      balance: summary.balance.toFixed(2),
+      paymentStatus: summary.paymentStatus,
+    };
   }
 
   async addPayment(
@@ -265,17 +320,23 @@ export class HotelService {
     businessId: string,
     data: { amount: number; paymentMode: string },
     createdBy: string,
+    createdByRole?: string,
+    createdByWorker?: { workerId: string; workerName: string },
   ) {
     const b = await this.prisma.booking.findFirst({
       where: { id: bookingId, businessId },
       include: { payments: true },
     });
     if (!b) throw new NotFoundException('Booking not found');
-    if (b.status !== 'CHECKED_IN') {
-      throw new NotFoundException('Can only add payments to checked-in bookings');
+    if (b.status === 'CANCELLED' || b.status === 'CHECKED_OUT') {
+      throw new NotFoundException('Cannot add payments to this booking status');
     }
     if (!PAYMENT_MODES.includes(data.paymentMode as any)) {
       throw new NotFoundException('Invalid payment mode');
+    }
+    const summary = this.computePaymentSummary(b.totalAmount, b.payments);
+    if (data.amount > summary.balance + 0.0001) {
+      throw new NotFoundException('Payment exceeds remaining balance');
     }
     await this.prisma.folioPayment.create({
       data: {
@@ -283,6 +344,9 @@ export class HotelService {
         amount: new Decimal(data.amount),
         paymentMode: data.paymentMode,
         createdBy,
+        createdByRole: createdByRole || null,
+        createdByWorkerId: createdByWorker?.workerId ?? null,
+        createdByWorkerName: createdByWorker?.workerName ?? null,
       },
     });
     return { message: 'Payment added' };
@@ -339,7 +403,7 @@ export class HotelService {
     }
     const bookings = await this.prisma.booking.findMany({
       where,
-      include: { room: { include: { category: true } } },
+      include: { room: { include: { category: true } }, payments: true },
       orderBy: { createdAt: 'desc' },
     });
     const creatorIds = [...new Set(bookings.map((b) => b.createdBy).filter(Boolean) as string[])];
@@ -350,10 +414,16 @@ export class HotelService {
         })
       : [];
     const userMap = new Map(users.map((u) => [u.id, u.email]));
-    return bookings.map((b) => ({
-      ...b,
-      servedBy: b.createdBy ? userMap.get(b.createdBy) ?? b.createdBy : null,
-    }));
+    return bookings.map((b) => {
+      const summary = this.computePaymentSummary(b.totalAmount, b.payments || []);
+      return {
+        ...b,
+        servedBy: b.createdBy ? userMap.get(b.createdBy) ?? b.createdBy : null,
+        paidAmount: summary.paidAmount.toFixed(2),
+        balance: summary.balance.toFixed(2),
+        paymentStatus: summary.paymentStatus,
+      };
+    });
   }
 
   async cancelBooking(bookingId: string, businessId: string) {
@@ -468,7 +538,7 @@ export class HotelService {
     } else if (status === 'CHECKED_OUT') {
       await this.prisma.room.update({
         where: { id: b.roomId },
-        data: { status: 'VACANT' },
+        data: { status: 'UNDER_MAINTENANCE' },
       });
     }
     return { message: 'Status updated' };
@@ -487,7 +557,7 @@ export class HotelService {
     });
     await this.prisma.room.update({
       where: { id: b.roomId },
-      data: { status: 'VACANT' },
+      data: { status: 'UNDER_MAINTENANCE' },
     });
     return { message: 'Checked out' };
   }

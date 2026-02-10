@@ -195,6 +195,9 @@ model FolioPayment {
   paymentMode String   // CASH, BANK, MPESA, TIGOPESA, AIRTEL_MONEY
   createdAt  DateTime @default(now())
   createdBy  String?
+  createdByRole String?
+  createdByWorkerId String?
+  createdByWorkerName String?
 
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 

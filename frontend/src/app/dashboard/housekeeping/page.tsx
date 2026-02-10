@@ -9,11 +9,12 @@ import { useSearch } from '@/store/search';
 type Room = { id: string; roomNumber: string; status: string; category: { name: string } };
 
 export default function HousekeepingPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { t } = useTranslation();
   const searchQuery = useSearch((s) => s.query);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
+  const isManager = ['MANAGER', 'ADMIN', 'OWNER'].includes(user?.role || '');
 
   useEffect(() => {
     if (!token) return;
@@ -53,15 +54,26 @@ export default function HousekeepingPage() {
           <div key={r.id} className="bg-white border rounded p-4">
             <div className="font-medium">{r.roomNumber}</div>
             <div className="text-sm text-slate-600">{r.category.name}</div>
-            <div className="text-xs mb-2">{r.status}</div>
+            <div className="text-xs mb-2">
+              {r.status === 'UNDER_MAINTENANCE' ? t('housekeeping.needsCleaning') : r.status}
+            </div>
+            {r.status === 'UNDER_MAINTENANCE' && (
+              <button
+                type="button"
+                onClick={() => updateStatus(r.id, 'VACANT')}
+                className="w-full mb-2 px-3 py-2 bg-teal-600 text-white rounded text-sm"
+              >
+                {t('housekeeping.approveCleaned')}
+              </button>
+            )}
             <select
               value={r.status}
               onChange={(e) => updateStatus(r.id, e.target.value)}
               className="w-full text-sm px-2 py-1 border rounded"
             >
               <option value="VACANT">{t('overview.vacant')}</option>
-              <option value="OCCUPIED">{t('overview.occupied')}</option>
-              <option value="RESERVED">{t('overview.reserved')}</option>
+              {isManager && <option value="OCCUPIED">{t('overview.occupied')}</option>}
+              {isManager && <option value="RESERVED">{t('overview.reserved')}</option>}
               <option value="UNDER_MAINTENANCE">{t('overview.underMaintenance')}</option>
             </select>
           </div>

@@ -41,7 +41,7 @@ export class HousekeepingController {
 
   @Put('rooms/:id/status')
   @UseGuards(RolesGuard)
-  @Roles('MANAGER', 'HOUSEKEEPING', 'FRONT_OFFICE')
+  @Roles('MANAGER', 'HOUSEKEEPING')
   async updateRoomStatus(
     @CurrentUser() user: any,
     @Param('id') roomId: string,
@@ -51,6 +51,12 @@ export class HousekeepingController {
       user.businessId,
       roomId,
       dto.status,
+      {
+        userId: user.sub,
+        role: user.role,
+        workerId: user.workerId ?? null,
+        workerName: user.workerName ?? null,
+      },
     );
   }
 

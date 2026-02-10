@@ -71,6 +71,10 @@ class CreateBookingDto {
   @IsString()
   @IsOptional()
   paymentMode?: string;
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  paidAmount?: number;
   @IsOptional()
   @IsBoolean()
   checkInImmediately?: boolean; // if true, create as CHECKED_IN (active folio) and room OCCUPIED
@@ -214,8 +218,11 @@ export class HotelController {
         currency: dto.currency,
         paymentMode: dto.paymentMode,
         checkInImmediately: dto.checkInImmediately,
+        paidAmount: dto.paidAmount,
       },
       user.sub,
+      user.role,
+      user.workerId && user.workerName ? { workerId: user.workerId, workerName: user.workerName } : undefined,
     );
     await this.hotel.logAudit(user.sub, user.role || 'USER', user.businessId, 'booking_created', 'booking', booking.id, undefined, user.workerId && user.workerName ? { workerId: user.workerId, workerName: user.workerName } : undefined);
     return booking;
@@ -314,6 +321,8 @@ export class HotelController {
       user.businessId,
       { amount: dto.amount, paymentMode: dto.paymentMode },
       user.sub,
+      user.role,
+      user.workerId && user.workerName ? { workerId: user.workerId, workerName: user.workerName } : undefined,
     );
     await this.hotel.logAudit(user.sub, user.role || 'USER', user.businessId, 'payment_added', 'folio', id, { amount: dto.amount, paymentMode: dto.paymentMode }, user.workerId && user.workerName ? { workerId: user.workerId, workerName: user.workerName } : undefined);
     return res;

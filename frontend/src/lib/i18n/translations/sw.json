@@ -141,6 +141,11 @@
   "frontOffice.viewPayments": "Angalia Malipo",
   "frontOffice.paymentHistory": "Historia ya malipo",
   "frontOffice.noPayments": "Hakuna malipo yaliyorekodiwa",
+  "frontOffice.paymentModeLabel": "Njia ya malipo",
+  "frontOffice.paidAmount": "Kiasi kilicholipwa",
+  "frontOffice.remaining": "Kiasi kilichobaki",
+  "frontOffice.payFull": "Lipa yote",
+  "frontOffice.payLater": "Lipa baadaye",
   "frontOffice.changeRoom": "Badilisha chumba",
   "frontOffice.overrideStatus": "Badilisha hali",
   "frontOffice.confirmed": "Imethibitishwa",
@@ -252,6 +257,8 @@
   "restaurant.uncategorized": "Bila kundi",
 
   "housekeeping.title": "Usimamizi wa Nyumba",
+  "housekeeping.needsCleaning": "Ameondoka — inahitaji usafi",
+  "housekeeping.approveCleaned": "Thibitisha imesafishwa (iwe tupu)",
 
   "finance.title": "Fedha",
   "finance.onlyManagers": "Wasimamizi tu wanaweza kufikia jumla za fedha na ripoti.",

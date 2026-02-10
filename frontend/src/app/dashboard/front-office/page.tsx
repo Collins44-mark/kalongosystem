@@ -18,6 +18,9 @@ type Booking = {
   checkOut: string;
   nights: number;
   totalAmount: string;
+  paidAmount?: string;
+  balance?: string;
+  paymentStatus?: 'UNPAID' | 'PARTIALLY_PAID' | 'FULLY_PAID';
   currency?: string;
   paymentMode?: string;
   status: string;
@@ -1049,11 +1052,25 @@ function BookingList({
             <div className="font-medium">{b.guestName}</div>
             <div className="text-sm text-slate-600">
               {b.room.roomNumber} · {b.nights} nights · {b.status}
+              {b.paymentStatus && (
+                <span className={`ml-2 inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
+                  b.paymentStatus === 'FULLY_PAID' ? 'bg-green-50 text-green-700'
+                  : b.paymentStatus === 'PARTIALLY_PAID' ? 'bg-amber-50 text-amber-700'
+                  : 'bg-slate-100 text-slate-700'
+                }`}>
+                  {b.paymentStatus.replace('_', ' ')}
+                </span>
+              )}
             </div>
             <div className="text-xs text-slate-500">
               {new Date(b.checkIn).toLocaleDateString()} - {new Date(b.checkOut).toLocaleDateString()}
               {b.servedBy && ` · Served by: ${b.servedBy}`}
             </div>
+            {(b.balance != null || b.paidAmount != null) && (
+              <div className="text-xs text-slate-500 mt-1">
+                Paid: {formatTzs(parseFloat(b.paidAmount || '0'))} · Balance: {formatTzs(parseFloat(b.balance || '0'))}
+              </div>
+            )}
           </div>
           <div className="text-sm font-medium flex-shrink-0">{formatTzs(parseFloat(b.totalAmount))}</div>
           {!readOnly && (
@@ -1156,7 +1173,14 @@ function ExtendStayModal({ booking, token, onDone, t }: { booking: Booking; toke
   );
 }
 
-type FolioPayment = { id: string; amount: string; paymentMode: string; createdAt: string };
+type FolioPayment = {
+  id: string;
+  amount: string;
+  paymentMode: string;
+  createdAt: string;
+  createdByRole?: string | null;
+  createdByWorkerName?: string | null;
+};
 
 function AddPaymentModal({ booking, token, onDone, t }: { booking: Booking; token: string; onDone: () => void; t: (k: string) => string }) {
   const [show, setShow] = useState(false);
@@ -1259,9 +1283,16 @@ function ViewPaymentsModal({ booking, token, t }: { booking: Booking; token: str
             ) : (
               <ul className="space-y-2">
                 {payments.map((p) => (
-                  <li key={p.id} className="flex justify-between text-sm py-2 border-b">
-                    <span>{formatTzs(parseFloat(p.amount))} · {PAYMENT_MODES.find(m => m.value === p.paymentMode)?.label ?? p.paymentMode}</span>
-                    <span className="text-slate-500 text-xs">{new Date(p.createdAt).toLocaleString()}</span>
+                  <li key={p.id} className="flex justify-between text-sm py-2 border-b gap-3">
+                    <span className="min-w-0">
+                      <span className="font-medium">{formatTzs(parseFloat(p.amount))}</span> · {PAYMENT_MODES.find(m => m.value === p.paymentMode)?.label ?? p.paymentMode}
+                      {(p.createdByWorkerName || p.createdByRole) && (
+                        <span className="block text-xs text-slate-500 truncate">
+                          Received by: {[p.createdByRole, p.createdByWorkerName].filter(Boolean).join(' | ')}
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-slate-500 text-xs whitespace-nowrap">{new Date(p.createdAt).toLocaleString()}</span>
                   </li>
                 ))}
               </ul>
@@ -1290,6 +1321,16 @@ function FolioList({
   t: (k: string) => string;
 }) {
   const vacantRooms = rooms.filter((r) => r.status === 'VACANT');
+  const badge = (b: Booking) => {
+    const status = b.paymentStatus || 'UNPAID';
+    const styles =
+      status === 'FULLY_PAID'
+        ? 'bg-green-50 text-green-700'
+        : status === 'PARTIALLY_PAID'
+          ? 'bg-amber-50 text-amber-700'
+          : 'bg-slate-100 text-slate-700';
+    return <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${styles}`}>{status.replace('_', ' ')}</span>;
+  };
 
   async function checkOut(id: string) {
     try {
@@ -1329,6 +1370,12 @@ function FolioList({
             <div className="text-left sm:text-right">
               <div className="font-semibold">{formatTzs(parseFloat(b.totalAmount))}</div>
               <div className="text-xs text-slate-500">{t('frontOffice.totalCharges')}</div>
+              <div className="mt-1 flex items-center gap-2 justify-start sm:justify-end">
+                {badge(b)}
+                <span className="text-xs text-slate-500">
+                  Paid: {formatTzs(parseFloat(b.paidAmount || '0'))} · Balance: {formatTzs(parseFloat(b.balance || '0'))}
+                </span>
+              </div>
             </div>
           </div>
           <div className="flex flex-wrap gap-2 pt-3 border-t">
@@ -1372,6 +1419,7 @@ function NewBookingForm({
   onDone: () => void;
 }) {
   const tokenFromStore = useAuth((s) => s.token);
+  const user = useAuth((s) => s.user);
   const activeToken = (token || tokenFromStore || '') as string;
   const [categoryId, setCategoryId] = useState('');
   const [roomId, setRoomId] = useState('');
@@ -1382,8 +1430,10 @@ function NewBookingForm({
   const [currency, setCurrency] = useState('TZS');
   const [paymentMode, setPaymentMode] = useState('');
   const [totalOverride, setTotalOverride] = useState<string>('');
+  const [paidAmount, setPaidAmount] = useState<string>('0');
   const [checkInImmediately, setCheckInImmediately] = useState(true);
   const [loading, setLoading] = useState(false);
+  const isManager = ['MANAGER', 'ADMIN', 'OWNER'].includes(user?.role || '');
 
   const category = categories.find((c) => c.id === categoryId);
   useEffect(() => {
@@ -1401,10 +1451,17 @@ function NewBookingForm({
   const totalTzs = totalOverride ? parseFloat(totalOverride.replace(/[^\d.]/g, '')) || calculatedTotal : calculatedTotal;
   const curr = CURRENCIES.find((c) => c.code === currency) || CURRENCIES[0];
   const totalDisplay = totalTzs / curr.rate;
+  const totalForSave = isManager ? totalTzs : calculatedTotal;
+  const paidTzs = Math.max(0, parseFloat((paidAmount || '0').replace(/[^\d.]/g, '')) || 0);
+  const remainingTzs = Math.max(0, totalForSave - paidTzs);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!roomId || nights < 1) return;
+    if (paidTzs > 0 && !paymentMode) {
+      alert('Please select payment mode');
+      return;
+    }
     setLoading(true);
     try {
       await api('/hotel/bookings', {
@@ -1417,9 +1474,10 @@ function NewBookingForm({
           checkIn,
           checkOut,
           nights,
-          totalAmount: totalTzs,
+          totalAmount: totalForSave,
           currency,
-          paymentMode: paymentMode || undefined,
+          paymentMode: paidTzs > 0 ? paymentMode : (paymentMode || undefined),
+          paidAmount: paidTzs > 0 ? paidTzs : 0,
           checkInImmediately: checkInImmediately || undefined,
         }),
       });
@@ -1495,7 +1553,7 @@ function NewBookingForm({
           </select>
         </div>
         <div>
-          <label className="block text-sm mb-1">Payment mode (optional)</label>
+          <label className="block text-sm mb-1">{t('frontOffice.paymentModeLabel')}</label>
           <select value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)} className="w-full px-3 py-2.5 border rounded text-base">
             <option value="">—</option>
             {PAYMENT_MODES.map((p) => (
@@ -1509,16 +1567,55 @@ function NewBookingForm({
         <div>Price/night: {formatCurrency(pricePerNight, 'TZS')}</div>
         <div>
           <label className="block text-sm mb-1">{t('frontOffice.totalAmount')}</label>
-          <input
-            type="text"
-            inputMode="decimal"
-            value={totalOverride || (calculatedTotal ? String(Math.round(calculatedTotal)) : '')}
-            onChange={(e) => setTotalOverride(e.target.value.replace(/[^\d.]/g, ''))}
-            placeholder={calculatedTotal ? String(Math.round(calculatedTotal)) : '0'}
-            className="w-full px-3 py-2 border rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-          />
+          {isManager ? (
+            <input
+              type="text"
+              inputMode="decimal"
+              value={totalOverride || (calculatedTotal ? String(Math.round(calculatedTotal)) : '')}
+              onChange={(e) => setTotalOverride(e.target.value.replace(/[^\d.]/g, ''))}
+              placeholder={calculatedTotal ? String(Math.round(calculatedTotal)) : '0'}
+              className="w-full px-3 py-2 border rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+          ) : (
+            <input
+              type="text"
+              readOnly
+              value={calculatedTotal ? String(Math.round(calculatedTotal)) : '0'}
+              className="w-full px-3 py-2 border rounded bg-white text-slate-700"
+            />
+          )}
         </div>
-        <div className="font-medium">{t('frontOffice.display')}: {formatCurrency(totalDisplay, currency)}</div>
+        <div className="font-medium">{t('frontOffice.display')}: {formatCurrency((isManager ? totalTzs : calculatedTotal) / curr.rate, currency)}</div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-200">
+          <div>
+            <label className="block text-sm mb-1">{t('frontOffice.paidAmount')} (TZS)</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={paidAmount}
+              onChange={(e) => setPaidAmount(e.target.value)}
+              className="w-full px-3 py-2 border rounded"
+            />
+          </div>
+          <div>
+            <label className="block text-sm mb-1">{t('frontOffice.remaining')} (TZS)</label>
+            <input
+              type="text"
+              readOnly
+              value={String(Math.max(0, Math.round(remainingTzs)))}
+              className="w-full px-3 py-2 border rounded bg-white text-slate-700"
+            />
+          </div>
+          <div className="flex items-end gap-2">
+            <button type="button" onClick={() => setPaidAmount(String(Math.round(totalForSave)))} className="flex-1 px-3 py-2 bg-slate-200 rounded text-sm">
+              {t('frontOffice.payFull')}
+            </button>
+            <button type="button" onClick={() => setPaidAmount('0')} className="flex-1 px-3 py-2 bg-slate-200 rounded text-sm">
+              {t('frontOffice.payLater')}
+            </button>
+          </div>
+        </div>
       </div>
       <button type="submit" disabled={loading} className="px-4 py-3 bg-teal-600 text-white rounded touch-manipulation min-h-[44px] w-full sm:w-auto">
         {t('frontOffice.createBooking')}

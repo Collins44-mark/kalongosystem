@@ -253,7 +253,17 @@ export default function DashboardLayout({
           <div className="flex items-center gap-2 min-w-0">
             <button
               type="button"
-              onClick={() => router.push(defaultDashboardRoute(user.role))}
+              onClick={() => {
+                try {
+                  if (typeof window !== 'undefined' && window.history.length > 1) {
+                    router.back();
+                  } else {
+                    router.push(defaultDashboardRoute(user.role));
+                  }
+                } catch {
+                  router.push(defaultDashboardRoute(user.role));
+                }
+              }}
               className="p-1.5 rounded hover:bg-slate-100 text-slate-600 flex-shrink-0"
               aria-label={t('common.back')}
               title={t('common.back')}
@@ -263,9 +273,14 @@ export default function DashboardLayout({
               </svg>
             </button>
             {isAdmin && <NotificationsPanel />}
-            <span className="text-xs sm:text-sm text-slate-600 truncate font-medium uppercase">
+            <button
+              type="button"
+              onClick={() => router.push(defaultDashboardRoute(user.role))}
+              className="text-xs sm:text-sm text-slate-600 truncate font-medium uppercase hover:underline text-left"
+              title={t('nav.overview')}
+            >
               {displayWorker ? `${displayRole} | ${displayWorker}` : displayRole}
-            </span>
+            </button>
           </div>
           <div className="relative flex-shrink-0 flex items-center gap-2">
             <HeaderSearch />
