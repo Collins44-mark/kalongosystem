@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
@@ -29,6 +29,7 @@ export default function FinancePage() {
   const [to, setTo] = useState('');
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>('cards');
+  const viewHistory = useRef<View[]>([]);
   const [selectedSector, setSelectedSector] = useState<'bar' | 'restaurant' | 'hotel'>('bar');
   const [salesHistory, setSalesHistory] = useState<SalesRow[]>([]);
   const [expenseDetail, setExpenseDetail] = useState<{ byCategory: Record<string, number>; expenses: ExpenseRow[] } | null>(null);
@@ -54,10 +55,35 @@ export default function FinancePage() {
       .finally(() => setLoading(false));
   }, [token, isManager, from, to]);
 
+  function goView(next: View) {
+    setView((current) => {
+      if (current && current !== next) viewHistory.current.push(current);
+      return next;
+    });
+  }
+
+  // Support "back" within this page (internal views) from the global header back button.
+  useEffect(() => {
+    const onBack = (e: Event) => {
+      const prev = viewHistory.current.pop();
+      if (prev) {
+        setView(prev);
+        e.preventDefault();
+        return;
+      }
+      if (view !== 'cards') {
+        setView('cards');
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('hms-back', onBack);
+    return () => window.removeEventListener('hms-back', onBack);
+  }, [view]);
+
   async function loadRevenueSector(sector: 'bar' | 'restaurant' | 'hotel') {
     if (!token) return;
     setSelectedSector(sector);
-    setView('revenue-sector');
+    goView('revenue-sector');
     const params = new URLSearchParams();
     if (from) params.set('from', from);
     if (to) params.set('to', to);
@@ -67,7 +93,7 @@ export default function FinancePage() {
 
   async function loadExpenseDetail() {
     if (!token) return;
-    setView('expenses');
+    goView('expenses');
     const params = new URLSearchParams();
     if (from) params.set('from', from);
     if (to) params.set('to', to);
@@ -127,7 +153,7 @@ export default function FinancePage() {
         <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="px-3 py-2 border rounded text-sm" />
         <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="px-3 py-2 border rounded text-sm" />
         {(view !== 'cards') && (
-          <button onClick={() => setView('cards')} className="px-3 py-1 text-sm text-teal-600 hover:underline">
+          <button onClick={() => goView('cards')} className="px-3 py-1 text-sm text-teal-600 hover:underline">
             ← {t('common.back')}
           </button>
         )}
@@ -136,14 +162,14 @@ export default function FinancePage() {
       {view === 'cards' && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <button
-            onClick={() => { setView('revenue'); }}
+            onClick={() => { goView('revenue'); }}
             className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
           >
             <div className="text-sm text-slate-500">{t('overview.totalRevenue')}</div>
             <div className="text-xl font-semibold">{formatTzs(d.totalRevenue)}</div>
           </button>
           <button
-            onClick={() => { setView('expenses'); void loadExpenseDetail(); }}
+            onClick={() => { goView('expenses'); void loadExpenseDetail(); }}
             className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
           >
             <div className="text-sm text-slate-500">{t('overview.totalExpenses')}</div>
@@ -264,7 +290,7 @@ export default function FinancePage() {
       {(isManagerLevel(user?.role) || user?.role === 'FINANCE') && (
         <div className="bg-white border rounded p-4 max-w-md">
           <h2 className="font-medium mb-2">{t('finance.recordExpense')}</h2>
-          <CreateExpenseForm token={token} t={t} onCreated={() => { setData(null); setView('cards'); setExpenseDetail(null); }} />
+          <CreateExpenseForm token={token} t={t} onCreated={() => { setData(null); goView('cards'); setExpenseDetail(null); }} />
         </div>
       )}
     </div>

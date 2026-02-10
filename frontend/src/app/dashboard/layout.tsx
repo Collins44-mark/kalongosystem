@@ -255,6 +255,12 @@ export default function DashboardLayout({
               type="button"
               onClick={() => {
                 try {
+                  // Allow pages to handle "back" within the same route (tabs, internal views).
+                  if (typeof window !== 'undefined') {
+                    const ev = new CustomEvent('hms-back', { cancelable: true });
+                    const notCancelled = window.dispatchEvent(ev);
+                    if (!notCancelled) return;
+                  }
                   if (typeof window !== 'undefined' && window.history.length > 1) {
                     router.back();
                   } else {

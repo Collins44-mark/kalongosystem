@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
@@ -57,6 +57,7 @@ export default function FrontOfficePage() {
   const [roomStatusFilter, setRoomStatusFilter] = useState<string>('all');
   const [enableDragDropBooking, setEnableDragDropBooking] = useState(false);
   const [roomsView, setRoomsView] = useState<'grid' | 'calendar'>('grid');
+  const tabHistory = useRef<string[]>([]);
 
   const isManager = ['MANAGER', 'ADMIN', 'OWNER'].includes(user?.role || '');
 
@@ -105,6 +106,31 @@ export default function FrontOfficePage() {
     { id: 'new', labelKey: 'frontOffice.newBooking' },
   ];
   const tabs = isManager ? managerTabs : staffTabs;
+
+  // Support "back" within this page (tabs / calendar view) from the global header back button.
+  useEffect(() => {
+    const onBack = (e: Event) => {
+      if (roomsView === 'calendar') {
+        setRoomsView('grid');
+        e.preventDefault();
+        return;
+      }
+      const prev = tabHistory.current.pop();
+      if (prev) {
+        setActiveTab(prev);
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('hms-back', onBack);
+    return () => window.removeEventListener('hms-back', onBack);
+  }, [roomsView]);
+
+  function goTab(tabId: string) {
+    setActiveTab((current) => {
+      if (current && current !== tabId) tabHistory.current.push(current);
+      return tabId;
+    });
+  }
 
   useEffect(() => {
     if (!token) return;
@@ -250,7 +276,7 @@ export default function FrontOfficePage() {
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => goTab(tab.id)}
             className={`px-3 sm:px-4 py-2 rounded text-sm whitespace-nowrap touch-manipulation min-h-[44px] sm:min-h-0 flex-shrink-0 ${activeTab === tab.id ? 'bg-teal-600 text-white' : 'bg-slate-200'}`}
           >
             {t(tab.labelKey)}
@@ -340,7 +366,7 @@ export default function FrontOfficePage() {
           categories={categories}
           rooms={rooms}
           t={t}
-          onDone={() => { setActiveTab('folios'); refresh(); }}
+          onDone={() => { goTab('folios'); refresh(); }}
         />
       )}
 
