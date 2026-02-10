@@ -264,13 +264,14 @@ export default function DashboardLayout({
                   router.push(defaultDashboardRoute(user.role));
                 }
               }}
-              className="p-1.5 rounded hover:bg-slate-100 text-slate-600 flex-shrink-0"
+              className="px-2 py-1.5 rounded hover:bg-slate-100 text-slate-600 flex-shrink-0 text-xs sm:text-sm inline-flex items-center gap-1"
               aria-label={t('common.back')}
               title={t('common.back')}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
+              <span className="hidden sm:inline">{t('common.back')}</span>
             </button>
             {isAdmin && <NotificationsPanel />}
             <button

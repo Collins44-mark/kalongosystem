@@ -224,32 +224,21 @@ export default function FrontOfficePage() {
             {activeTab === 'bookings' ? t('frontOffice.activeBookings') : t('frontOffice.bookingHistoryLabel')} — {bookingFilter === 'today' ? t('overview.today') : bookingFilter === 'week' ? t('overview.thisWeek') : bookingFilter === 'month' ? t('overview.thisMonth') : bookingDateFrom && bookingDateTo ? `${bookingDateFrom} ${t('common.to')} ${bookingDateTo}` : t('common.selectDates')}
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex rounded-full bg-slate-100 p-1 gap-0.5">
-              {(['today', 'week', 'month'] as const).map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setBookingFilter(f)}
-                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
-                    bookingFilter === f ? 'bg-white text-teal-600 shadow-sm ring-1 ring-teal-200' : 'text-slate-600 hover:text-slate-800'
-                  }`}
-                >
-                  {f === 'today' ? t('overview.today') : f === 'week' ? t('overview.thisWeek') : t('overview.thisMonth')}
-                </button>
-              ))}
-              <button
-                onClick={() => setBookingFilter('bydate')}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  bookingFilter === 'bydate' ? 'bg-white text-teal-600 shadow-sm ring-1 ring-teal-200' : 'text-slate-600 hover:text-slate-800'
-                }`}
-              >
-                {t('overview.byDate')}
-              </button>
-            </div>
+            <select
+              value={bookingFilter}
+              onChange={(e) => setBookingFilter(e.target.value as any)}
+              className="px-3 py-2 border rounded text-sm bg-white"
+            >
+              <option value="today">{t('overview.today')}</option>
+              <option value="week">{t('overview.thisWeek')}</option>
+              <option value="month">{t('overview.thisMonth')}</option>
+              <option value="bydate">{t('overview.byDate')}</option>
+            </select>
             {bookingFilter === 'bydate' && (
               <div className="flex items-center gap-2">
-                <input type="date" value={bookingDateFrom} onChange={(e) => setBookingDateFrom(e.target.value)} className="px-3 py-1.5 rounded-full border border-slate-200 text-sm" />
-                <span className="text-slate-400">to</span>
-                <input type="date" value={bookingDateTo} onChange={(e) => setBookingDateTo(e.target.value)} className="px-3 py-1.5 rounded-full border border-slate-200 text-sm" />
+                <input type="date" value={bookingDateFrom} onChange={(e) => setBookingDateFrom(e.target.value)} className="px-3 py-2 border rounded text-sm bg-white" />
+                <span className="text-slate-400 text-sm">{t('common.to')}</span>
+                <input type="date" value={bookingDateTo} onChange={(e) => setBookingDateTo(e.target.value)} className="px-3 py-2 border rounded text-sm bg-white" />
               </div>
             )}
             <button onClick={refresh} className="px-3 py-1.5 text-sm text-teal-600 hover:underline">{t('common.refresh')}</button>
@@ -451,7 +440,12 @@ function RoomAvailability({
           {roomsByCategory.length > 0 ? (
             roomsByCategory.map(({ category, rooms: catRooms }) => (
               <div key={category.id}>
-                <h3 className="text-sm font-medium text-slate-600 mb-2">{category.name}</h3>
+                <div className="mb-2">
+                  <h3 className="text-sm font-medium text-slate-600">{category.name}</h3>
+                  <div className="text-xs text-slate-500">
+                    {formatTzs(parseFloat(category.pricePerNight || '0'))}/night
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
                   {catRooms.map((r) => (
                     <div
@@ -786,7 +780,12 @@ function RoomSetup({
             {roomsByCategory.map(({ category, rooms: catRooms }) => (
               <div key={category.id} className="border rounded-xl p-4 bg-slate-50/50">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-slate-800">{category.name}</h3>
+                  <div>
+                    <h3 className="font-semibold text-slate-800">{category.name}</h3>
+                    <div className="text-xs text-slate-500">
+                      {formatTzs(parseFloat(category.pricePerNight || '0'))}/night
+                    </div>
+                  </div>
                   <div className="relative">
                     <button
                       type="button"
@@ -1430,7 +1429,6 @@ function NewBookingForm({
   const [currency, setCurrency] = useState('TZS');
   const [paymentMode, setPaymentMode] = useState('');
   const [totalOverride, setTotalOverride] = useState<string>('');
-  const [paidAmount, setPaidAmount] = useState<string>('0');
   const [checkInImmediately, setCheckInImmediately] = useState(true);
   const [loading, setLoading] = useState(false);
   const isManager = ['MANAGER', 'ADMIN', 'OWNER'].includes(user?.role || '');
@@ -1452,16 +1450,10 @@ function NewBookingForm({
   const curr = CURRENCIES.find((c) => c.code === currency) || CURRENCIES[0];
   const totalDisplay = totalTzs / curr.rate;
   const totalForSave = isManager ? totalTzs : calculatedTotal;
-  const paidTzs = Math.max(0, parseFloat((paidAmount || '0').replace(/[^\d.]/g, '')) || 0);
-  const remainingTzs = Math.max(0, totalForSave - paidTzs);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!roomId || nights < 1) return;
-    if (paidTzs > 0 && !paymentMode) {
-      alert('Please select payment mode');
-      return;
-    }
     setLoading(true);
     try {
       await api('/hotel/bookings', {
@@ -1476,8 +1468,7 @@ function NewBookingForm({
           nights,
           totalAmount: totalForSave,
           currency,
-          paymentMode: paidTzs > 0 ? paymentMode : (paymentMode || undefined),
-          paidAmount: paidTzs > 0 ? paidTzs : 0,
+          paymentMode: paymentMode || undefined,
           checkInImmediately: checkInImmediately || undefined,
         }),
       });
@@ -1497,7 +1488,7 @@ function NewBookingForm({
         <select value={categoryId} onChange={(e) => { setCategoryId(e.target.value); setRoomId(''); }} className="w-full px-3 py-2.5 border rounded text-base" required>
           <option value="">Select category</option>
           {categories.map((c) => (
-            <option key={c.id} value={c.id}>{c.name} — {formatCurrency(parseFloat(c.pricePerNight), 'TZS')}/night</option>
+            <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
       </div>
@@ -1586,36 +1577,6 @@ function NewBookingForm({
           )}
         </div>
         <div className="font-medium">{t('frontOffice.display')}: {formatCurrency((isManager ? totalTzs : calculatedTotal) / curr.rate, currency)}</div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-200">
-          <div>
-            <label className="block text-sm mb-1">{t('frontOffice.paidAmount')} (TZS)</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={paidAmount}
-              onChange={(e) => setPaidAmount(e.target.value)}
-              className="w-full px-3 py-2 border rounded"
-            />
-          </div>
-          <div>
-            <label className="block text-sm mb-1">{t('frontOffice.remaining')} (TZS)</label>
-            <input
-              type="text"
-              readOnly
-              value={String(Math.max(0, Math.round(remainingTzs)))}
-              className="w-full px-3 py-2 border rounded bg-white text-slate-700"
-            />
-          </div>
-          <div className="flex items-end gap-2">
-            <button type="button" onClick={() => setPaidAmount(String(Math.round(totalForSave)))} className="flex-1 px-3 py-2 bg-slate-200 rounded text-sm">
-              {t('frontOffice.payFull')}
-            </button>
-            <button type="button" onClick={() => setPaidAmount('0')} className="flex-1 px-3 py-2 bg-slate-200 rounded text-sm">
-              {t('frontOffice.payLater')}
-            </button>
-          </div>
-        </div>
       </div>
       <button type="submit" disabled={loading} className="px-4 py-3 bg-teal-600 text-white rounded touch-manipulation min-h-[44px] w-full sm:w-auto">
         {t('frontOffice.createBooking')}

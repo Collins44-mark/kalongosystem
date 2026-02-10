@@ -39,9 +39,10 @@ export default function HousekeepingPage() {
 
   if (loading) return <div>{t('common.loading')}</div>;
   const q = (searchQuery || '').trim().toLowerCase();
+  const baseRooms = isManager ? rooms : rooms.filter((r) => r.status === 'UNDER_MAINTENANCE');
   const displayed = !q
-    ? rooms
-    : rooms.filter((r) => {
+    ? baseRooms
+    : baseRooms.filter((r) => {
         const txt = `${r.roomNumber} ${r.status} ${r.category?.name ?? ''}`.toLowerCase();
         return txt.includes(q);
       });
@@ -66,16 +67,18 @@ export default function HousekeepingPage() {
                 {t('housekeeping.approveCleaned')}
               </button>
             )}
-            <select
-              value={r.status}
-              onChange={(e) => updateStatus(r.id, e.target.value)}
-              className="w-full text-sm px-2 py-1 border rounded"
-            >
-              <option value="VACANT">{t('overview.vacant')}</option>
-              {isManager && <option value="OCCUPIED">{t('overview.occupied')}</option>}
-              {isManager && <option value="RESERVED">{t('overview.reserved')}</option>}
-              <option value="UNDER_MAINTENANCE">{t('overview.underMaintenance')}</option>
-            </select>
+            {isManager ? (
+              <select
+                value={r.status}
+                onChange={(e) => updateStatus(r.id, e.target.value)}
+                className="w-full text-sm px-2 py-1 border rounded"
+              >
+                <option value="VACANT">{t('overview.vacant')}</option>
+                <option value="OCCUPIED">{t('overview.occupied')}</option>
+                <option value="RESERVED">{t('overview.reserved')}</option>
+                <option value="UNDER_MAINTENANCE">{t('overview.underMaintenance')}</option>
+              </select>
+            ) : null}
           </div>
         ))}
       </div>
