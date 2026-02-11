@@ -1,5 +1,18 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Head } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+
+@Controller()
+export class RootController {
+  @Get()
+  ok() {
+    return { status: 'ok' };
+  }
+
+  @Head()
+  headOk() {
+    return;
+  }
+}
 
 @Controller('health')
 export class HealthController {
