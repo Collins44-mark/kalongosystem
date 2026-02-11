@@ -20,18 +20,25 @@ export class AuthService {
 
   /** Signup: email + password + business_name. Creates User, Business, BusinessUser (MANAGER), Subscription. */
   async signup(email: string, password: string, businessName: string) {
+    const cleanEmail = (email || '').toLowerCase().trim();
+    const cleanPassword = (password || '').trim();
+    const cleanBusinessName = (businessName || '').trim();
+
     const existing = await this.prisma.user.findUnique({
-      where: { email: email.toLowerCase().trim() },
+      where: { email: cleanEmail },
     });
     if (existing) throw new ConflictException('Email already registered');
 
-    const hashed = await bcrypt.hash(password, 10);
+    if (cleanPassword.length < 6) throw new BadRequestException('Password must be at least 6 characters');
+    if (!cleanBusinessName) throw new BadRequestException('business_name required');
+
+    const hashed = await bcrypt.hash(cleanPassword, 10);
     const businessId = await this.generateBusinessCode();
 
     const [user, business, subscription] = await this.prisma.$transaction(async (tx) => {
       const u = await tx.user.create({
         data: {
-          email: email.toLowerCase().trim(),
+          email: cleanEmail,
           password: hashed,
           language: 'en',
         },
@@ -42,7 +49,7 @@ export class AuthService {
         data: {
           businessId,
           businessType: 'HOTEL',
-          name: businessName.trim(),
+          name: cleanBusinessName,
           createdBy: u.id,
         },
       });
@@ -107,8 +114,12 @@ export class AuthService {
 
   /** Login: Business ID + Email + Password. Returns JWT with tenant context. */
   async login(businessId: string, email: string, password: string) {
+    const cleanBusinessId = (businessId || '').toUpperCase().trim();
+    const cleanEmail = (email || '').toLowerCase().trim();
+    const cleanPassword = (password || '').trim();
+
     const user = await this.prisma.user.findUnique({
-      where: { email: email.toLowerCase().trim() },
+      where: { email: cleanEmail },
       select: { id: true, email: true, name: true, language: true, password: true },
     });
     if (!user) throw new UnauthorizedException('Invalid credentials');
@@ -116,13 +127,13 @@ export class AuthService {
     const bu = await this.prisma.businessUser.findFirst({
       where: {
         userId: user.id,
-        business: { businessId: businessId.toUpperCase().trim() },
+        business: { businessId: cleanBusinessId },
       },
       include: { business: true },
     });
     if (!bu) throw new UnauthorizedException('Invalid business or credentials');
 
-    const valid = await bcrypt.compare(password, user.password);
+    const valid = await bcrypt.compare(cleanPassword, user.password);
     if (!valid) throw new UnauthorizedException('Invalid credentials');
 
     const role = ['ADMIN', 'OWNER'].includes(bu.role || '') ? 'MANAGER' : bu.role;
