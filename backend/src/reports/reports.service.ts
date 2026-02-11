@@ -280,9 +280,9 @@ async function renderPdf(input: {
     try {
       const doc = new PDFDocument({ margin: 40, size: 'A4' });
       const chunks: Buffer[] = [];
-      doc.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+      doc.on('data', (c: any) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
-      doc.on('error', (e) => reject(e));
+      doc.on('error', (e: any) => reject(e));
 
       doc.fontSize(16).text(input.title);
       doc.moveDown(0.3);
