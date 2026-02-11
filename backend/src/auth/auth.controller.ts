@@ -30,6 +30,16 @@ class LoginDto {
   password: string;
 }
 
+class ChangePasswordDto {
+  @IsString()
+  @MinLength(6)
+  currentPassword: string;
+
+  @IsString()
+  @MinLength(6)
+  newPassword: string;
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(private auth: AuthService) {}
@@ -59,5 +69,14 @@ export class AuthController {
       user.businessCode || '',
       user.branchId || 'main',
     );
+  }
+
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  async changePassword(
+    @CurrentUser() user: { sub: string },
+    @Body() dto: ChangePasswordDto,
+  ) {
+    return this.auth.changePassword(user.sub, dto.currentPassword, dto.newPassword);
   }
 }

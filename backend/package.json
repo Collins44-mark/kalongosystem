@@ -41,5 +41,8 @@
     "@types/node": "^20.3.0",
     "@types/passport-jwt": "^3.0.13",
     "@types/pdfkit": "^0.17.4"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
   }
 }

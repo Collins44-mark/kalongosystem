@@ -120,7 +120,7 @@ export class AuthService {
 
     const user = await this.prisma.user.findUnique({
       where: { email: cleanEmail },
-      select: { id: true, email: true, name: true, language: true, password: true },
+      select: { id: true, email: true, name: true, language: true, password: true, forcePasswordChange: true },
     });
     if (!user) throw new UnauthorizedException('Invalid credentials');
 
@@ -129,9 +129,16 @@ export class AuthService {
         userId: user.id,
         business: { businessId: cleanBusinessId },
       },
-      include: { business: true },
+      include: { business: { include: { subscription: true } } },
     });
     if (!bu) throw new UnauthorizedException('Invalid business or credentials');
+
+    if (bu.business?.isSuspended === true) {
+      throw new ForbiddenException('Your subscription is inactive. Contact support.');
+    }
+    if (bu.business?.subscription?.status === 'EXPIRED') {
+      throw new ForbiddenException('Subscription expired. System is read-only. Please renew.');
+    }
 
     const valid = await bcrypt.compare(cleanPassword, user.password);
     if (!valid) throw new UnauthorizedException('Invalid credentials');
@@ -161,9 +168,32 @@ export class AuthService {
         businessId: bu.business.businessId,
         role,
       },
+      forcePasswordChange: (user as any).forcePasswordChange === true,
       needsWorkerSelection,
       workers: needsWorkerSelection ? workers.map((w) => ({ id: w.id, fullName: w.fullName })) : [],
     };
+  }
+
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const current = (currentPassword || '').trim();
+    const next = (newPassword || '').trim();
+    if (next.length < 6) throw new BadRequestException('Password must be at least 6 characters');
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, password: true },
+    });
+    if (!user) throw new UnauthorizedException('Invalid credentials');
+
+    const ok = await bcrypt.compare(current, user.password);
+    if (!ok) throw new UnauthorizedException('Invalid credentials');
+
+    const hashed = await bcrypt.hash(next, 10);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashed, forcePasswordChange: false },
+    });
+    return { success: true };
   }
 
   /** Select worker after login. Returns new token with worker context. */
@@ -214,6 +244,21 @@ export class AuthService {
 
   /** Validate JWT payload - used by JwtStrategy */
   async validateUser(payload: any) {
+    // Super Admin tokens do not belong to a business.
+    if (payload?.isSuperAdmin === true || payload?.role === 'SUPER_ADMIN') {
+      const u = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+        select: { id: true, email: true, isSuperAdmin: true },
+      });
+      if (!u?.isSuperAdmin) return null;
+      return {
+        sub: u.id,
+        email: u.email,
+        role: 'SUPER_ADMIN',
+        isSuperAdmin: true,
+      };
+    }
+
     const bu = await this.prisma.businessUser.findFirst({
       where: {
         userId: payload.sub,

@@ -19,6 +19,8 @@ model User {
   password  String
   name      String?
   language  String   @default("en") // en, sw
+  isSuperAdmin        Boolean  @default(false)
+  forcePasswordChange Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -69,6 +71,7 @@ model Business {
   name         String
   location     String?
   phone        String?
+  isSuspended  Boolean  @default(false)
   createdAt    DateTime @default(now())
   createdBy    String?
   updatedAt    DateTime @updatedAt

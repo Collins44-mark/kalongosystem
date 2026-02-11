@@ -17,6 +17,7 @@ import { StaffWorkersModule } from './staff-workers/staff-workers.module';
 import { ReportsModule } from './reports/reports.module';
 import { OverviewModule } from './overview/overview.module';
 import { HealthModule } from './health/health.module';
+import { SuperAdminModule } from './super-admin/super-admin.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { HealthModule } from './health/health.module';
     ReportsModule,
     OverviewModule,
     HealthModule,
+    SuperAdminModule,
   ],
 })
 export class AppModule {}

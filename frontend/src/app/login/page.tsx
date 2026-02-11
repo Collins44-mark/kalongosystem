@@ -38,6 +38,7 @@ export default function LoginPage() {
         user: LoginUser;
         needsWorkerSelection?: boolean;
         workers?: Worker[];
+        forcePasswordChange?: boolean;
       }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify({
@@ -50,7 +51,10 @@ export default function LoginPage() {
       if (!token) throw new Error('No token received from server');
       const user = res.user as LoginUser;
 
-      if (res.needsWorkerSelection && res.workers && res.workers.length > 0) {
+      if (res.forcePasswordChange) {
+        setAuth(token, user);
+        router.replace('/change-password');
+      } else if (res.needsWorkerSelection && res.workers && res.workers.length > 0) {
         setLoginToken(token);
         setLoginUser(user);
         setPendingWorkerSelection(res.workers);
