@@ -95,6 +95,7 @@ export class ApiService {
         map[s.key] = s.value;
       }
     }
+    // Legacy VAT settings (backward compatible)
     const vatEnabled = map['vat_enabled'] === true;
     const vatNameRaw = map['vat_name'];
     const vatName = typeof vatNameRaw === 'string' && vatNameRaw.trim() ? vatNameRaw.trim() : 'VAT';
@@ -111,6 +112,9 @@ export class ApiService {
     const applyBar = map['vat_apply_bar'] !== false;
     const applyRestaurant = map['vat_apply_restaurant'] !== false;
 
+    const taxesRaw = map['taxes'];
+    const taxes = Array.isArray(taxesRaw) ? taxesRaw : null;
+
     return {
       enableDragDropBooking: map['enableDragDropBooking'] === true,
       vat_enabled: vatEnabled,
@@ -120,6 +124,7 @@ export class ApiService {
       vat_apply_rooms: applyRooms,
       vat_apply_bar: applyBar,
       vat_apply_restaurant: applyRestaurant,
+      taxes: taxes ?? [],
     };
   }
 

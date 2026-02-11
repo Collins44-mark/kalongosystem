@@ -8,41 +8,82 @@ import PDFDocument from 'pdfkit';
 export class FinanceService {
   constructor(private prisma: PrismaService) {}
 
-  private async getVatConfig(
+  private async getTaxConfig(
     businessId: string,
-  ): Promise<{ enabled: boolean; rate: number; type: 'inclusive' | 'exclusive'; apply: { rooms: boolean; bar: boolean; restaurant: boolean } }> {
+  ): Promise<{
+    enabled: boolean;
+    rateBySector: { rooms: number; bar: number; restaurant: number };
+  }> {
     const settings = await this.prisma.businessSetting.findMany({
-      where: { businessId, key: { in: ['vat_enabled', 'vat_rate', 'vat_type', 'vat_apply_rooms', 'vat_apply_bar', 'vat_apply_restaurant'] } },
+      where: {
+        businessId,
+        key: {
+          in: [
+            'taxes',
+            'vat_enabled',
+            'vat_rate',
+            'vat_apply_rooms',
+            'vat_apply_bar',
+            'vat_apply_restaurant',
+          ],
+        },
+      },
     });
     const map = new Map(settings.map((s) => [s.key, s.value]));
+
+    // Preferred: `taxes` JSON array from settings
+    const taxesRaw = map.get('taxes');
+    let taxes: Array<any> = [];
+    try {
+      taxes = Array.isArray(taxesRaw) ? (taxesRaw as any[]) : taxesRaw ? JSON.parse(String(taxesRaw)) : [];
+    } catch {
+      taxes = [];
+    }
+    const enabledTaxes = (Array.isArray(taxes) ? taxes : []).filter((t) => t && t.enabled === true);
+
+    if (enabledTaxes.length > 0) {
+      const rateSum = (sector: 'rooms' | 'bar' | 'restaurant') =>
+        enabledTaxes.reduce((s, t) => {
+          const rate = Math.max(0, Number(t.rate ?? 0) || 0);
+          const apply = t.apply ?? {};
+          const applies = sector === 'rooms' ? apply.rooms !== false : sector === 'bar' ? apply.bar !== false : apply.restaurant !== false;
+          return applies ? s + rate : s;
+        }, 0);
+
+      return {
+        enabled: true,
+        rateBySector: {
+          rooms: rateSum('rooms'),
+          bar: rateSum('bar'),
+          restaurant: rateSum('restaurant'),
+        },
+      };
+    }
+
+    // Fallback: legacy single VAT keys
     const enabledRaw = map.get('vat_enabled');
     const enabled = enabledRaw === 'true' || enabledRaw === '1';
     const rateRaw = map.get('vat_rate');
     const rate = Math.max(0, Number(rateRaw ?? 0) || 0);
-    const typeRaw = map.get('vat_type');
-    const type = typeRaw === 'exclusive' ? 'exclusive' : 'inclusive';
     const applyRoomsRaw = map.get('vat_apply_rooms');
     const applyBarRaw = map.get('vat_apply_bar');
     const applyRestaurantRaw = map.get('vat_apply_restaurant');
-    const apply = {
-      rooms: applyRoomsRaw === 'false' ? false : true,
-      bar: applyBarRaw === 'false' ? false : true,
-      restaurant: applyRestaurantRaw === 'false' ? false : true,
+    return {
+      enabled: enabled && rate > 0,
+      rateBySector: {
+        rooms: applyRoomsRaw === 'false' ? 0 : rate,
+        bar: applyBarRaw === 'false' ? 0 : rate,
+        restaurant: applyRestaurantRaw === 'false' ? 0 : rate,
+      },
     };
-    return { enabled, rate, type, apply };
   }
 
-  private splitVatFromGross(
-    gross: number,
-    cfg: { enabled: boolean; rate: number; type: 'inclusive' | 'exclusive' },
-    applyVat: boolean,
-  ) {
+  private splitTaxFromGross(gross: number, enabled: boolean, rate: number) {
     const g = Math.max(0, gross || 0);
-    if (!applyVat || !cfg.enabled || cfg.rate <= 0) return { net: g, vat: 0, gross: g };
-    // For cash collected, VAT can be derived from gross for both inclusive and exclusive pricing.
-    const net = g / (1 + cfg.rate);
-    const vat = g - net;
-    return { net, vat, gross: g };
+    if (!enabled || rate <= 0) return { net: g, tax: 0, gross: g };
+    const net = g / (1 + rate);
+    const tax = g - net;
+    return { net, tax, gross: g };
   }
 
   private round2(n: number) {
@@ -283,7 +324,7 @@ export class FinanceService {
   }
 
   async getOverview(businessId: string, from: Date, to: Date) {
-    const vat = await this.getVatConfig(businessId);
+    const tax = await this.getTaxConfig(businessId);
 
     const [roomsAgg, barAgg, restAgg] = await Promise.all([
       this.prisma.folioPayment.aggregate({
@@ -304,26 +345,27 @@ export class FinanceService {
     const barGross = Number(barAgg._sum.totalAmount || 0);
     const restaurantGross = Number(restAgg._sum.totalAmount || 0);
 
-    const roomsSplit = this.splitVatFromGross(roomsGross, vat, vat.apply.rooms);
-    const barSplit = this.splitVatFromGross(barGross, vat, vat.apply.bar);
-    const restaurantSplit = this.splitVatFromGross(restaurantGross, vat, vat.apply.restaurant);
+    const roomsSplit = this.splitTaxFromGross(roomsGross, tax.enabled, tax.rateBySector.rooms);
+    const barSplit = this.splitTaxFromGross(barGross, tax.enabled, tax.rateBySector.bar);
+    const restaurantSplit = this.splitTaxFromGross(restaurantGross, tax.enabled, tax.rateBySector.restaurant);
 
     const grossSales = roomsGross + barGross + restaurantGross;
     const netRevenue = roomsSplit.net + barSplit.net + restaurantSplit.net;
-    const vatCollected = roomsSplit.vat + barSplit.vat + restaurantSplit.vat;
+    const vatCollected = roomsSplit.tax + barSplit.tax + restaurantSplit.tax;
 
     return {
       period: { from: from.toISOString(), to: to.toISOString() },
-      vat: { vat_enabled: vat.enabled, vat_rate: vat.rate, vat_type: vat.type },
+      // keep legacy shape for frontend
+      vat: { vat_enabled: tax.enabled, vat_rate: Math.max(tax.rateBySector.rooms, tax.rateBySector.bar, tax.rateBySector.restaurant), vat_type: 'inclusive' as const },
       totals: {
         netRevenue: this.round2(netRevenue),
         grossSales: this.round2(grossSales),
         vatCollected: this.round2(vatCollected),
       },
       bySector: {
-        rooms: { net: this.round2(roomsSplit.net), vat: this.round2(roomsSplit.vat), gross: this.round2(roomsSplit.gross) },
-        bar: { net: this.round2(barSplit.net), vat: this.round2(barSplit.vat), gross: this.round2(barSplit.gross) },
-        restaurant: { net: this.round2(restaurantSplit.net), vat: this.round2(restaurantSplit.vat), gross: this.round2(restaurantSplit.gross) },
+        rooms: { net: this.round2(roomsSplit.net), vat: this.round2(roomsSplit.tax), gross: this.round2(roomsSplit.gross) },
+        bar: { net: this.round2(barSplit.net), vat: this.round2(barSplit.tax), gross: this.round2(barSplit.gross) },
+        restaurant: { net: this.round2(restaurantSplit.net), vat: this.round2(restaurantSplit.tax), gross: this.round2(restaurantSplit.gross) },
       },
     };
   }
@@ -353,7 +395,7 @@ export class FinanceService {
     to: Date,
     sector: 'all' | 'rooms' | 'bar' | 'restaurant',
   ) {
-    const vat = await this.getVatConfig(businessId);
+    const tax = await this.getTaxConfig(businessId);
 
     type Txn = {
       date: Date;
@@ -375,13 +417,13 @@ export class FinanceService {
       });
       for (const p of payments) {
         const gross = Number(p.amount);
-        const split = this.splitVatFromGross(gross, vat, vat.apply.rooms);
+        const split = this.splitTaxFromGross(gross, tax.enabled, tax.rateBySector.rooms);
         txns.push({
           date: p.createdAt,
           referenceId: p.bookingId,
           sector: 'rooms',
           netAmount: this.round2(split.net),
-          vatAmount: this.round2(split.vat),
+          vatAmount: this.round2(split.tax),
           grossAmount: this.round2(split.gross),
           paymentMode: p.paymentMode,
         });
@@ -396,13 +438,13 @@ export class FinanceService {
       });
       for (const o of orders) {
         const gross = Number(o.totalAmount);
-        const split = this.splitVatFromGross(gross, vat, vat.apply.bar);
+        const split = this.splitTaxFromGross(gross, tax.enabled, tax.rateBySector.bar);
         txns.push({
           date: o.createdAt,
           referenceId: o.orderNumber || o.id,
           sector: 'bar',
           netAmount: this.round2(split.net),
-          vatAmount: this.round2(split.vat),
+          vatAmount: this.round2(split.tax),
           grossAmount: this.round2(split.gross),
           paymentMode: o.paymentMethod,
         });
@@ -417,13 +459,13 @@ export class FinanceService {
       });
       for (const o of orders) {
         const gross = Number(o.totalAmount);
-        const split = this.splitVatFromGross(gross, vat, vat.apply.restaurant);
+        const split = this.splitTaxFromGross(gross, tax.enabled, tax.rateBySector.restaurant);
         txns.push({
           date: o.createdAt,
           referenceId: o.orderNumber || o.id,
           sector: 'restaurant',
           netAmount: this.round2(split.net),
-          vatAmount: this.round2(split.vat),
+          vatAmount: this.round2(split.tax),
           grossAmount: this.round2(split.gross),
           paymentMode: o.paymentMethod,
         });

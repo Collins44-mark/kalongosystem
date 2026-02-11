@@ -60,7 +60,8 @@ export default function FinancePage() {
 
   const q = (searchQuery || '').trim().toLowerCase();
 
-  const [expenseCategory, setExpenseCategory] = useState('');
+  const [expenseCategory, setExpenseCategory] = useState<'HOUSEKEEPING' | 'MAINTENANCE' | 'UTILITIES' | 'OTHERS'>('HOUSEKEEPING');
+  const [expenseOtherCategory, setExpenseOtherCategory] = useState('');
   const [expenseAmount, setExpenseAmount] = useState('');
   const [expenseDate, setExpenseDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [expenseNotes, setExpenseNotes] = useState('');
@@ -199,24 +200,34 @@ export default function FinancePage() {
     if (!token) return;
     if (!isManager) return;
     const amount = Number(expenseAmount);
-    if (!expenseCategory.trim() || !Number.isFinite(amount) || amount <= 0 || !expenseDate) {
+    if (!Number.isFinite(amount) || amount <= 0 || !expenseDate) {
+      notifyError(t('common.fillAllFields'));
+      return;
+    }
+    if (expenseCategory === 'OTHERS' && !expenseOtherCategory.trim()) {
       notifyError(t('common.fillAllFields'));
       return;
     }
     setSavingExpense(true);
     try {
+      const descParts: string[] = [];
+      if (expenseCategory === 'OTHERS') descParts.push(`Other: ${expenseOtherCategory.trim()}`);
+      if (expenseNotes.trim()) descParts.push(expenseNotes.trim());
+      const description = descParts.length ? descParts.join(' — ') : undefined;
+
       await api(`/finance/expenses`, {
         token,
         method: 'POST',
         body: JSON.stringify({
-          category: expenseCategory.trim(),
+          category: expenseCategory,
           amount,
-          description: expenseNotes.trim() || undefined,
+          description,
           expenseDate,
         }),
       });
       notifySuccess(t('finance.expenseRecorded'));
-      setExpenseCategory('');
+      setExpenseCategory('HOUSEKEEPING');
+      setExpenseOtherCategory('');
       setExpenseAmount('');
       setExpenseNotes('');
       // Refresh overview + transactions (cashflow impact)
@@ -390,12 +401,16 @@ export default function FinancePage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm text-slate-600 mb-1">{t('finance.category')}</label>
-                  <input
+                  <select
                     value={expenseCategory}
-                    onChange={(e) => setExpenseCategory(e.target.value)}
-                    className="w-full px-3 py-2 border rounded text-sm"
-                    placeholder={t('finance.category')}
-                  />
+                    onChange={(e) => setExpenseCategory(e.target.value as any)}
+                    className="w-full px-3 py-2 border rounded text-sm bg-white"
+                  >
+                    <option value="HOUSEKEEPING">{t('finance.housekeeping')}</option>
+                    <option value="MAINTENANCE">{t('finance.maintenance')}</option>
+                    <option value="UTILITIES">{t('finance.utilities')}</option>
+                    <option value="OTHERS">{t('finance.others')}</option>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm text-slate-600 mb-1">{t('finance.amount')}</label>
@@ -407,6 +422,17 @@ export default function FinancePage() {
                     placeholder="0"
                   />
                 </div>
+                {expenseCategory === 'OTHERS' && (
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm text-slate-600 mb-1">{t('finance.category')} ({t('finance.others')})</label>
+                    <input
+                      value={expenseOtherCategory}
+                      onChange={(e) => setExpenseOtherCategory(e.target.value)}
+                      className="w-full px-3 py-2 border rounded text-sm"
+                      placeholder="e.g. Marketing"
+                    />
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm text-slate-600 mb-1">{t('finance.date')}</label>
                   <input

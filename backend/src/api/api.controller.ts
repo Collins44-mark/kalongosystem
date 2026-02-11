@@ -44,6 +44,7 @@ export class ApiController {
       vat_apply_rooms?: boolean;
       vat_apply_bar?: boolean;
       vat_apply_restaurant?: boolean;
+      taxes?: unknown;
     },
   ) {
     if (typeof dto.enableDragDropBooking === 'boolean') {
@@ -72,6 +73,9 @@ export class ApiController {
     }
     if (typeof dto.vat_apply_restaurant === 'boolean') {
       updates.push(this.api.updateSetting(user.businessId, 'vat_apply_restaurant', dto.vat_apply_restaurant));
+    }
+    if (Array.isArray(dto.taxes)) {
+      updates.push(this.api.updateSetting(user.businessId, 'taxes', dto.taxes));
     }
     if (updates.length > 0) {
       await Promise.all(updates);
