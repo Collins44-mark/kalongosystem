@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import { FinanceService } from './finance.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { SubscriptionGuard } from '../common/guards/subscription.guard';
@@ -204,5 +205,28 @@ export class FinanceController {
     const pg = Math.max(1, Number(page || 1) || 1);
     const ps = Math.min(100, Math.max(10, Number(pageSize || 20) || 20));
     return this.finance.getTransactions(user.businessId, range.from, range.to, s, pg, ps);
+  }
+
+  @Get('export')
+  @UseGuards(RolesGuard)
+  @Roles('MANAGER', 'FINANCE')
+  async export(
+    @CurrentUser() user: any,
+    @Res() res: Response,
+    @Query('format') format?: string,
+    @Query('period') period?: 'today' | 'week' | 'month' | 'bydate',
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('sector') sector?: 'all' | 'rooms' | 'bar' | 'restaurant',
+  ) {
+    const fmt = format === 'pdf' || format === 'xlsx' ? format : 'csv';
+    const p = period && ['today', 'week', 'month', 'bydate'].includes(period) ? period : 'today';
+    const s = sector && ['all', 'rooms', 'bar', 'restaurant'].includes(sector) ? sector : 'all';
+    const range = this.getRangeFromQuery(p, from, to);
+
+    const out = await this.finance.exportTransactions(user.businessId, range.from, range.to, s, fmt);
+    res.setHeader('Content-Type', out.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${out.filename}"`);
+    return res.send(out.body);
   }
 }

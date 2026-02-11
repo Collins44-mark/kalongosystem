@@ -258,7 +258,7 @@
   "housekeeping.approveCleaned": "Thibitisha imesafishwa (iwe tupu)",
 
   "finance.title": "Fedha",
-  "finance.onlyManagers": "Wasimamizi tu wanaweza kufikia jumla za fedha na ripoti.",
+  "finance.onlyManagers": "Wasimamizi na fedha tu wanaweza kufikia fedha.",
   "finance.createExpensesRole": "Unaweza kuandika matumizi ikiwa una jukumu la Fedha.",
   "finance.netRevenue": "Mapato Halisi",
   "finance.grossSales": "Mauzo Jumla",

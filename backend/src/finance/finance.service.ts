@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
+import ExcelJS from 'exceljs';
+import PDFDocument from 'pdfkit';
 
 @Injectable()
 export class FinanceService {
@@ -11,8 +13,10 @@ export class FinanceService {
       where: { businessId, key: { in: ['vat_enabled', 'vat_rate', 'vat_type'] } },
     });
     const map = new Map(settings.map((s) => [s.key, s.value]));
-    const enabled = map.get('vat_enabled') === 'true';
-    const rate = Math.max(0, Number(map.get('vat_rate') ?? 0) || 0);
+    const enabledRaw = map.get('vat_enabled');
+    const enabled = enabledRaw === 'true' || enabledRaw === '1';
+    const rateRaw = map.get('vat_rate');
+    const rate = Math.max(0, Number(rateRaw ?? 0) || 0);
     const typeRaw = map.get('vat_type');
     const type = typeRaw === 'exclusive' ? 'exclusive' : 'inclusive';
     return { enabled, rate, type };
@@ -318,6 +322,23 @@ export class FinanceService {
     page: number,
     pageSize: number,
   ) {
+    const txns = await this.collectTransactions(businessId, from, to, sector);
+    const total = txns.length;
+    const start = (page - 1) * pageSize;
+    const rows = txns.slice(start, start + pageSize).map((r) => ({
+      ...r,
+      date: r.date.toISOString(),
+    }));
+
+    return { page, pageSize, total, rows };
+  }
+
+  private async collectTransactions(
+    businessId: string,
+    from: Date,
+    to: Date,
+    sector: 'all' | 'rooms' | 'bar' | 'restaurant',
+  ) {
     const vat = await this.getVatConfig(businessId);
 
     type Txn = {
@@ -396,13 +417,144 @@ export class FinanceService {
     }
 
     txns.sort((a, b) => b.date.getTime() - a.date.getTime());
-    const total = txns.length;
-    const start = (page - 1) * pageSize;
-    const rows = txns.slice(start, start + pageSize).map((r) => ({
-      ...r,
-      date: r.date.toISOString(),
-    }));
-
-    return { page, pageSize, total, rows };
+    return txns;
   }
+
+  async exportTransactions(
+    businessId: string,
+    from: Date,
+    to: Date,
+    sector: 'all' | 'rooms' | 'bar' | 'restaurant',
+    format: 'csv' | 'xlsx' | 'pdf',
+  ): Promise<{ filename: string; contentType: string; body: Buffer }> {
+    const txns = await this.collectTransactions(businessId, from, to, sector);
+    const safe = (d: Date) => d.toISOString().slice(0, 10);
+    const baseName = `finance-${sector}-${safe(from)}-${safe(to)}`;
+
+    if (format === 'csv') {
+      // QuickBooks-ready double-entry style
+      const header = 'Date,Account,Debit,Credit,Description';
+      const lines: string[] = [header];
+      for (const t of txns) {
+        const date = formatDdMmYyyy(t.date);
+        const cashAccount = mapPaymentAccount(t.paymentMode);
+        const revenueAccount = t.sector === 'rooms' ? 'Room Revenue' : t.sector === 'bar' ? 'Bar Revenue' : 'Restaurant Revenue';
+        const descBase = `${t.sector.toUpperCase()} ${t.referenceId}`;
+
+        // Debit cash/bank/mobile for gross received
+        lines.push([date, cashAccount, round2(t.grossAmount), 0, `${descBase} payment received`].map(csvEscape).join(','));
+        // Credit revenue for net
+        lines.push([date, revenueAccount, 0, round2(t.netAmount), `${descBase} revenue`].map(csvEscape).join(','));
+        // Credit VAT payable
+        if (round2(t.vatAmount) > 0) {
+          lines.push([date, 'VAT Payable', 0, round2(t.vatAmount), `${descBase} VAT collected`].map(csvEscape).join(','));
+        }
+      }
+      const csv = lines.join('\n') + '\n';
+      return {
+        filename: `${baseName}-quickbooks.csv`,
+        contentType: 'text/csv; charset=utf-8',
+        body: Buffer.from(csv, 'utf8'),
+      };
+    }
+
+    if (format === 'xlsx') {
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Transactions');
+      ws.columns = [
+        { header: 'Date', key: 'date', width: 22 },
+        { header: 'Reference ID', key: 'referenceId', width: 18 },
+        { header: 'Sector', key: 'sector', width: 14 },
+        { header: 'Net Amount', key: 'netAmount', width: 14 },
+        { header: 'VAT Amount', key: 'vatAmount', width: 14 },
+        { header: 'Gross Amount', key: 'grossAmount', width: 14 },
+        { header: 'Payment Mode', key: 'paymentMode', width: 16 },
+      ];
+      txns.forEach((t) =>
+        ws.addRow({
+          date: t.date.toISOString(),
+          referenceId: t.referenceId,
+          sector: t.sector,
+          netAmount: round2(t.netAmount),
+          vatAmount: round2(t.vatAmount),
+          grossAmount: round2(t.grossAmount),
+          paymentMode: t.paymentMode,
+        }),
+      );
+      const buf: any = await wb.xlsx.writeBuffer();
+      return {
+        filename: `${baseName}.xlsx`,
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        body: Buffer.isBuffer(buf) ? buf : Buffer.from(buf),
+      };
+    }
+
+    const pdf = await renderPdf({
+      title: 'Finance Transactions',
+      subtitle: `Range: ${safe(from)} to ${safe(to)} | Sector: ${sector}`,
+      columns: ['Date', 'Reference', 'Sector', 'Net', 'VAT', 'Gross', 'Mode'],
+      rows: txns.map((t) => [
+        formatDdMmYyyy(t.date),
+        t.referenceId,
+        t.sector,
+        String(round2(t.netAmount)),
+        String(round2(t.vatAmount)),
+        String(round2(t.grossAmount)),
+        t.paymentMode,
+      ]),
+    });
+    return { filename: `${baseName}.pdf`, contentType: 'application/pdf', body: pdf };
+  }
+}
+
+function csvEscape(v: any) {
+  const s = String(v ?? '');
+  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function round2(n: number) {
+  return Math.round((Number(n || 0) + Number.EPSILON) * 100) / 100;
+}
+
+function formatDdMmYyyy(d: Date) {
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+function mapPaymentAccount(mode: string) {
+  const m = String(mode || '').toLowerCase();
+  if (m.includes('bank')) return 'Bank';
+  if (m.includes('mpesa') || m.includes('m-pesa') || m.includes('tigopesa') || m.includes('airtel')) return 'Mobile Money';
+  return 'Cash';
+}
+
+async function renderPdf(input: { title: string; subtitle: string; columns: string[]; rows: string[][] }): Promise<Buffer> {
+  return await new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ margin: 40, size: 'A4' });
+      const chunks: Buffer[] = [];
+      doc.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', (e) => reject(e));
+
+      doc.fontSize(16).text(input.title);
+      doc.moveDown(0.3);
+      doc.fontSize(10).fillColor('#444').text(input.subtitle);
+      doc.moveDown(0.8);
+      doc.fillColor('#000');
+
+      doc.fontSize(11).text(input.columns.join(' | '));
+      doc.moveDown(0.2);
+      doc.fontSize(10).text('-'.repeat(90));
+      doc.moveDown(0.4);
+
+      input.rows.forEach((r) => doc.text(r.join(' | ')));
+      doc.end();
+    } catch (e) {
+      reject(e);
+    }
+  });
 }

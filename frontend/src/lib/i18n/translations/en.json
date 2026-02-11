@@ -258,7 +258,7 @@
   "housekeeping.approveCleaned": "Approve cleaned (set vacant)",
 
   "finance.title": "Finance",
-  "finance.onlyManagers": "Only managers can access finance totals and reports.",
+  "finance.onlyManagers": "Only managers and finance can access finance.",
   "finance.createExpensesRole": "You can create expenses if you have Finance role.",
   "finance.netRevenue": "Net Revenue",
   "finance.grossSales": "Gross Sales",

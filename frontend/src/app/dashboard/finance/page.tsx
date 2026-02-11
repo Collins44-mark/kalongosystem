@@ -53,6 +53,8 @@ export default function FinancePage() {
   const viewHistory = useRef<{ metric: Metric; sector: Sector; page: number }[]>([]);
 
   const isManager = isManagerLevel(user?.role);
+  const isFinance = user?.role === 'FINANCE';
+  const canAccess = isManager || isFinance;
 
   const q = (searchQuery || '').trim().toLowerCase();
 
@@ -64,12 +66,11 @@ export default function FinancePage() {
   const [expenseNotes, setExpenseNotes] = useState('');
   const [savingExpense, setSavingExpense] = useState(false);
 
-  if (!isManager) {
+  if (!canAccess) {
     return (
       <div>
         <h1 className="text-xl font-semibold mb-4">{t('finance.title')}</h1>
         <p className="text-slate-600">{t('finance.onlyManagers')}</p>
-        <p className="text-sm text-slate-500 mt-2">{t('finance.createExpensesRole')}</p>
       </div>
     );
   }
@@ -157,6 +158,37 @@ export default function FinancePage() {
     return t('finance.allSectors');
   }
 
+  async function download(format: 'csv' | 'xlsx' | 'pdf') {
+    if (!token) return;
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+    const params = new URLSearchParams();
+    params.set('format', format);
+    params.set('period', period);
+    if (period === 'bydate' && dateFrom && dateTo) {
+      params.set('from', dateFrom);
+      params.set('to', dateTo);
+    }
+    params.set('sector', sector);
+
+    const res = await fetch(`${baseUrl}/finance/export?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'include',
+    });
+    if (!res.ok) return;
+
+    const blob = await res.blob();
+    const cd = res.headers.get('content-disposition') || '';
+    const match = cd.match(/filename="([^"]+)"/i);
+    const filename = match?.[1] || `finance-${period}-${new Date().toISOString().slice(0, 10)}.${format}`;
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function recordExpense() {
     if (!token) return;
     const amount = Number(expenseAmount);
@@ -220,13 +252,25 @@ export default function FinancePage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <button type="button" className="px-3 py-2 border rounded text-sm bg-white hover:bg-slate-50" disabled>
+          <button
+            type="button"
+            onClick={() => download('csv')}
+            className="px-3 py-2 border rounded text-sm bg-white hover:bg-slate-50"
+          >
             CSV
           </button>
-          <button type="button" className="px-3 py-2 border rounded text-sm bg-white hover:bg-slate-50" disabled>
+          <button
+            type="button"
+            onClick={() => download('xlsx')}
+            className="px-3 py-2 border rounded text-sm bg-white hover:bg-slate-50"
+          >
             Excel
           </button>
-          <button type="button" className="px-3 py-2 border rounded text-sm bg-white hover:bg-slate-50" disabled>
+          <button
+            type="button"
+            onClick={() => download('pdf')}
+            className="px-3 py-2 border rounded text-sm bg-white hover:bg-slate-50"
+          >
             PDF
           </button>
         </div>
