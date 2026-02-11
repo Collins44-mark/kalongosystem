@@ -85,11 +85,13 @@ export class FinanceController {
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
+    const startOfDay = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+    const endOfDay = (d: Date) => { const x = new Date(d); x.setHours(23, 59, 59, 999); return x; };
     return this.finance.getExpenses(
       user.businessId,
       user.branchId,
-      from ? new Date(from) : undefined,
-      to ? new Date(to) : undefined,
+      from ? startOfDay(new Date(from)) : undefined,
+      to ? endOfDay(new Date(to)) : undefined,
     );
   }
 
@@ -132,11 +134,23 @@ export class FinanceController {
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
+    const startOfDay = (d: Date) => {
+      const x = new Date(d);
+      x.setHours(0, 0, 0, 0);
+      return x;
+    };
+    const endOfDay = (d: Date) => {
+      const x = new Date(d);
+      x.setHours(23, 59, 59, 999);
+      return x;
+    };
+    const rangeFrom = from ? startOfDay(new Date(from)) : undefined;
+    const rangeTo = to ? endOfDay(new Date(to)) : undefined;
     return this.finance.getDashboard(
       user.businessId,
       user.branchId,
-      from ? new Date(from) : undefined,
-      to ? new Date(to) : undefined,
+      rangeFrom,
+      rangeTo,
     );
   }
 
@@ -165,11 +179,13 @@ export class FinanceController {
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
+    const startOfDay = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+    const endOfDay = (d: Date) => { const x = new Date(d); x.setHours(23, 59, 59, 999); return x; };
     return this.finance.getExpensesByCategory(
       user.businessId,
       user.branchId,
-      from ? new Date(from) : undefined,
-      to ? new Date(to) : undefined,
+      from ? startOfDay(new Date(from)) : undefined,
+      to ? endOfDay(new Date(to)) : undefined,
     );
   }
 

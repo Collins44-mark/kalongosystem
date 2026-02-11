@@ -143,6 +143,8 @@
   "frontOffice.paymentHistory": "Historia ya malipo",
   "frontOffice.noPayments": "Hakuna malipo yaliyorekodiwa",
   "frontOffice.paymentModeLabel": "Njia ya malipo",
+  "frontOffice.paidAmount": "Kiasi kilicholipwa (TZS)",
+  "frontOffice.paidAmountHint": "Si lazima. Ikiwa umelipa sasa, ingiza kiasi na chagua njia ya malipo. Inaunganishwa na Fedha.",
   "frontOffice.changeRoom": "Badilisha chumba",
   "frontOffice.overrideStatus": "Badilisha hali",
   "frontOffice.confirmed": "Imethibitishwa",

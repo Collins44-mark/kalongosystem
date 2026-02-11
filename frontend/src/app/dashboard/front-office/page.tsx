@@ -1223,6 +1223,7 @@ function AddPaymentModal({ booking, token, onDone, t }: { booking: Booking; toke
         token,
         body: JSON.stringify({ amount: amt, paymentMode }),
       });
+      if (typeof window !== 'undefined') try { localStorage.setItem('hms-data-updated', Date.now().toString()); } catch { /* ignore */ }
       setShow(false);
       setAmount('');
       onDone();
@@ -1454,6 +1455,7 @@ function NewBookingForm({
   const [checkOut, setCheckOut] = useState('');
   const [currency, setCurrency] = useState('TZS');
   const [paymentMode, setPaymentMode] = useState('');
+  const [paidAmount, setPaidAmount] = useState<string>('');
   const [totalOverride, setTotalOverride] = useState<string>('');
   const [checkInImmediately, setCheckInImmediately] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -1482,22 +1484,30 @@ function NewBookingForm({
     if (!roomId || nights < 1) return;
     setLoading(true);
     try {
+      const paid = paidAmount ? parseFloat(paidAmount.replace(/[^\d.]/g, '')) : 0;
+      const body: Record<string, unknown> = {
+        roomId,
+        guestName,
+        guestPhone: guestPhone || undefined,
+        checkIn,
+        checkOut,
+        nights,
+        totalAmount: totalForSave,
+        currency,
+        paymentMode: paid > 0 ? (paymentMode || 'CASH') : undefined,
+        checkInImmediately: checkInImmediately || undefined,
+      };
+      if (paid > 0 && paid <= totalForSave) {
+        body.paidAmount = paid;
+        body.paymentMode = body.paymentMode || 'CASH';
+      }
       await api('/hotel/bookings', {
         method: 'POST',
         token: activeToken,
-        body: JSON.stringify({
-          roomId,
-          guestName,
-          guestPhone: guestPhone || undefined,
-          checkIn,
-          checkOut,
-          nights,
-          totalAmount: totalForSave,
-          currency,
-          paymentMode: paymentMode || undefined,
-          checkInImmediately: checkInImmediately || undefined,
-        }),
+        body: JSON.stringify(body),
       });
+      if (typeof window !== 'undefined') try { localStorage.setItem('hms-data-updated', Date.now().toString()); } catch { /* ignore */ }
+      setPaidAmount('');
       onDone();
     } catch (e) {
       const err = e as Error & { status?: number };
@@ -1577,6 +1587,18 @@ function NewBookingForm({
               <option key={p.value} value={p.value}>{p.label}</option>
             ))}
           </select>
+        </div>
+        <div>
+          <label className="block text-sm mb-1">{t('frontOffice.paidAmount')}</label>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={paidAmount}
+            onChange={(e) => setPaidAmount(e.target.value.replace(/[^\d.]/g, ''))}
+            placeholder="0"
+            className="w-full px-3 py-2.5 border rounded text-base [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
+          <p className="text-xs text-slate-500 mt-0.5">{t('frontOffice.paidAmountHint')}</p>
         </div>
       </div>
       <div className="p-3 sm:p-4 bg-slate-50 rounded-lg text-sm space-y-2">

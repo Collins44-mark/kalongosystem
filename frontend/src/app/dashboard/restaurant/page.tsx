@@ -113,6 +113,7 @@ export default function RestaurantPage() {
           paymentMethod,
         }),
       });
+      if (typeof window !== 'undefined') try { localStorage.setItem('hms-data-updated', Date.now().toString()); } catch { /* ignore */ }
       setMessage(t('restaurant.orderConfirmed'));
       setCart([]);
       loadHistory();

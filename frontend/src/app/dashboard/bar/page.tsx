@@ -200,6 +200,7 @@ export default function BarPage() {
           paymentMethod,
         }),
       });
+      if (typeof window !== 'undefined') try { localStorage.setItem('hms-data-updated', Date.now().toString()); } catch { /* ignore */ }
       setMessage(t('bar.orderConfirmed'));
       setCart([]);
     } catch (e) {
