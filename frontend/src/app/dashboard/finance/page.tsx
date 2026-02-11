@@ -1,105 +1,68 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
 import { isManagerLevel } from '@/lib/roles';
 import { useSearch } from '@/store/search';
+import { notifyError, notifySuccess } from '@/store/notifications';
 
-type Dashboard = {
-  totalRevenue: number;
-  totalExpenses: number;
-  netProfit: number;
-  bySector: { bar: number; restaurant: number; hotel: number };
-  expenses: { id: string; category: string; amount: string; expenseDate: string; description?: string }[];
+type Period = 'today' | 'week' | 'month' | 'bydate';
+type Sector = 'all' | 'rooms' | 'bar' | 'restaurant';
+type Metric = 'net' | 'gross' | 'vat';
+
+type Overview = {
+  period: { from: string; to: string };
+  vat: { vat_enabled: boolean; vat_rate: number; vat_type: 'inclusive' | 'exclusive' };
+  totals: { netRevenue: number; grossSales: number; vatCollected: number };
+  bySector: {
+    rooms: { net: number; vat: number; gross: number };
+    bar: { net: number; vat: number; gross: number };
+    restaurant: { net: number; vat: number; gross: number };
+  };
 };
 
-type SalesRow = { id: string; date: string; orderId: string; amount: number; paymentMode: string; staff: string };
-type ExpenseRow = { id: string; category: string; amount: number; date: string; notes: string | null };
-
-type View = 'cards' | 'revenue' | 'revenue-sector' | 'expenses';
+type TxnRow = {
+  date: string;
+  referenceId: string;
+  sector: 'rooms' | 'bar' | 'restaurant';
+  netAmount: number;
+  vatAmount: number;
+  grossAmount: number;
+  paymentMode: string;
+};
 
 export default function FinancePage() {
   const { token, user } = useAuth();
   const { t } = useTranslation();
   const searchQuery = useSearch((s) => s.query);
-  const [data, setData] = useState<Dashboard | null>(null);
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const [period, setPeriod] = useState<Period>('today');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [metric, setMetric] = useState<Metric>('net');
+  const [sector, setSector] = useState<Sector>('all');
+  const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<View>('cards');
-  const viewHistory = useRef<View[]>([]);
-  const [selectedSector, setSelectedSector] = useState<'bar' | 'restaurant' | 'hotel'>('bar');
-  const [salesHistory, setSalesHistory] = useState<SalesRow[]>([]);
-  const [expenseDetail, setExpenseDetail] = useState<{ byCategory: Record<string, number>; expenses: ExpenseRow[] } | null>(null);
+
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [txLoading, setTxLoading] = useState(false);
+  const [tx, setTx] = useState<{ total: number; rows: TxnRow[] }>({ total: 0, rows: [] });
+
+  const viewHistory = useRef<{ metric: Metric; sector: Sector; page: number }[]>([]);
 
   const isManager = isManagerLevel(user?.role);
 
-  const empty: Dashboard = {
-    totalRevenue: 0,
-    totalExpenses: 0,
-    netProfit: 0,
-    bySector: { bar: 0, restaurant: 0, hotel: 0 },
-    expenses: [],
-  };
+  const q = (searchQuery || '').trim().toLowerCase();
 
-  useEffect(() => {
-    if (!token || !isManager) return;
-    const params = new URLSearchParams();
-    if (from) params.set('from', from);
-    if (to) params.set('to', to);
-    api<Dashboard>(`/finance/dashboard?${params}`, { token })
-      .then(setData)
-      .catch(() => setData(empty))
-      .finally(() => setLoading(false));
-  }, [token, isManager, from, to]);
+  const isMainView = metric === 'net' && sector === 'all';
 
-  function goView(next: View) {
-    setView((current) => {
-      if (current && current !== next) viewHistory.current.push(current);
-      return next;
-    });
-  }
-
-  // Support "back" within this page (internal views) from the global header back button.
-  useEffect(() => {
-    const onBack = (e: Event) => {
-      const prev = viewHistory.current.pop();
-      if (prev) {
-        setView(prev);
-        e.preventDefault();
-        return;
-      }
-      if (view !== 'cards') {
-        setView('cards');
-        e.preventDefault();
-      }
-    };
-    window.addEventListener('hms-back', onBack);
-    return () => window.removeEventListener('hms-back', onBack);
-  }, [view]);
-
-  async function loadRevenueSector(sector: 'bar' | 'restaurant' | 'hotel') {
-    if (!token) return;
-    setSelectedSector(sector);
-    goView('revenue-sector');
-    const params = new URLSearchParams();
-    if (from) params.set('from', from);
-    if (to) params.set('to', to);
-    const rows = await api<SalesRow[]>(`/finance/revenue/sector/${sector}?${params}`, { token }).catch(() => []);
-    setSalesHistory(Array.isArray(rows) ? rows : []);
-  }
-
-  async function loadExpenseDetail() {
-    if (!token) return;
-    goView('expenses');
-    const params = new URLSearchParams();
-    if (from) params.set('from', from);
-    if (to) params.set('to', to);
-    const res = await api<{ byCategory: Record<string, number>; expenses: ExpenseRow[] }>(`/finance/expenses/by-category?${params}`, { token }).catch(() => ({ byCategory: {}, expenses: [] }));
-    setExpenseDetail(res);
-  }
+  const [expenseCategory, setExpenseCategory] = useState('');
+  const [expenseAmount, setExpenseAmount] = useState('');
+  const [expenseDate, setExpenseDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [expenseNotes, setExpenseNotes] = useState('');
+  const [savingExpense, setSavingExpense] = useState(false);
 
   if (!isManager) {
     return (
@@ -111,239 +74,355 @@ export default function FinancePage() {
     );
   }
 
-  if (loading && !data) return <div className="text-slate-500">{t('common.loading')}</div>;
-  const d = data ?? empty;
-  const q = (searchQuery || '').trim().toLowerCase();
+  function pushViewHistory(nextMetric: Metric, nextSector: Sector, nextPage: number) {
+    viewHistory.current.push({ metric, sector, page });
+    setMetric(nextMetric);
+    setSector(nextSector);
+    setPage(nextPage);
+  }
 
-  const displayedSales =
-    !q
-      ? salesHistory
-      : salesHistory.filter((r) => {
-          const txt = `${r.orderId} ${r.paymentMode} ${r.staff} ${r.amount} ${r.date}`.toLowerCase();
-          return txt.includes(q);
-        });
+  useEffect(() => {
+    const onBack = (e: Event) => {
+      const prev = viewHistory.current.pop();
+      if (prev) {
+        setMetric(prev.metric);
+        setSector(prev.sector);
+        setPage(prev.page);
+        e.preventDefault();
+        return;
+      }
+      if (sector !== 'all' || metric !== 'net') {
+        setMetric('net');
+        setSector('all');
+        setPage(1);
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('hms-back', onBack);
+    return () => window.removeEventListener('hms-back', onBack);
+  }, [metric, sector, page]);
 
-  const displayedExpenses =
-    !q || !expenseDetail
-      ? expenseDetail?.expenses ?? []
-      : expenseDetail.expenses.filter((e) => {
-          const txt = `${e.category} ${e.amount} ${e.date} ${e.notes ?? ''}`.toLowerCase();
-          return txt.includes(q);
-        });
+  useEffect(() => {
+    if (!token) return;
+    setLoading(true);
+    const params = new URLSearchParams();
+    params.set('period', period);
+    if (period === 'bydate' && dateFrom && dateTo) {
+      params.set('from', dateFrom);
+      params.set('to', dateTo);
+    }
+    api<Overview>(`/finance/overview?${params}`, { token })
+      .then(setOverview)
+      .catch(() => setOverview(null))
+      .finally(() => setLoading(false));
+  }, [token, period, dateFrom, dateTo]);
 
-  const displayedByCategory =
-    !expenseDetail
-      ? {}
-      : !q
-        ? expenseDetail.byCategory
-        : displayedExpenses.reduce<Record<string, number>>((acc, e) => {
-            acc[e.category] = (acc[e.category] || 0) + (e.amount || 0);
-            return acc;
-          }, {});
+  useEffect(() => {
+    if (!token) return;
+    setTxLoading(true);
+    const params = new URLSearchParams();
+    params.set('period', period);
+    if (period === 'bydate' && dateFrom && dateTo) {
+      params.set('from', dateFrom);
+      params.set('to', dateTo);
+    }
+    params.set('sector', sector);
+    params.set('page', String(page));
+    params.set('pageSize', String(pageSize));
+    api<{ total: number; rows: TxnRow[] }>(`/finance/transactions?${params}`, { token })
+      .then((res: any) => setTx({ total: Number(res?.total || 0), rows: Array.isArray(res?.rows) ? res.rows : [] }))
+      .catch(() => setTx({ total: 0, rows: [] }))
+      .finally(() => setTxLoading(false));
+  }, [token, period, dateFrom, dateTo, sector, page, pageSize]);
 
-  const params = new URLSearchParams();
-  if (from) params.set('from', from);
-  if (to) params.set('to', to);
+  const displayedRows = useMemo(() => {
+    if (!q) return tx.rows;
+    return tx.rows.filter((r) => {
+      const txt = `${r.date} ${r.referenceId} ${r.sector} ${r.paymentMode} ${r.netAmount} ${r.vatAmount} ${r.grossAmount}`.toLowerCase();
+      return txt.includes(q);
+    });
+  }, [q, tx.rows]);
+
+  const totalPages = Math.max(1, Math.ceil((tx.total || 0) / pageSize));
+  const vatEnabled = overview?.vat?.vat_enabled === true && (overview?.vat?.vat_rate ?? 0) > 0;
+
+  function formatTzs(n: number) {
+    return new Intl.NumberFormat('en-TZ', { style: 'currency', currency: 'TZS', maximumFractionDigits: 0 }).format(n || 0);
+  }
+
+  function labelSector(s: Sector) {
+    if (s === 'rooms') return t('finance.roomsRevenue');
+    if (s === 'bar') return t('bar.title');
+    if (s === 'restaurant') return t('restaurant.title');
+    return t('finance.allSectors');
+  }
+
+  async function recordExpense() {
+    if (!token) return;
+    const amount = Number(expenseAmount);
+    if (!expenseCategory.trim() || !Number.isFinite(amount) || amount <= 0 || !expenseDate) {
+      notifyError(t('common.fillAllFields'));
+      return;
+    }
+    setSavingExpense(true);
+    try {
+      await api(`/finance/expenses`, {
+        token,
+        method: 'POST',
+        body: JSON.stringify({
+          category: expenseCategory.trim(),
+          amount,
+          description: expenseNotes.trim() || undefined,
+          expenseDate,
+        }),
+      });
+      notifySuccess(t('finance.expenseRecorded'));
+      setExpenseCategory('');
+      setExpenseAmount('');
+      setExpenseNotes('');
+      // Refresh overview + transactions (cashflow impact)
+      setPage(1);
+      const params = new URLSearchParams();
+      params.set('period', period);
+      if (period === 'bydate' && dateFrom && dateTo) {
+        params.set('from', dateFrom);
+        params.set('to', dateTo);
+      }
+      api<Overview>(`/finance/overview?${params}`, { token })
+        .then(setOverview)
+        .catch(() => {});
+    } catch (e: any) {
+      notifyError(e?.message || 'Request failed');
+    } finally {
+      setSavingExpense(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold">{t('finance.title')}</h1>
 
-      <div className="flex flex-wrap gap-4 items-center">
-        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="px-3 py-2 border rounded text-sm" />
-        <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="px-3 py-2 border rounded text-sm" />
-        {(view !== 'cards') && (
-          <button onClick={() => goView('cards')} className="px-3 py-1 text-sm text-teal-600 hover:underline">
-            ← {t('common.back')}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={period} onChange={(e) => { setPeriod(e.target.value as Period); setPage(1); }} className="px-3 py-2 border rounded text-sm bg-white">
+            <option value="today">{t('overview.today')}</option>
+            <option value="week">{t('overview.thisWeek')}</option>
+            <option value="month">{t('overview.thisMonth')}</option>
+            <option value="bydate">{t('overview.byDate')}</option>
+          </select>
+          {period === 'bydate' && (
+            <div className="flex items-center gap-2">
+              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="px-3 py-2 border rounded text-sm bg-white" />
+              <span className="text-slate-400 text-sm">{t('common.to')}</span>
+              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="px-3 py-2 border rounded text-sm bg-white" />
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button type="button" className="px-3 py-2 border rounded text-sm bg-white hover:bg-slate-50" disabled>
+            CSV
           </button>
-        )}
+          <button type="button" className="px-3 py-2 border rounded text-sm bg-white hover:bg-slate-50" disabled>
+            Excel
+          </button>
+          <button type="button" className="px-3 py-2 border rounded text-sm bg-white hover:bg-slate-50" disabled>
+            PDF
+          </button>
+        </div>
       </div>
 
-      {view === 'cards' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <button
-            onClick={() => { goView('revenue'); }}
-            className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
-          >
-            <div className="text-sm text-slate-500">{t('overview.totalRevenue')}</div>
-            <div className="text-xl font-semibold">{formatTzs(d.totalRevenue)}</div>
-          </button>
-          <button
-            onClick={() => { goView('expenses'); void loadExpenseDetail(); }}
-            className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
-          >
-            <div className="text-sm text-slate-500">{t('overview.totalExpenses')}</div>
-            <div className="text-xl font-semibold">{formatTzs(d.totalExpenses)}</div>
-          </button>
-          <div className="bg-white border rounded-lg p-4">
-            <div className="text-sm text-slate-500">{t('overview.netProfit')}</div>
-            <div className={`text-xl font-semibold ${d.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {formatTzs(d.netProfit)}
+      {loading && !overview ? (
+        <div className="text-slate-500">{t('common.loading')}</div>
+      ) : overview ? (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <button
+              type="button"
+              onClick={() => pushViewHistory('net', 'all', 1)}
+              className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
+            >
+              <div className="text-sm text-slate-500">{t('finance.netRevenue')}</div>
+              <div className="text-xl font-semibold">{formatTzs(overview.totals.netRevenue)}</div>
+              <div className="text-xs text-slate-500 mt-1">{vatEnabled ? t('finance.beforeVat') : t('finance.vatDisabled')}</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => pushViewHistory('gross', 'all', 1)}
+              className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
+            >
+              <div className="text-sm text-slate-500">{t('finance.grossSales')}</div>
+              <div className="text-xl font-semibold">{formatTzs(overview.totals.grossSales)}</div>
+              <div className="text-xs text-slate-500 mt-1">{t('finance.paymentsReceived')}</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => pushViewHistory('vat', 'all', 1)}
+              className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
+            >
+              <div className="text-sm text-slate-500">{t('finance.vatCollected')}</div>
+              <div className="text-xl font-semibold">{formatTzs(overview.totals.vatCollected)}</div>
+              <div className="text-xs text-slate-500 mt-1">
+                {vatEnabled ? `${Math.round((overview.vat.vat_rate || 0) * 100)}% · ${overview.vat.vat_type}` : t('finance.vatDisabled')}
+              </div>
+            </button>
+          </div>
+
+          {sector === 'all' && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {(['rooms', 'bar', 'restaurant'] as const).map((s) => {
+                const val = metric === 'net'
+                  ? overview.bySector[s].net
+                  : metric === 'vat'
+                    ? overview.bySector[s].vat
+                    : overview.bySector[s].gross;
+                const title = metric === 'net' ? t('finance.netRevenue') : metric === 'vat' ? t('finance.vatCollected') : t('finance.grossSales');
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => pushViewHistory(metric, s, 1)}
+                    className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
+                  >
+                    <div className="text-sm text-slate-500">{labelSector(s)}</div>
+                    <div className="text-lg font-semibold">{formatTzs(val)}</div>
+                    <div className="text-xs text-slate-500 mt-1">{title}</div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {isMainView && (
+            <div className="bg-white border rounded-lg p-4 max-w-2xl">
+              <h2 className="font-medium mb-3">{t('finance.recordExpense')}</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm text-slate-600 mb-1">{t('finance.category')}</label>
+                  <input
+                    value={expenseCategory}
+                    onChange={(e) => setExpenseCategory(e.target.value)}
+                    className="w-full px-3 py-2 border rounded text-sm"
+                    placeholder={t('finance.category')}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-600 mb-1">{t('finance.amount')}</label>
+                  <input
+                    value={expenseAmount}
+                    onChange={(e) => setExpenseAmount(e.target.value)}
+                    className="w-full px-3 py-2 border rounded text-sm"
+                    inputMode="decimal"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-600 mb-1">{t('finance.date')}</label>
+                  <input
+                    type="date"
+                    value={expenseDate}
+                    onChange={(e) => setExpenseDate(e.target.value)}
+                    className="w-full px-3 py-2 border rounded text-sm bg-white"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-sm text-slate-600 mb-1">{t('finance.notesOptional')}</label>
+                  <input
+                    value={expenseNotes}
+                    onChange={(e) => setExpenseNotes(e.target.value)}
+                    className="w-full px-3 py-2 border rounded text-sm"
+                    placeholder={t('finance.notesOptional')}
+                  />
+                </div>
+              </div>
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={recordExpense}
+                  disabled={savingExpense}
+                  className="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700 disabled:opacity-50 text-sm"
+                >
+                  {savingExpense ? t('common.loading') : t('finance.record')}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white border rounded-lg overflow-hidden">
+            <div className="p-4 border-b flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="font-medium">{t('finance.transactions')}</div>
+                <div className="text-xs text-slate-500">
+                  {t('finance.showingFor')}: {labelSector(sector)}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <select value={sector} onChange={(e) => { setSector(e.target.value as Sector); setPage(1); }} className="px-3 py-2 border rounded text-sm bg-white">
+                  <option value="all">{t('finance.allSectors')}</option>
+                  <option value="rooms">{t('finance.roomsRevenue')}</option>
+                  <option value="bar">{t('bar.title')}</option>
+                  <option value="restaurant">{t('restaurant.title')}</option>
+                </select>
+                <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }} className="px-3 py-2 border rounded text-sm bg-white">
+                  {[10, 20, 50, 100].map((n) => <option key={n} value={n}>{n}/page</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[980px]">
+                <thead className="bg-slate-50 border-b">
+                  <tr className="text-left text-slate-600">
+                    <th className="p-3 font-medium">{t('common.date')}</th>
+                    <th className="p-3 font-medium">{t('finance.referenceId')}</th>
+                    <th className="p-3 font-medium">{t('finance.sector')}</th>
+                    <th className="p-3 font-medium text-right">{t('finance.netAmount')}</th>
+                    <th className="p-3 font-medium text-right">{t('finance.vatAmount')}</th>
+                    <th className="p-3 font-medium text-right">{t('finance.grossAmount')}</th>
+                    <th className="p-3 font-medium">{t('finance.paymentMode')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {txLoading ? (
+                    <tr><td className="p-3 text-slate-500" colSpan={7}>{t('common.loading')}</td></tr>
+                  ) : displayedRows.length === 0 ? (
+                    <tr><td className="p-3 text-slate-500" colSpan={7}>{t('common.noItems')}</td></tr>
+                  ) : (
+                    displayedRows.map((r, idx) => (
+                      <tr key={`${r.referenceId}-${idx}`} className="hover:bg-slate-50">
+                        <td className="p-3 whitespace-nowrap">{new Date(r.date).toLocaleString()}</td>
+                        <td className="p-3 font-mono text-xs">{r.referenceId}</td>
+                        <td className="p-3">{r.sector}</td>
+                        <td className="p-3 text-right whitespace-nowrap">{formatTzs(r.netAmount)}</td>
+                        <td className="p-3 text-right whitespace-nowrap">{formatTzs(r.vatAmount)}</td>
+                        <td className="p-3 text-right whitespace-nowrap">{formatTzs(r.grossAmount)}</td>
+                        <td className="p-3 whitespace-nowrap">{r.paymentMode}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="p-4 border-t flex items-center justify-between">
+              <div className="text-xs text-slate-500">
+                {t('finance.page')} {page} / {totalPages} · {t('finance.totalRows')}: {tx.total}
+              </div>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="px-3 py-2 border rounded text-sm bg-white disabled:opacity-50">
+                  {t('common.back')}
+                </button>
+                <button type="button" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="px-3 py-2 border rounded text-sm bg-white disabled:opacity-50">
+                  {t('common.next')}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </>
+      ) : (
+        <div className="text-slate-500">{t('common.noItems')}</div>
       )}
 
-      {view === 'revenue' && (
-        <div className="space-y-4">
-          <h2 className="font-medium">{t('finance.revenueBySector')}</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <button
-              onClick={() => loadRevenueSector('bar')}
-              className="bg-white border rounded-lg p-4 text-left hover:border-teal-500"
-            >
-              <div className="text-sm text-slate-500">{t('bar.title')}</div>
-              <div className="text-lg font-semibold">{formatTzs(d.bySector.bar)}</div>
-            </button>
-            <button
-              onClick={() => loadRevenueSector('restaurant')}
-              className="bg-white border rounded-lg p-4 text-left hover:border-teal-500"
-            >
-              <div className="text-sm text-slate-500">{t('restaurant.title')}</div>
-              <div className="text-lg font-semibold">{formatTzs(d.bySector.restaurant)}</div>
-            </button>
-            <button
-              onClick={() => loadRevenueSector('hotel')}
-              className="bg-white border rounded-lg p-4 text-left hover:border-teal-500"
-            >
-              <div className="text-sm text-slate-500">{t('overview.hotelRooms')}</div>
-              <div className="text-lg font-semibold">{formatTzs(d.bySector.hotel)}</div>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {view === 'revenue-sector' && (
-        <div className="space-y-4">
-          <h2 className="font-medium capitalize">{selectedSector} – {t('finance.revenueSummary')}</h2>
-          <p className="text-sm text-slate-600">
-            Total: {formatTzs(displayedSales.reduce((s, r) => s + r.amount, 0))}
-          </p>
-          <div className="bg-white border rounded overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="text-left p-3">{t('finance.date')}</th>
-                  <th className="text-left p-3">{t('finance.orderId')}</th>
-                  <th className="text-right p-3">{t('finance.amount')}</th>
-                  <th className="text-left p-3">{t('finance.payment')}</th>
-                  <th className="text-left p-3">{t('finance.staff')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {displayedSales.map((r) => (
-                  <tr key={r.id} className="border-t">
-                    <td className="p-3">{new Date(r.date).toLocaleDateString()}</td>
-                    <td className="p-3">{r.orderId}</td>
-                    <td className="p-3 text-right">{formatTzs(r.amount)}</td>
-                    <td className="p-3">{r.paymentMode}</td>
-                    <td className="p-3">{r.staff}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {displayedSales.length === 0 && <p className="p-4 text-slate-500">{t('finance.noSales')}</p>}
-          </div>
-        </div>
-      )}
-
-      {view === 'expenses' && expenseDetail && (
-        <div className="space-y-4">
-          <h2 className="font-medium">{t('finance.expensesByCategory')}</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {Object.entries(displayedByCategory).map(([cat, amt]) => (
-              <div key={cat} className="bg-white border rounded p-4">
-                <div className="text-sm text-slate-500">{cat}</div>
-                <div className="font-semibold">{formatTzs(amt)}</div>
-              </div>
-            ))}
-          </div>
-          <h3 className="font-medium mt-6">{t('finance.expenseHistory')}</h3>
-          <div className="bg-white border rounded overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="text-left p-3">{t('finance.date')}</th>
-                  <th className="text-left p-3">{t('finance.category')}</th>
-                  <th className="text-right p-3">{t('finance.amount')}</th>
-                  <th className="text-left p-3">{t('finance.notes')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {displayedExpenses.map((e) => (
-                  <tr key={e.id} className="border-t">
-                    <td className="p-3">{new Date(e.date).toLocaleDateString()}</td>
-                    <td className="p-3">{e.category}</td>
-                    <td className="p-3 text-right">{formatTzs(e.amount)}</td>
-                    <td className="p-3 text-slate-600">{e.notes ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {displayedExpenses.length === 0 && <p className="p-4 text-slate-500">{t('finance.noExpenses')}</p>}
-          </div>
-        </div>
-      )}
-
-      {view === 'expenses' && !expenseDetail && <div className="text-slate-500">{t('finance.loadingExpenses')}</div>}
-
-      {(isManagerLevel(user?.role) || user?.role === 'FINANCE') && (
-        <div className="bg-white border rounded p-4 max-w-md">
-          <h2 className="font-medium mb-2">{t('finance.recordExpense')}</h2>
-          <CreateExpenseForm token={token} t={t} onCreated={() => { setData(null); goView('cards'); setExpenseDetail(null); }} />
-        </div>
-      )}
     </div>
   );
-}
-
-function CreateExpenseForm({ token, t, onCreated }: { token: string | null; t: (k: string) => string; onCreated: () => void }) {
-  const [category, setCategory] = useState('HOUSEKEEPING');
-  const [amount, setAmount] = useState('');
-  const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10));
-  const [notes, setNotes] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState('');
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!token || !amount) return;
-    setLoading(true);
-    setMsg('');
-    try {
-      await api('/finance/expenses', {
-        method: 'POST',
-        token,
-        body: JSON.stringify({ category, amount: parseFloat(amount), expenseDate, description: notes || undefined }),
-      });
-      setAmount('');
-      setNotes('');
-      setMsg(t('finance.expenseRecorded'));
-      onCreated();
-    } catch (err) {
-      setMsg((err as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <form onSubmit={submit} className="space-y-2">
-      <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full px-3 py-2 border rounded text-sm" required>
-        <option value="HOUSEKEEPING">{t('finance.housekeeping')}</option>
-        <option value="MAINTENANCE">{t('finance.maintenance')}</option>
-        <option value="UTILITIES">{t('finance.utilities')}</option>
-        <option value="OTHERS">{t('finance.others')}</option>
-      </select>
-      <input type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={t('finance.amountPlaceholder')} className="w-full px-3 py-2 border rounded text-sm" required />
-      <input type="date" value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} className="w-full px-3 py-2 border rounded text-sm" required />
-      <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t('finance.notesOptional')} className="w-full px-3 py-2 border rounded text-sm" />
-      <button type="submit" disabled={loading} className="px-4 py-2 bg-teal-600 text-white rounded text-sm disabled:opacity-50">{t('finance.record')}</button>
-      {msg && <p className="text-sm text-green-600">{msg}</p>}
-    </form>
-  );
-}
-
-function formatTzs(n: number) {
-  return new Intl.NumberFormat('en-TZ', { style: 'currency', currency: 'TZS', maximumFractionDigits: 0 }).format(n);
 }

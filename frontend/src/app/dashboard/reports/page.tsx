@@ -19,10 +19,10 @@ export default function ReportsPage() {
   const [data, setData] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const isManager = isManagerLevel(user?.role);
+  const canView = isManagerLevel(user?.role) || user?.role === 'FINANCE';
 
   async function loadReport() {
-    if (!token || !isManager) return;
+    if (!token || !canView) return;
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -30,13 +30,26 @@ export default function ReportsPage() {
       if (to) params.set('to', to);
       if (reportType === 'revenue') {
         const res = await api<{ bar?: { total?: number }; restaurant?: { total?: number }; hotel?: number; total?: number }>(`/reports/sales?${params}`, { token });
-        setData(res);
+        if (sector !== 'all') {
+          const bar = (res.bar as { total?: number })?.total ?? 0;
+          const restaurant = (res.restaurant as { total?: number })?.total ?? 0;
+          const hotel = (res.hotel as number) ?? 0;
+          const filtered =
+            sector === 'bar'
+              ? { bar: res.bar, restaurant: { total: 0 }, hotel: 0, total: bar }
+              : sector === 'restaurant'
+                ? { bar: { total: 0 }, restaurant: res.restaurant, hotel: 0, total: restaurant }
+                : { bar: { total: 0 }, restaurant: { total: 0 }, hotel, total: hotel };
+          setData(filtered as unknown as Record<string, unknown>);
+        } else {
+          setData(res as unknown as Record<string, unknown>);
+        }
       } else if (reportType === 'expenses') {
         const res = await api<{ expenses: unknown[]; total?: number }>(`/finance/expenses?${params}`, { token });
-        setData(res);
+        setData(res as unknown as Record<string, unknown>);
       } else {
         const res = await api<{ totalRevenue?: number; totalExpenses?: number; netProfit?: number }>(`/finance/dashboard?${params}`, { token });
-        setData(res);
+        setData(res as unknown as Record<string, unknown>);
       }
     } catch {
       setData(null);
@@ -45,33 +58,36 @@ export default function ReportsPage() {
     }
   }
 
-  function exportCsv() {
-    if (!data) return;
-    let csv = '';
-    if (reportType === 'revenue' && data.bar !== undefined) {
-      csv = 'Sector,Amount (TZS)\n';
-      csv += `Bar,${(data.bar as { total?: number }).total ?? 0}\n`;
-      csv += `Restaurant,${(data.restaurant as { total?: number })?.total ?? 0}\n`;
-      csv += `Hotel,${(data.hotel as number) ?? 0}\n`;
-      csv += `Total,${(data.total as number) ?? 0}\n`;
-    } else if (reportType === 'pnl') {
-      csv = 'Item,Amount (TZS)\n';
-      csv += `Revenue,${(data.totalRevenue as number) ?? 0}\n`;
-      csv += `Expenses,${(data.totalExpenses as number) ?? 0}\n`;
-      csv += `Net Profit,${(data.netProfit as number) ?? 0}\n`;
-    }
-    if (csv) {
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `report-${reportType}-${new Date().toISOString().slice(0, 10)}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    }
+  async function download(format: 'csv' | 'xlsx' | 'pdf') {
+    if (!token) return;
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+    const params = new URLSearchParams();
+    params.set('reportType', reportType);
+    params.set('format', format);
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    if (reportType === 'revenue') params.set('sector', sector);
+
+    const res = await fetch(`${baseUrl}/reports/export?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'include',
+    });
+    if (!res.ok) return;
+
+    const blob = await res.blob();
+    const cd = res.headers.get('content-disposition') || '';
+    const match = cd.match(/filename="([^"]+)"/i);
+    const filename = match?.[1] || `report-${reportType}-${new Date().toISOString().slice(0, 10)}.${format}`;
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
-  if (!isManager) {
+  if (!canView) {
     return (
       <div>
         <h1 className="text-xl font-semibold mb-4">{t('reports.title')}</h1>
@@ -95,15 +111,17 @@ export default function ReportsPage() {
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-full px-3 py-2 border rounded" />
           </div>
         </div>
-        <div>
-          <label className="block text-sm text-slate-600 mb-1">{t('reports.sector')}</label>
-          <select value={sector} onChange={(e) => setSector(e.target.value as Sector)} className="w-full px-3 py-2 border rounded">
-            <option value="all">All</option>
-            <option value="bar">{t('bar.title')}</option>
-            <option value="restaurant">{t('restaurant.title')}</option>
-            <option value="hotel">{t('overview.hotelRooms')}</option>
-          </select>
-        </div>
+        {reportType === 'revenue' && (
+          <div>
+            <label className="block text-sm text-slate-600 mb-1">{t('reports.sector')}</label>
+            <select value={sector} onChange={(e) => setSector(e.target.value as Sector)} className="w-full px-3 py-2 border rounded">
+              <option value="all">All</option>
+              <option value="bar">{t('bar.title')}</option>
+              <option value="restaurant">{t('restaurant.title')}</option>
+              <option value="hotel">{t('overview.hotelRooms')}</option>
+            </select>
+          </div>
+        )}
         <div>
           <label className="block text-sm text-slate-600 mb-1">Report type</label>
           <select value={reportType} onChange={(e) => setReportType(e.target.value as ReportType)} className="w-full px-3 py-2 border rounded">
@@ -120,10 +138,15 @@ export default function ReportsPage() {
       {data && (
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
-            <button onClick={exportCsv} className="px-3 py-1 text-sm bg-slate-100 rounded hover:bg-slate-200">
+            <button onClick={() => download('csv')} className="px-3 py-1 text-sm bg-slate-100 rounded hover:bg-slate-200">
               {t('reports.exportCsv')}
             </button>
-            <span className="px-3 py-1 text-sm text-slate-400">PDF, Excel, Email, WhatsApp – coming soon</span>
+            <button onClick={() => download('xlsx')} className="px-3 py-1 text-sm bg-slate-100 rounded hover:bg-slate-200">
+              {t('reports.exportExcel')}
+            </button>
+            <button onClick={() => download('pdf')} className="px-3 py-1 text-sm bg-slate-100 rounded hover:bg-slate-200">
+              {t('reports.exportPdf')}
+            </button>
           </div>
 
           {reportType === 'revenue' && (

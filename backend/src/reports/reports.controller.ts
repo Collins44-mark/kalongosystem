@@ -1,4 +1,5 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import { ReportsService } from './reports.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { SubscriptionGuard } from '../common/guards/subscription.guard';
@@ -9,7 +10,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 @Controller('reports')
 @UseGuards(JwtAuthGuard, SubscriptionGuard)
 @UseGuards(RolesGuard)
-@Roles('MANAGER')
+@Roles('MANAGER', 'FINANCE')
 export class ReportsController {
   constructor(private reports: ReportsService) {}
 
@@ -66,5 +67,34 @@ export class ReportsController {
       from ? new Date(from) : undefined,
       to ? new Date(to) : undefined,
     );
+  }
+
+  @Get('export')
+  async export(
+    @CurrentUser() user: any,
+    @Res() res: Response,
+    @Query('reportType') reportType?: string,
+    @Query('format') format?: string,
+    @Query('sector') sector?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    const rt = (reportType ?? 'revenue').toLowerCase();
+    const fmt = (format ?? 'csv').toLowerCase();
+    const sec = (sector ?? 'all').toLowerCase();
+
+    const payload = await this.reports.exportReport(
+      user.businessId,
+      user.branchId,
+      rt,
+      fmt,
+      sec,
+      from ? new Date(from) : undefined,
+      to ? new Date(to) : undefined,
+    );
+
+    res.setHeader('Content-Type', payload.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${payload.filename}"`);
+    return res.send(payload.body);
   }
 }
