@@ -21,6 +21,11 @@ export default function LoginPage() {
   const [businessId, setBusinessId] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotBusinessId, setForgotBusinessId] = useState('');
+  const [forgotMsg, setForgotMsg] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [workerId, setWorkerId] = useState('');
@@ -51,7 +56,8 @@ export default function LoginPage() {
       if (!token) throw new Error('No token received from server');
       const user = res.user as LoginUser;
 
-      if (res.forcePasswordChange) {
+      // Force-change only for MANAGER (admin), not role-based workers.
+      if (res.forcePasswordChange && user.role === 'MANAGER') {
         setAuth(token, user);
         router.replace('/change-password');
       } else if (res.needsWorkerSelection && res.workers && res.workers.length > 0) {
@@ -99,6 +105,27 @@ export default function LoginPage() {
     setLoginUser(null);
     setWorkerId('');
     setError('');
+  }
+
+  async function submitForgot(e: React.FormEvent) {
+    e.preventDefault();
+    setForgotMsg('');
+    setError('');
+    setLoading(true);
+    try {
+      await api('/auth/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify({
+          businessId: (forgotBusinessId || businessId).trim().toUpperCase(),
+          email: (forgotEmail || email).trim(),
+        }),
+      });
+      setForgotMsg('If the Business ID + email match an admin account, a temporary password was sent to the email.');
+    } catch (err: any) {
+      setForgotMsg(err?.message || 'Request failed');
+    } finally {
+      setLoading(false);
+    }
   }
 
   // Worker selection screen (after login when role has workers)
@@ -166,6 +193,7 @@ export default function LoginPage() {
               placeholder="HMS-12345"
               required
             />
+            <p className="text-xs text-slate-500 mt-1">Use the Business ID (HMS-xxxxx), not the business name.</p>
           </div>
           <div>
             <label className="block text-sm text-slate-600 mb-1">{t('auth.email')}</label>
@@ -179,13 +207,22 @@ export default function LoginPage() {
           </div>
           <div>
             <label className="block text-sm text-slate-600 mb-1">{t('auth.password')}</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border rounded"
-              required
-            />
+            <div className="flex gap-2">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-3 py-2 border rounded"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="px-3 py-2 border rounded text-sm bg-white hover:bg-slate-50"
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
           </div>
         </div>
         <button
@@ -195,6 +232,42 @@ export default function LoginPage() {
         >
           {loading ? t('auth.loggingIn') : t('auth.login')}
         </button>
+
+        <button
+          type="button"
+          onClick={() => { setForgotOpen((v) => !v); setForgotMsg(''); }}
+          className="mt-3 w-full text-sm text-slate-600 hover:text-slate-800"
+        >
+          Forgot password?
+        </button>
+
+        {forgotOpen && (
+          <div className="mt-3 p-3 border rounded bg-slate-50 space-y-2">
+            <div className="text-sm font-medium text-slate-700">Reset admin password</div>
+            <div className="text-xs text-slate-600">
+              This is only for MANAGER (admin). Temporary password will be sent to email, then you must change it after login.
+            </div>
+            <form onSubmit={submitForgot} className="space-y-2">
+              <input
+                value={forgotBusinessId}
+                onChange={(e) => setForgotBusinessId(e.target.value)}
+                className="w-full px-3 py-2 border rounded text-sm"
+                placeholder="Business ID (HMS-12345)"
+              />
+              <input
+                value={forgotEmail}
+                onChange={(e) => setForgotEmail(e.target.value)}
+                className="w-full px-3 py-2 border rounded text-sm"
+                placeholder="Admin email"
+              />
+              <button type="submit" disabled={loading} className="w-full py-2 bg-slate-900 text-white rounded text-sm disabled:opacity-50">
+                {loading ? '...' : 'Send temporary password'}
+              </button>
+            </form>
+            {forgotMsg && <div className="text-xs text-slate-700">{forgotMsg}</div>}
+          </div>
+        )}
+
         <p className="mt-4 text-center text-sm text-slate-500">
           {t('auth.noAccount')} <Link href="/signup" className="text-teal-600">{t('auth.signUpLink')}</Link>
         </p>

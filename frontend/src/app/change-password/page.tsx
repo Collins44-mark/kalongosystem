@@ -9,15 +9,21 @@ export default function ChangePasswordPage() {
   const router = useRouter();
   const token = useAuth((s) => s.token);
   const user = useAuth((s) => s.user);
+  const logout = useAuth((s) => s.logout);
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!token || !user) return;
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
     setError('');
     setLoading(true);
     try {
@@ -27,6 +33,7 @@ export default function ChangePasswordPage() {
         body: JSON.stringify({ currentPassword, newPassword }),
       });
       // Force a clean re-login (also re-triggers worker selection for role-based users)
+      logout();
       router.replace('/login');
     } catch (err: any) {
       setError(err?.message || 'Request failed');
@@ -71,6 +78,17 @@ export default function ChangePasswordPage() {
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
+              className="w-full px-3 py-2 border rounded"
+              minLength={6}
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-slate-600 mb-1">Confirm new password</label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
               className="w-full px-3 py-2 border rounded"
               minLength={6}
               required

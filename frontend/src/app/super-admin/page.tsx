@@ -12,6 +12,7 @@ export default function SuperAdminLoginPage() {
   const [businessId, setBusinessId] = useState('HMS-1');
   const [email, setEmail] = useState('markkcollins979@gmail.com');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -49,7 +50,22 @@ export default function SuperAdminLoginPage() {
           </div>
           <div>
             <label className="block text-sm text-slate-600 mb-1">Password</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-3 py-2 border rounded" required />
+            <div className="flex gap-2">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-3 py-2 border rounded"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="px-3 py-2 border rounded text-sm bg-white hover:bg-slate-50"
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
           </div>
         </div>
         <button type="submit" disabled={loading} className="mt-6 w-full py-2 bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">

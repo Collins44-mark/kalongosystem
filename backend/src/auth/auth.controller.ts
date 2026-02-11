@@ -40,6 +40,15 @@ class ChangePasswordDto {
   newPassword: string;
 }
 
+class ForgotPasswordDto {
+  @IsString()
+  @IsNotEmpty()
+  businessId: string;
+
+  @IsEmail()
+  email: string;
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(private auth: AuthService) {}
@@ -78,5 +87,10 @@ export class AuthController {
     @Body() dto: ChangePasswordDto,
   ) {
     return this.auth.changePassword(user.sub, dto.currentPassword, dto.newPassword);
+  }
+
+  @Post('forgot-password')
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.auth.forgotPassword(dto.businessId, dto.email);
   }
 }

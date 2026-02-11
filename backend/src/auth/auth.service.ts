@@ -9,6 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { StaffWorkersService } from '../staff-workers/staff-workers.service';
+import nodemailer from 'nodemailer';
 
 @Injectable()
 export class AuthService {
@@ -118,6 +119,10 @@ export class AuthService {
     const cleanEmail = (email || '').toLowerCase().trim();
     const cleanPassword = (password || '').trim();
 
+    if (!/^HMS-\d+$/i.test(cleanBusinessId)) {
+      throw new BadRequestException('Business ID must be like HMS-12345');
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { email: cleanEmail },
       select: { id: true, email: true, name: true, language: true, password: true, forcePasswordChange: true },
@@ -172,6 +177,99 @@ export class AuthService {
       needsWorkerSelection,
       workers: needsWorkerSelection ? workers.map((w) => ({ id: w.id, fullName: w.fullName })) : [],
     };
+  }
+
+  /**
+   * Forgot password (MANAGER only):
+   * - Validates businessId + email match a MANAGER BusinessUser
+   * - Generates temporary password
+   * - Hashes + stores it
+   * - Sets forcePasswordChange=true
+   * - Emails the temp password to the user
+   */
+  async forgotPassword(businessId: string, email: string) {
+    const cleanBusinessId = (businessId || '').toUpperCase().trim();
+    const cleanEmail = (email || '').toLowerCase().trim();
+
+    if (!/^HMS-\d+$/i.test(cleanBusinessId)) {
+      throw new BadRequestException('Business ID must be like HMS-12345');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { email: cleanEmail },
+      select: { id: true, email: true, isSuperAdmin: true },
+    });
+    if (!user || user.isSuperAdmin) {
+      // Do not reveal which part failed
+      return { success: true };
+    }
+
+    const bu = await this.prisma.businessUser.findFirst({
+      where: {
+        userId: user.id,
+        role: 'MANAGER',
+        business: { businessId: cleanBusinessId },
+        isDisabled: false,
+      },
+      include: { business: { include: { subscription: true } } },
+    });
+    if (!bu) return { success: true };
+
+    if (bu.business?.isSuspended === true) {
+      throw new ForbiddenException('Your subscription is inactive. Contact support.');
+    }
+
+    const temp = this.generateTempPassword();
+    const hashed = await bcrypt.hash(temp, 10);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashed, forcePasswordChange: true },
+    });
+
+    await this.sendTempPasswordEmail({
+      to: cleanEmail,
+      businessId: cleanBusinessId,
+      tempPassword: temp,
+    });
+
+    return { success: true };
+  }
+
+  private generateTempPassword() {
+    // simple but reasonably strong: 10 chars alnum
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    let out = '';
+    for (let i = 0; i < 10; i++) {
+      out += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return out;
+  }
+
+  private async sendTempPasswordEmail(input: { to: string; businessId: string; tempPassword: string }) {
+    const host = process.env.SMTP_HOST;
+    const port = Number(process.env.SMTP_PORT || 587);
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
+    const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+
+    if (!host || !user || !pass || !from) {
+      // In production we require SMTP config so the flow matches spec
+      throw new BadRequestException('Email service not configured');
+    }
+
+    const transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: port === 465,
+      auth: { user, pass },
+    });
+
+    await transporter.sendMail({
+      from,
+      to: input.to,
+      subject: `HMS Temporary Password (${input.businessId})`,
+      text: `Your temporary password is: ${input.tempPassword}\n\nBusiness ID: ${input.businessId}\n\nPlease log in and change your password immediately.`,
+    });
   }
 
   async changePassword(userId: string, currentPassword: string, newPassword: string) {
