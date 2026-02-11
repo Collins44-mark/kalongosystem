@@ -8,9 +8,11 @@ import PDFDocument from 'pdfkit';
 export class FinanceService {
   constructor(private prisma: PrismaService) {}
 
-  private async getVatConfig(businessId: string): Promise<{ enabled: boolean; rate: number; type: 'inclusive' | 'exclusive' }> {
+  private async getVatConfig(
+    businessId: string,
+  ): Promise<{ enabled: boolean; rate: number; type: 'inclusive' | 'exclusive'; apply: { rooms: boolean; bar: boolean; restaurant: boolean } }> {
     const settings = await this.prisma.businessSetting.findMany({
-      where: { businessId, key: { in: ['vat_enabled', 'vat_rate', 'vat_type'] } },
+      where: { businessId, key: { in: ['vat_enabled', 'vat_rate', 'vat_type', 'vat_apply_rooms', 'vat_apply_bar', 'vat_apply_restaurant'] } },
     });
     const map = new Map(settings.map((s) => [s.key, s.value]));
     const enabledRaw = map.get('vat_enabled');
@@ -19,12 +21,24 @@ export class FinanceService {
     const rate = Math.max(0, Number(rateRaw ?? 0) || 0);
     const typeRaw = map.get('vat_type');
     const type = typeRaw === 'exclusive' ? 'exclusive' : 'inclusive';
-    return { enabled, rate, type };
+    const applyRoomsRaw = map.get('vat_apply_rooms');
+    const applyBarRaw = map.get('vat_apply_bar');
+    const applyRestaurantRaw = map.get('vat_apply_restaurant');
+    const apply = {
+      rooms: applyRoomsRaw === 'false' ? false : true,
+      bar: applyBarRaw === 'false' ? false : true,
+      restaurant: applyRestaurantRaw === 'false' ? false : true,
+    };
+    return { enabled, rate, type, apply };
   }
 
-  private splitVatFromGross(gross: number, cfg: { enabled: boolean; rate: number; type: 'inclusive' | 'exclusive' }) {
+  private splitVatFromGross(
+    gross: number,
+    cfg: { enabled: boolean; rate: number; type: 'inclusive' | 'exclusive' },
+    applyVat: boolean,
+  ) {
     const g = Math.max(0, gross || 0);
-    if (!cfg.enabled || cfg.rate <= 0) return { net: g, vat: 0, gross: g };
+    if (!applyVat || !cfg.enabled || cfg.rate <= 0) return { net: g, vat: 0, gross: g };
     // For cash collected, VAT can be derived from gross for both inclusive and exclusive pricing.
     const net = g / (1 + cfg.rate);
     const vat = g - net;
@@ -290,9 +304,9 @@ export class FinanceService {
     const barGross = Number(barAgg._sum.totalAmount || 0);
     const restaurantGross = Number(restAgg._sum.totalAmount || 0);
 
-    const roomsSplit = this.splitVatFromGross(roomsGross, vat);
-    const barSplit = this.splitVatFromGross(barGross, vat);
-    const restaurantSplit = this.splitVatFromGross(restaurantGross, vat);
+    const roomsSplit = this.splitVatFromGross(roomsGross, vat, vat.apply.rooms);
+    const barSplit = this.splitVatFromGross(barGross, vat, vat.apply.bar);
+    const restaurantSplit = this.splitVatFromGross(restaurantGross, vat, vat.apply.restaurant);
 
     const grossSales = roomsGross + barGross + restaurantGross;
     const netRevenue = roomsSplit.net + barSplit.net + restaurantSplit.net;
@@ -361,7 +375,7 @@ export class FinanceService {
       });
       for (const p of payments) {
         const gross = Number(p.amount);
-        const split = this.splitVatFromGross(gross, vat);
+        const split = this.splitVatFromGross(gross, vat, vat.apply.rooms);
         txns.push({
           date: p.createdAt,
           referenceId: p.bookingId,
@@ -382,7 +396,7 @@ export class FinanceService {
       });
       for (const o of orders) {
         const gross = Number(o.totalAmount);
-        const split = this.splitVatFromGross(gross, vat);
+        const split = this.splitVatFromGross(gross, vat, vat.apply.bar);
         txns.push({
           date: o.createdAt,
           referenceId: o.orderNumber || o.id,
@@ -403,7 +417,7 @@ export class FinanceService {
       });
       for (const o of orders) {
         const gross = Number(o.totalAmount);
-        const split = this.splitVatFromGross(gross, vat);
+        const split = this.splitVatFromGross(gross, vat, vat.apply.restaurant);
         txns.push({
           date: o.createdAt,
           referenceId: o.orderNumber || o.id,

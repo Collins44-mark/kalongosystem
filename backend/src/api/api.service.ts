@@ -96,6 +96,8 @@ export class ApiService {
       }
     }
     const vatEnabled = map['vat_enabled'] === true;
+    const vatNameRaw = map['vat_name'];
+    const vatName = typeof vatNameRaw === 'string' && vatNameRaw.trim() ? vatNameRaw.trim() : 'VAT';
     const vatRateRaw = map['vat_rate'];
     const vatRate =
       typeof vatRateRaw === 'number'
@@ -105,12 +107,19 @@ export class ApiService {
           : 0;
     const vatTypeRaw = map['vat_type'];
     const vatType = vatTypeRaw === 'inclusive' || vatTypeRaw === 'exclusive' ? vatTypeRaw : 'inclusive';
+    const applyRooms = map['vat_apply_rooms'] !== false;
+    const applyBar = map['vat_apply_bar'] !== false;
+    const applyRestaurant = map['vat_apply_restaurant'] !== false;
 
     return {
       enableDragDropBooking: map['enableDragDropBooking'] === true,
       vat_enabled: vatEnabled,
+      vat_name: vatName,
       vat_rate: isFinite(vatRate) ? vatRate : 0,
       vat_type: vatType,
+      vat_apply_rooms: applyRooms,
+      vat_apply_bar: applyBar,
+      vat_apply_restaurant: applyRestaurant,
     };
   }
 

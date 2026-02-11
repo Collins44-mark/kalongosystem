@@ -8,6 +8,7 @@ import { isManagerLevel } from '@/lib/roles';
 import { UserRolesSection } from './UserRolesSection';
 import { SystemSettingsSection } from './SystemSettingsSection';
 import { StaffWorkersSection } from './StaffWorkersSection';
+import { TaxConfigurationSection } from './TaxConfigurationSection';
 
 type Subscription = { plan: string; status: string; trialEndsAt: string };
 type MeResponse = { email: string; role: string; business: { id: string; name: string; code: string } };
@@ -73,6 +74,7 @@ export default function SettingsPage() {
           <UserRolesSection token={token} t={t} />
           <StaffWorkersSection token={token} t={t} />
           <SystemSettingsSection token={token} t={t} />
+          <TaxConfigurationSection token={token} t={t} />
         </>
       )}
     </div>

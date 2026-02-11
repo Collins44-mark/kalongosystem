@@ -11,6 +11,7 @@ import { notifyError, notifySuccess } from '@/store/notifications';
 type Period = 'today' | 'week' | 'month' | 'bydate';
 type Sector = 'all' | 'rooms' | 'bar' | 'restaurant';
 type Metric = 'net' | 'gross' | 'vat';
+type ViewLevel = 'overview' | 'metric' | 'transactions';
 
 type Overview = {
   period: { from: string; to: string };
@@ -42,6 +43,7 @@ export default function FinancePage() {
   const [dateTo, setDateTo] = useState('');
   const [metric, setMetric] = useState<Metric>('net');
   const [sector, setSector] = useState<Sector>('all');
+  const [level, setLevel] = useState<ViewLevel>('overview');
   const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -50,15 +52,13 @@ export default function FinancePage() {
   const [txLoading, setTxLoading] = useState(false);
   const [tx, setTx] = useState<{ total: number; rows: TxnRow[] }>({ total: 0, rows: [] });
 
-  const viewHistory = useRef<{ metric: Metric; sector: Sector; page: number }[]>([]);
+  const viewHistory = useRef<{ level: ViewLevel; metric: Metric; sector: Sector; page: number }[]>([]);
 
   const isManager = isManagerLevel(user?.role);
   const isFinance = user?.role === 'FINANCE';
   const canAccess = isManager || isFinance;
 
   const q = (searchQuery || '').trim().toLowerCase();
-
-  const isMainView = metric === 'net' && sector === 'all';
 
   const [expenseCategory, setExpenseCategory] = useState('');
   const [expenseAmount, setExpenseAmount] = useState('');
@@ -75,8 +75,9 @@ export default function FinancePage() {
     );
   }
 
-  function pushViewHistory(nextMetric: Metric, nextSector: Sector, nextPage: number) {
-    viewHistory.current.push({ metric, sector, page });
+  function pushViewHistory(nextLevel: ViewLevel, nextMetric: Metric, nextSector: Sector, nextPage: number) {
+    viewHistory.current.push({ level, metric, sector, page });
+    setLevel(nextLevel);
     setMetric(nextMetric);
     setSector(nextSector);
     setPage(nextPage);
@@ -86,13 +87,15 @@ export default function FinancePage() {
     const onBack = (e: Event) => {
       const prev = viewHistory.current.pop();
       if (prev) {
+        setLevel(prev.level);
         setMetric(prev.metric);
         setSector(prev.sector);
         setPage(prev.page);
         e.preventDefault();
         return;
       }
-      if (sector !== 'all' || metric !== 'net') {
+      if (level !== 'overview') {
+        setLevel('overview');
         setMetric('net');
         setSector('all');
         setPage(1);
@@ -101,7 +104,7 @@ export default function FinancePage() {
     };
     window.addEventListener('hms-back', onBack);
     return () => window.removeEventListener('hms-back', onBack);
-  }, [metric, sector, page]);
+  }, [level, metric, sector, page]);
 
   useEffect(() => {
     if (!token) return;
@@ -120,6 +123,7 @@ export default function FinancePage() {
 
   useEffect(() => {
     if (!token) return;
+    if (level !== 'transactions') return;
     setTxLoading(true);
     const params = new URLSearchParams();
     params.set('period', period);
@@ -134,15 +138,16 @@ export default function FinancePage() {
       .then((res: any) => setTx({ total: Number(res?.total || 0), rows: Array.isArray(res?.rows) ? res.rows : [] }))
       .catch(() => setTx({ total: 0, rows: [] }))
       .finally(() => setTxLoading(false));
-  }, [token, period, dateFrom, dateTo, sector, page, pageSize]);
+  }, [token, period, dateFrom, dateTo, sector, page, pageSize, level]);
 
   const displayedRows = useMemo(() => {
+    if (level !== 'transactions') return [];
     if (!q) return tx.rows;
     return tx.rows.filter((r) => {
       const txt = `${r.date} ${r.referenceId} ${r.sector} ${r.paymentMode} ${r.netAmount} ${r.vatAmount} ${r.grossAmount}`.toLowerCase();
       return txt.includes(q);
     });
-  }, [q, tx.rows]);
+  }, [q, tx.rows, level]);
 
   const totalPages = Math.max(1, Math.ceil((tx.total || 0) / pageSize));
   const vatEnabled = overview?.vat?.vat_enabled === true && (overview?.vat?.vat_rate ?? 0) > 0;
@@ -160,6 +165,7 @@ export default function FinancePage() {
 
   async function download(format: 'csv' | 'xlsx' | 'pdf') {
     if (!token) return;
+    if (level !== 'transactions') return;
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
     const params = new URLSearchParams();
     params.set('format', format);
@@ -191,6 +197,7 @@ export default function FinancePage() {
 
   async function recordExpense() {
     if (!token) return;
+    if (!isManager) return;
     const amount = Number(expenseAmount);
     if (!expenseCategory.trim() || !Number.isFinite(amount) || amount <= 0 || !expenseDate) {
       notifyError(t('common.fillAllFields'));
@@ -230,9 +237,44 @@ export default function FinancePage() {
     }
   }
 
+  const canExport = level === 'transactions';
+  const breadcrumb = (() => {
+    const m = metric === 'net' ? t('finance.netRevenue') : metric === 'gross' ? t('finance.grossSales') : t('finance.vatCollected');
+    if (level === 'overview') return t('finance.title');
+    if (level === 'metric') return `${t('finance.title')} · ${m}`;
+    return `${t('finance.title')} · ${m} · ${labelSector(sector)}`;
+  })();
+
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">{t('finance.title')}</h1>
+      <div>
+        <h1 className="text-xl font-semibold">{t('finance.title')}</h1>
+        {level !== 'overview' && (
+          <div className="mt-1 flex items-center justify-between">
+            <div className="text-sm text-slate-500">{breadcrumb}</div>
+            <button
+              type="button"
+              onClick={() => {
+                const prev = viewHistory.current.pop();
+                if (prev) {
+                  setLevel(prev.level);
+                  setMetric(prev.metric);
+                  setSector(prev.sector);
+                  setPage(prev.page);
+                } else {
+                  setLevel('overview');
+                  setMetric('net');
+                  setSector('all');
+                  setPage(1);
+                }
+              }}
+              className="text-sm text-slate-600 hover:text-slate-800 hover:underline"
+            >
+              {t('common.back')}
+            </button>
+          </div>
+        )}
+      </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -255,21 +297,24 @@ export default function FinancePage() {
           <button
             type="button"
             onClick={() => download('csv')}
-            className="px-3 py-2 border rounded text-sm bg-white hover:bg-slate-50"
+            disabled={!canExport}
+            className="px-3 py-2 border rounded text-sm bg-white hover:bg-slate-50 disabled:opacity-50"
           >
             CSV
           </button>
           <button
             type="button"
             onClick={() => download('xlsx')}
-            className="px-3 py-2 border rounded text-sm bg-white hover:bg-slate-50"
+            disabled={!canExport}
+            className="px-3 py-2 border rounded text-sm bg-white hover:bg-slate-50 disabled:opacity-50"
           >
             Excel
           </button>
           <button
             type="button"
             onClick={() => download('pdf')}
-            className="px-3 py-2 border rounded text-sm bg-white hover:bg-slate-50"
+            disabled={!canExport}
+            className="px-3 py-2 border rounded text-sm bg-white hover:bg-slate-50 disabled:opacity-50"
           >
             PDF
           </button>
@@ -280,39 +325,41 @@ export default function FinancePage() {
         <div className="text-slate-500">{t('common.loading')}</div>
       ) : overview ? (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <button
-              type="button"
-              onClick={() => pushViewHistory('net', 'all', 1)}
-              className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
-            >
-              <div className="text-sm text-slate-500">{t('finance.netRevenue')}</div>
-              <div className="text-xl font-semibold">{formatTzs(overview.totals.netRevenue)}</div>
-              <div className="text-xs text-slate-500 mt-1">{vatEnabled ? t('finance.beforeVat') : t('finance.vatDisabled')}</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => pushViewHistory('gross', 'all', 1)}
-              className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
-            >
-              <div className="text-sm text-slate-500">{t('finance.grossSales')}</div>
-              <div className="text-xl font-semibold">{formatTzs(overview.totals.grossSales)}</div>
-              <div className="text-xs text-slate-500 mt-1">{t('finance.paymentsReceived')}</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => pushViewHistory('vat', 'all', 1)}
-              className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
-            >
-              <div className="text-sm text-slate-500">{t('finance.vatCollected')}</div>
-              <div className="text-xl font-semibold">{formatTzs(overview.totals.vatCollected)}</div>
-              <div className="text-xs text-slate-500 mt-1">
-                {vatEnabled ? `${Math.round((overview.vat.vat_rate || 0) * 100)}% · ${overview.vat.vat_type}` : t('finance.vatDisabled')}
-              </div>
-            </button>
-          </div>
+          {level === 'overview' && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <button
+                type="button"
+                onClick={() => pushViewHistory('metric', 'net', 'all', 1)}
+                className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
+              >
+                <div className="text-sm text-slate-500">{t('finance.netRevenue')}</div>
+                <div className="text-xl font-semibold">{formatTzs(overview.totals.netRevenue)}</div>
+                <div className="text-xs text-slate-500 mt-1">{vatEnabled ? t('finance.beforeVat') : t('finance.vatDisabled')}</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => pushViewHistory('metric', 'gross', 'all', 1)}
+                className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
+              >
+                <div className="text-sm text-slate-500">{t('finance.grossSales')}</div>
+                <div className="text-xl font-semibold">{formatTzs(overview.totals.grossSales)}</div>
+                <div className="text-xs text-slate-500 mt-1">{t('finance.paymentsReceived')}</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => pushViewHistory('metric', 'vat', 'all', 1)}
+                className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
+              >
+                <div className="text-sm text-slate-500">{t('finance.vatCollected')}</div>
+                <div className="text-xl font-semibold">{formatTzs(overview.totals.vatCollected)}</div>
+                <div className="text-xs text-slate-500 mt-1">
+                  {vatEnabled ? `${Math.round((overview.vat.vat_rate || 0) * 100)}% · ${overview.vat.vat_type}` : t('finance.vatDisabled')}
+                </div>
+              </button>
+            </div>
+          )}
 
-          {sector === 'all' && (
+          {level === 'metric' && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {(['rooms', 'bar', 'restaurant'] as const).map((s) => {
                 const val = metric === 'net'
@@ -325,7 +372,7 @@ export default function FinancePage() {
                   <button
                     key={s}
                     type="button"
-                    onClick={() => pushViewHistory(metric, s, 1)}
+                    onClick={() => pushViewHistory('transactions', metric, s, 1)}
                     className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
                   >
                     <div className="text-sm text-slate-500">{labelSector(s)}</div>
@@ -337,7 +384,7 @@ export default function FinancePage() {
             </div>
           )}
 
-          {isMainView && (
+          {isManager && level === 'overview' && (
             <div className="bg-white border rounded-lg p-4 max-w-2xl">
               <h2 className="font-medium mb-3">{t('finance.recordExpense')}</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -392,76 +439,72 @@ export default function FinancePage() {
             </div>
           )}
 
-          <div className="bg-white border rounded-lg overflow-hidden">
-            <div className="p-4 border-b flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="font-medium">{t('finance.transactions')}</div>
-                <div className="text-xs text-slate-500">
-                  {t('finance.showingFor')}: {labelSector(sector)}
+          {level === 'transactions' && (
+            <div className="bg-white border rounded-lg overflow-hidden">
+              <div className="p-4 border-b flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="font-medium">{t('finance.transactions')}</div>
+                  <div className="text-xs text-slate-500">
+                    {t('finance.showingFor')}: {labelSector(sector)}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }} className="px-3 py-2 border rounded text-sm bg-white">
+                    {[10, 20, 50, 100].map((n) => <option key={n} value={n}>{n}/page</option>)}
+                  </select>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <select value={sector} onChange={(e) => { setSector(e.target.value as Sector); setPage(1); }} className="px-3 py-2 border rounded text-sm bg-white">
-                  <option value="all">{t('finance.allSectors')}</option>
-                  <option value="rooms">{t('finance.roomsRevenue')}</option>
-                  <option value="bar">{t('bar.title')}</option>
-                  <option value="restaurant">{t('restaurant.title')}</option>
-                </select>
-                <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }} className="px-3 py-2 border rounded text-sm bg-white">
-                  {[10, 20, 50, 100].map((n) => <option key={n} value={n}>{n}/page</option>)}
-                </select>
-              </div>
-            </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[980px]">
-                <thead className="bg-slate-50 border-b">
-                  <tr className="text-left text-slate-600">
-                    <th className="p-3 font-medium">{t('common.date')}</th>
-                    <th className="p-3 font-medium">{t('finance.referenceId')}</th>
-                    <th className="p-3 font-medium">{t('finance.sector')}</th>
-                    <th className="p-3 font-medium text-right">{t('finance.netAmount')}</th>
-                    <th className="p-3 font-medium text-right">{t('finance.vatAmount')}</th>
-                    <th className="p-3 font-medium text-right">{t('finance.grossAmount')}</th>
-                    <th className="p-3 font-medium">{t('finance.paymentMode')}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {txLoading ? (
-                    <tr><td className="p-3 text-slate-500" colSpan={7}>{t('common.loading')}</td></tr>
-                  ) : displayedRows.length === 0 ? (
-                    <tr><td className="p-3 text-slate-500" colSpan={7}>{t('common.noItems')}</td></tr>
-                  ) : (
-                    displayedRows.map((r, idx) => (
-                      <tr key={`${r.referenceId}-${idx}`} className="hover:bg-slate-50">
-                        <td className="p-3 whitespace-nowrap">{new Date(r.date).toLocaleString()}</td>
-                        <td className="p-3 font-mono text-xs">{r.referenceId}</td>
-                        <td className="p-3">{r.sector}</td>
-                        <td className="p-3 text-right whitespace-nowrap">{formatTzs(r.netAmount)}</td>
-                        <td className="p-3 text-right whitespace-nowrap">{formatTzs(r.vatAmount)}</td>
-                        <td className="p-3 text-right whitespace-nowrap">{formatTzs(r.grossAmount)}</td>
-                        <td className="p-3 whitespace-nowrap">{r.paymentMode}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[980px]">
+                  <thead className="bg-slate-50 border-b">
+                    <tr className="text-left text-slate-600">
+                      <th className="p-3 font-medium">{t('common.date')}</th>
+                      <th className="p-3 font-medium">{t('finance.referenceId')}</th>
+                      <th className="p-3 font-medium">{t('finance.sector')}</th>
+                      <th className="p-3 font-medium text-right">{t('finance.netAmount')}</th>
+                      <th className="p-3 font-medium text-right">{t('finance.vatAmount')}</th>
+                      <th className="p-3 font-medium text-right">{t('finance.grossAmount')}</th>
+                      <th className="p-3 font-medium">{t('finance.paymentMode')}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {txLoading ? (
+                      <tr><td className="p-3 text-slate-500" colSpan={7}>{t('common.loading')}</td></tr>
+                    ) : displayedRows.length === 0 ? (
+                      <tr><td className="p-3 text-slate-500" colSpan={7}>{t('common.noItems')}</td></tr>
+                    ) : (
+                      displayedRows.map((r, idx) => (
+                        <tr key={`${r.referenceId}-${idx}`} className="hover:bg-slate-50">
+                          <td className="p-3 whitespace-nowrap">{new Date(r.date).toLocaleString()}</td>
+                          <td className="p-3 font-mono text-xs">{r.referenceId}</td>
+                          <td className="p-3">{r.sector}</td>
+                          <td className="p-3 text-right whitespace-nowrap">{formatTzs(r.netAmount)}</td>
+                          <td className="p-3 text-right whitespace-nowrap">{formatTzs(r.vatAmount)}</td>
+                          <td className="p-3 text-right whitespace-nowrap">{formatTzs(r.grossAmount)}</td>
+                          <td className="p-3 whitespace-nowrap">{r.paymentMode}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
 
-            <div className="p-4 border-t flex items-center justify-between">
-              <div className="text-xs text-slate-500">
-                {t('finance.page')} {page} / {totalPages} · {t('finance.totalRows')}: {tx.total}
-              </div>
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="px-3 py-2 border rounded text-sm bg-white disabled:opacity-50">
-                  {t('common.back')}
-                </button>
-                <button type="button" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="px-3 py-2 border rounded text-sm bg-white disabled:opacity-50">
-                  {t('common.next')}
-                </button>
+              <div className="p-4 border-t flex items-center justify-between">
+                <div className="text-xs text-slate-500">
+                  {t('finance.page')} {page} / {totalPages} · {t('finance.totalRows')}: {tx.total}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="px-3 py-2 border rounded text-sm bg-white disabled:opacity-50">
+                    {t('common.back')}
+                  </button>
+                  <button type="button" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="px-3 py-2 border rounded text-sm bg-white disabled:opacity-50">
+                    {t('common.next')}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </>
       ) : (
         <div className="text-slate-500">{t('common.noItems')}</div>
