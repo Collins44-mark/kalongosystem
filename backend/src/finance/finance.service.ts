@@ -191,19 +191,25 @@ export class FinanceService {
   }
 
   async getDashboard(businessId: string, branchId: string, from?: Date, to?: Date) {
-    const revenue = await this.getRevenue(businessId, from, to);
-    const { expenses, total: expTotal } = await this.getExpenses(
-      businessId,
-      branchId,
-      from,
-      to,
-    );
-    const netProfit = revenue.total - expTotal;
+    const now = new Date();
+    const rangeFrom = from || new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const rangeTo = to || new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+    const [overview, { expenses, total: expTotal }] = await Promise.all([
+      this.getOverview(businessId, rangeFrom, rangeTo),
+      this.getExpenses(businessId, branchId, rangeFrom, rangeTo),
+    ]);
+
+    const netProfit = overview.totals.netRevenue - expTotal;
     return {
-      totalRevenue: revenue.total,
+      totalRevenue: overview.totals.grossSales,
       totalExpenses: expTotal,
       netProfit,
-      bySector: { bar: revenue.bar, restaurant: revenue.restaurant, hotel: revenue.hotel },
+      bySector: {
+        bar: overview.bySector.bar.gross,
+        restaurant: overview.bySector.restaurant.gross,
+        hotel: overview.bySector.rooms.gross,
+      },
       expenses,
     };
   }

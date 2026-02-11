@@ -7,7 +7,7 @@ type Tax = {
   id: string;
   enabled: boolean;
   name: string;
-  rate: number; // decimal (0.18)
+  rate: number;
   type: 'inclusive' | 'exclusive';
   apply: { rooms: boolean; bar: boolean; restaurant: boolean };
 };
@@ -24,10 +24,11 @@ export function TaxConfigurationSection({ token, t }: { token: string; t: (k: st
 
   const [taxes, setTaxes] = useState<Tax[]>([]);
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<Tax | null>(null);
 
   const [enabled, setEnabled] = useState(true);
-  const [name, setName] = useState('VAT 18%');
-  const [ratePercent, setRatePercent] = useState('18');
+  const [name, setName] = useState('');
+  const [ratePercent, setRatePercent] = useState('');
   const [type, setType] = useState<'inclusive' | 'exclusive'>('inclusive');
   const [applyRooms, setApplyRooms] = useState(true);
   const [applyBar, setApplyBar] = useState(true);
@@ -64,6 +65,18 @@ export function TaxConfigurationSection({ token, t }: { token: string; t: (k: st
     }
   }
 
+  function resetForm() {
+    setName('');
+    setRatePercent('');
+    setType('inclusive');
+    setEnabled(true);
+    setApplyRooms(true);
+    setApplyBar(true);
+    setApplyRestaurant(true);
+    setCreating(false);
+    setEditing(null);
+  }
+
   async function createTax() {
     if (!canSave) {
       alert(t('common.fillAllFields'));
@@ -79,7 +92,39 @@ export function TaxConfigurationSection({ token, t }: { token: string; t: (k: st
       apply: { rooms: applyRooms, bar: applyBar, restaurant: applyRestaurant },
     };
     await persist([tax, ...taxes]);
-    setCreating(false);
+    resetForm();
+  }
+
+  function startEdit(x: Tax) {
+    setEditing(x);
+    setName(x.name);
+    const pct = Math.round((Number(x.rate || 0) * 100) * 100) / 100;
+    setRatePercent(String(pct));
+    setType(x.type);
+    setEnabled(x.enabled);
+    setApplyRooms(x.apply?.rooms !== false);
+    setApplyBar(x.apply?.bar !== false);
+    setApplyRestaurant(x.apply?.restaurant !== false);
+  }
+
+  async function saveEdit() {
+    if (!editing || !canSave) return;
+    const pct = Number(ratePercent);
+    const updated: Tax = {
+      ...editing,
+      enabled,
+      name: name.trim(),
+      rate: Math.max(0, (pct > 1 ? pct / 100 : pct)),
+      type,
+      apply: { rooms: applyRooms, bar: applyBar, restaurant: applyRestaurant },
+    };
+    await persist(taxes.map((x) => (x.id === editing.id ? updated : x)));
+    resetForm();
+  }
+
+  async function deleteTax(id: string) {
+    if (!confirm(t('settings.deleteTaxConfirm'))) return;
+    await persist(taxes.filter((x) => x.id !== id));
   }
 
   async function toggleEnabled(id: string, v: boolean) {
@@ -87,13 +132,15 @@ export function TaxConfigurationSection({ token, t }: { token: string; t: (k: st
     await persist(next);
   }
 
+  const showForm = creating || editing;
+
   return (
-    <div className="bg-white border rounded p-4 max-w-md">
+    <div className="bg-white border rounded p-4 max-w-2xl">
       <div className="flex items-center justify-between gap-3">
         <h2 className="font-medium">{t('settings.taxConfiguration')}</h2>
         <button
           type="button"
-          onClick={() => setCreating((v) => !v)}
+          onClick={() => { resetForm(); setCreating(true); }}
           className="px-3 py-2 rounded text-sm bg-slate-900 text-white hover:bg-slate-800"
           disabled={saving}
         >
@@ -101,9 +148,9 @@ export function TaxConfigurationSection({ token, t }: { token: string; t: (k: st
         </button>
       </div>
 
-      {creating && (
+      {showForm && (
         <div className="mt-4 border rounded p-3 bg-slate-50 space-y-3">
-          <div className="text-sm font-medium">{t('settings.createTax')}</div>
+          <div className="text-sm font-medium">{editing ? t('settings.editTax') : t('settings.createTax')}</div>
 
           <label className="flex items-center gap-2 cursor-pointer">
             <input
@@ -113,21 +160,21 @@ export function TaxConfigurationSection({ token, t }: { token: string; t: (k: st
               disabled={saving}
               className="rounded border-slate-300 text-teal-600"
             />
-            <span className="text-sm">{t('settings.enableVat')}</span>
+            <span className="text-sm">{t('settings.enableTax')}</span>
           </label>
 
           <div>
-            <label className="block text-sm text-slate-600 mb-1">{t('settings.vatName')}</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} className="w-full px-3 py-2 border rounded text-sm" disabled={saving} />
+            <label className="block text-sm text-slate-600 mb-1">{t('settings.taxName')}</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} className="w-full px-3 py-2 border rounded text-sm" disabled={saving} placeholder="e.g. VAT 18%" />
           </div>
 
           <div>
-            <label className="block text-sm text-slate-600 mb-1">{t('settings.vatRatePercent')}</label>
-            <input value={ratePercent} onChange={(e) => setRatePercent(e.target.value)} className="w-full px-3 py-2 border rounded text-sm" disabled={saving} inputMode="decimal" />
+            <label className="block text-sm text-slate-600 mb-1">{t('settings.taxRatePercent')}</label>
+            <input value={ratePercent} onChange={(e) => setRatePercent(e.target.value)} className="w-full px-3 py-2 border rounded text-sm" disabled={saving} inputMode="decimal" placeholder="18" />
           </div>
 
           <div>
-            <div className="block text-sm text-slate-600 mb-1">{t('settings.vatType')}</div>
+            <div className="block text-sm text-slate-600 mb-1">{t('settings.taxType')}</div>
             <label className="flex items-center gap-2 text-sm">
               <input type="radio" checked={type === 'inclusive'} onChange={() => setType('inclusive')} disabled={saving} />
               <span>{t('settings.vatInclusive')}</span>
@@ -139,7 +186,7 @@ export function TaxConfigurationSection({ token, t }: { token: string; t: (k: st
           </div>
 
           <div>
-            <div className="block text-sm text-slate-600 mb-1">{t('settings.applyVatOn')}</div>
+            <div className="block text-sm text-slate-600 mb-1">{t('settings.applyTaxOn')}</div>
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={applyRooms} onChange={(e) => setApplyRooms(e.target.checked)} disabled={saving} />
               <span>{t('settings.applyRooms')}</span>
@@ -157,7 +204,7 @@ export function TaxConfigurationSection({ token, t }: { token: string; t: (k: st
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={createTax}
+              onClick={editing ? saveEdit : createTax}
               disabled={saving || !canSave}
               className="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700 disabled:opacity-50 text-sm"
             >
@@ -165,7 +212,7 @@ export function TaxConfigurationSection({ token, t }: { token: string; t: (k: st
             </button>
             <button
               type="button"
-              onClick={() => setCreating(false)}
+              onClick={resetForm}
               className="px-4 py-2 border rounded text-sm bg-white hover:bg-slate-50"
               disabled={saving}
             >
@@ -181,26 +228,46 @@ export function TaxConfigurationSection({ token, t }: { token: string; t: (k: st
         ) : taxes.length === 0 ? (
           <div className="text-sm text-slate-500">{t('settings.noTaxes')}</div>
         ) : (
-          <div className="space-y-2">
-            {taxes.map((x) => (
-              <div key={x.id} className="border rounded p-3 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-sm font-medium truncate">{x.name}</div>
-                  <div className="text-xs text-slate-500">
-                    {Math.round((Number(x.rate || 0) * 100) * 100) / 100}% · {x.type}
-                  </div>
-                </div>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={x.enabled}
-                    onChange={(e) => toggleEnabled(x.id, e.target.checked)}
-                    disabled={saving}
-                  />
-                  <span>{t('settings.active')}</span>
-                </label>
-              </div>
-            ))}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[520px]">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="text-left p-3">{t('settings.taxName')}</th>
+                  <th className="text-left p-3">{t('settings.taxRatePercent')}</th>
+                  <th className="text-left p-3">{t('settings.taxType')}</th>
+                  <th className="text-left p-3">{t('settings.applyTaxOn')}</th>
+                  <th className="text-left p-3">{t('settings.status')}</th>
+                  <th className="text-left p-3 w-28">{t('settings.actions')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {taxes.map((x) => (
+                  <tr key={x.id} className="border-t">
+                    <td className="p-3 font-medium">{x.name}</td>
+                    <td className="p-3">{Math.round((Number(x.rate || 0) * 100) * 100) / 100}%</td>
+                    <td className="p-3">{x.type}</td>
+                    <td className="p-3 text-xs">
+                      {[x.apply?.rooms && t('settings.applyRooms'), x.apply?.bar && t('settings.applyBar'), x.apply?.restaurant && t('settings.applyRestaurant')].filter(Boolean).join(', ') || '-'}
+                    </td>
+                    <td className="p-3">
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={x.enabled}
+                          onChange={(e) => toggleEnabled(x.id, e.target.checked)}
+                          disabled={saving}
+                        />
+                        <span>{t('settings.active')}</span>
+                      </label>
+                    </td>
+                    <td className="p-3 flex gap-2">
+                      <button type="button" onClick={() => startEdit(x)} className="text-teal-600 hover:underline text-sm" disabled={saving}>{t('common.edit')}</button>
+                      <button type="button" onClick={() => deleteTax(x.id)} className="text-red-600 hover:underline text-sm" disabled={saving}>{t('common.delete')}</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

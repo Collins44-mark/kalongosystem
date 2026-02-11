@@ -153,25 +153,68 @@ export default function RestaurantPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div>
           <h2 className="font-medium mb-2">{t('restaurant.items')}</h2>
-          <div className="space-y-4">
-            {categories.map((cat) => (
-              <div key={cat}>
-                <div className="text-xs font-medium text-slate-500 mb-2">{cat}</div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {grouped[cat].map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => addToCart(item)}
-                      className="p-4 bg-white border rounded text-left hover:border-teal-500"
-                    >
-                      <div className="font-medium truncate">{item.name}</div>
-                      <div className="text-sm text-slate-600">{formatTzs(parseFloat(item.price))}</div>
-                    </button>
+          {isAdmin ? (
+            <div className="overflow-x-auto bg-white border rounded">
+              <table className="w-full text-sm min-w-[520px]">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="text-left p-3">{t('restaurant.foodName')}</th>
+                    <th className="text-left p-3">{t('restaurant.category')}</th>
+                    <th className="text-right p-3">{t('restaurant.price')}</th>
+                    <th className="text-left p-3">{t('restaurant.status')}</th>
+                    <th className="text-left p-3 w-20">{t('common.add')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayedItems.map((it) => (
+                    <tr key={it.id} className="border-t">
+                      <td className="p-3 font-medium">{it.name}</td>
+                      <td className="p-3">{it.category || '-'}</td>
+                      <td className="p-3 text-right">{formatTzs(parseFloat(it.price))}</td>
+                      <td className="p-3">
+                        <span className={`text-xs px-2 py-1 rounded ${it.isEnabled === false ? 'bg-slate-200 text-slate-700' : 'bg-green-100 text-green-800'}`}>
+                          {it.isEnabled === false ? t('restaurant.disabled') : t('restaurant.enabled')}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        <button
+                          type="button"
+                          onClick={() => addToCart(it)}
+                          disabled={it.isEnabled === false}
+                          className="text-teal-600 hover:underline text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {t('common.add')}
+                        </button>
+                      </td>
+                    </tr>
                   ))}
+                  {displayedItems.length === 0 && (
+                    <tr><td className="p-3 text-slate-500" colSpan={5}>{t('common.noItems')}</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {categories.map((cat) => (
+                <div key={cat}>
+                  <div className="text-xs font-medium text-slate-500 mb-2">{cat}</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {grouped[cat].map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => addToCart(item)}
+                        className="p-4 bg-white border rounded text-left hover:border-teal-500"
+                      >
+                        <div className="font-medium truncate">{item.name}</div>
+                        <div className="text-sm text-slate-600">{formatTzs(parseFloat(item.price))}</div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
         <div>
           <h2 className="font-medium mb-2">{t('restaurant.order')}</h2>

@@ -5,7 +5,6 @@ import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { isManagerLevel } from '@/lib/roles';
 import { defaultDashboardRoute } from '@/lib/homeRoute';
 
@@ -241,8 +240,7 @@ export default function OverviewPage() {
       </div>
 
       {/* Room Status Cards */}
-      <Link href="/dashboard/front-office" className="block">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div className="rounded-xl p-5 shadow-lg bg-[#0B3C5D] text-white min-h-[100px] flex flex-col justify-center hover:opacity-95 transition-opacity">
             <div className="text-sm font-medium opacity-90">{t('overview.totalRooms')}</div>
             <div className="text-2xl font-bold mt-0.5">{roomSummary.total}</div>
@@ -252,11 +250,9 @@ export default function OverviewPage() {
           <RoomCard title={t('overview.reserved')} value={roomSummary.reserved} variant="reserved" />
           <RoomCard title={t('overview.underMaintenance')} value={roomSummary.underMaintenance} variant="maintenance" />
         </div>
-      </Link>
 
       {/* Sales Container */}
-      <Link href="/dashboard/finance" className="block">
-        <div className="bg-white rounded-xl shadow-md border border-slate-100 overflow-hidden hover:border-teal-200 transition-colors">
+      <div className="bg-white rounded-xl shadow-md border border-slate-100 overflow-hidden">
         <div className="p-4 border-b border-slate-100">
           <h2 className="font-semibold text-slate-800">{t('overview.sales')}</h2>
         </div>
@@ -277,11 +273,9 @@ export default function OverviewPage() {
           </div>
         </div>
         </div>
-      </Link>
 
       {/* Inventory & Business Health */}
-      <Link href="/dashboard/bar?filter=low" className="block">
-        <div className="bg-white rounded-xl shadow-md border border-slate-100 p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-6 hover:border-teal-200 transition-colors">
+      <div className="bg-white rounded-xl shadow-md border border-slate-100 p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-full bg-red-500 text-white flex items-center justify-center font-bold text-lg shadow-sm">
             {lowStockCount}
@@ -305,12 +299,10 @@ export default function OverviewPage() {
           <span className="text-sm text-slate-500">{t('overview.businessHealth')}</span>
         </div>
         </div>
-      </Link>
 
       {/* Inventory Alerts Detail */}
       {lowStockCount > 0 && (
-        <Link href="/dashboard/bar?filter=low" className="block">
-          <div className="bg-white rounded-xl shadow-md border border-slate-100 p-5 hover:border-teal-200 transition-colors">
+        <div className="bg-white rounded-xl shadow-md border border-slate-100 p-5">
             <h3 className="font-semibold text-slate-800 mb-3">{t('overview.lowStockItems')}</h3>
             <div className="space-y-2">
               {displayData.inventoryAlerts.lowStock.map((item) => (
@@ -326,12 +318,10 @@ export default function OverviewPage() {
               {t('overview.valueAtRisk')}: {formatTzs(displayData.inventoryAlerts.totalValueAtRisk)}
             </p>
           </div>
-        </Link>
       )}
 
       {/* Performance Graph */}
-      <Link href="/dashboard/finance" className="block">
-        <div className="bg-white rounded-xl shadow-md border border-slate-100 p-5 hover:border-teal-200 transition-colors">
+      <div className="bg-white rounded-xl shadow-md border border-slate-100 p-5">
         <h3 className="font-semibold text-slate-800 mb-4">{t('overview.performanceBySector')}</h3>
         <div className="space-y-4">
           {(['hotel', 'bar', 'restaurant'] as const).map((sector) => (
@@ -350,7 +340,6 @@ export default function OverviewPage() {
           ))}
         </div>
         </div>
-      </Link>
     </div>
   );
 }

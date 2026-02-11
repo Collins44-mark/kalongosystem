@@ -10,8 +10,8 @@ import { notifyError, notifySuccess } from '@/store/notifications';
 
 type Period = 'today' | 'week' | 'month' | 'bydate';
 type Sector = 'all' | 'rooms' | 'bar' | 'restaurant';
-type Metric = 'net' | 'gross' | 'vat';
-type ViewLevel = 'overview' | 'metric' | 'transactions';
+type Metric = 'net' | 'gross' | 'vat' | 'expenses';
+type ViewLevel = 'overview' | 'metric' | 'transactions' | 'expenses';
 
 type Overview = {
   period: { from: string; to: string };
@@ -45,6 +45,8 @@ export default function FinancePage() {
   const [sector, setSector] = useState<Sector>('all');
   const [level, setLevel] = useState<ViewLevel>('overview');
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [totalExpenses, setTotalExpenses] = useState(0);
+  const [expensesData, setExpensesData] = useState<{ byCategory: Record<string, number>; expenses: { id: string; category: string; amount: number; date: string; notes: string | null }[] } | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [page, setPage] = useState(1);
@@ -107,6 +109,34 @@ export default function FinancePage() {
     return () => window.removeEventListener('hms-back', onBack);
   }, [level, metric, sector, page]);
 
+  const dateRange = (() => {
+    const now = new Date();
+    const endOfDay = (d: Date) => {
+      const x = new Date(d);
+      x.setHours(23, 59, 59, 999);
+      return x;
+    };
+    const startOfDay = (d: Date) => {
+      const x = new Date(d);
+      x.setHours(0, 0, 0, 0);
+      return x;
+    };
+    if (period === 'bydate' && dateFrom && dateTo) {
+      return { from: dateFrom, to: dateTo };
+    }
+    if (period === 'month') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { from: start.toISOString().slice(0, 10), to: endOfDay(now).toISOString().slice(0, 10) };
+    }
+    if (period === 'week') {
+      const start = new Date(now);
+      start.setDate(start.getDate() - 7);
+      return { from: start.toISOString().slice(0, 10), to: endOfDay(now).toISOString().slice(0, 10) };
+    }
+    const today = startOfDay(now);
+    return { from: today.toISOString().slice(0, 10), to: endOfDay(now).toISOString().slice(0, 10) };
+  })();
+
   useEffect(() => {
     if (!token) return;
     setLoading(true);
@@ -116,9 +146,24 @@ export default function FinancePage() {
       params.set('from', dateFrom);
       params.set('to', dateTo);
     }
-    api<Overview>(`/finance/overview?${params}`, { token })
-      .then(setOverview)
-      .catch(() => setOverview(null))
+    const expParams = new URLSearchParams();
+    if (dateRange.from) expParams.set('from', dateRange.from);
+    if (dateRange.to) expParams.set('to', dateRange.to);
+    Promise.all([
+      api<Overview>(`/finance/overview?${params}`, { token }),
+      api<{ expenses: unknown[]; total: number }>(`/finance/expenses?${expParams}`, { token }).then((r) => r?.total ?? 0),
+      api<{ byCategory: Record<string, number>; expenses: { id: string; category: string; amount: number; date: string; notes: string | null }[] }>(`/finance/expenses/by-category?${expParams}`, { token }),
+    ])
+      .then(([ov, tot, exp]) => {
+        setOverview(ov);
+        setTotalExpenses(typeof tot === 'number' ? tot : 0);
+        setExpensesData(exp || null);
+      })
+      .catch(() => {
+        setOverview(null);
+        setTotalExpenses(0);
+        setExpensesData(null);
+      })
       .finally(() => setLoading(false));
   }, [token, period, dateFrom, dateTo]);
 
@@ -238,9 +283,18 @@ export default function FinancePage() {
         params.set('from', dateFrom);
         params.set('to', dateTo);
       }
-      api<Overview>(`/finance/overview?${params}`, { token })
-        .then(setOverview)
-        .catch(() => {});
+      const expParams = new URLSearchParams();
+      if (dateRange.from) expParams.set('from', dateRange.from);
+      if (dateRange.to) expParams.set('to', dateRange.to);
+      Promise.all([
+        api<Overview>(`/finance/overview?${params}`, { token }),
+        api<{ expenses: unknown[]; total: number }>(`/finance/expenses?${expParams}`, { token }),
+        api<{ byCategory: Record<string, number>; expenses: { id: string; category: string; amount: number; date: string; notes: string | null }[] }>(`/finance/expenses/by-category?${expParams}`, { token }),
+      ]).then(([ov, expRes, expCat]) => {
+        setOverview(ov);
+        setTotalExpenses(expRes?.total ?? 0);
+        setExpensesData(expCat || null);
+      }).catch(() => {});
     } catch (e: any) {
       notifyError(e?.message || 'Request failed');
     } finally {
@@ -250,8 +304,9 @@ export default function FinancePage() {
 
   const canExport = level === 'transactions';
   const breadcrumb = (() => {
-    const m = metric === 'net' ? t('finance.netRevenue') : metric === 'gross' ? t('finance.grossSales') : t('finance.vatCollected');
+    const m = metric === 'net' ? t('finance.netRevenue') : metric === 'gross' ? t('finance.grossSales') : metric === 'vat' ? t('finance.vatCollected') : t('finance.expenses');
     if (level === 'overview') return t('finance.title');
+    if (level === 'expenses') return `${t('finance.title')} · ${t('finance.expenses')}`;
     if (level === 'metric') return `${t('finance.title')} · ${m}`;
     return `${t('finance.title')} · ${m} · ${labelSector(sector)}`;
   })();
@@ -337,15 +392,26 @@ export default function FinancePage() {
       ) : overview ? (
         <>
           {level === 'overview' && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <button
                 type="button"
-                onClick={() => pushViewHistory('metric', 'net', 'all', 1)}
+                onClick={() => pushViewHistory('metric', 'vat', 'all', 1)}
                 className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
               >
-                <div className="text-sm text-slate-500">{t('finance.netRevenue')}</div>
-                <div className="text-xl font-semibold">{formatTzs(overview.totals.netRevenue)}</div>
-                <div className="text-xs text-slate-500 mt-1">{vatEnabled ? t('finance.beforeVat') : t('finance.vatDisabled')}</div>
+                <div className="text-sm text-slate-500">{t('finance.vatCollected')}</div>
+                <div className="text-xl font-semibold">{formatTzs(overview.totals.vatCollected)}</div>
+                <div className="text-xs text-slate-500 mt-1">
+                  {vatEnabled ? `${Math.round((overview.vat.vat_rate || 0) * 100)}% · ${overview.vat.vat_type}` : t('finance.vatDisabled')}
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => pushViewHistory('expenses', 'expenses', 'all', 1)}
+                className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
+              >
+                <div className="text-sm text-slate-500">{t('finance.expenses')}</div>
+                <div className="text-xl font-semibold">{formatTzs(totalExpenses)}</div>
+                <div className="text-xs text-slate-500 mt-1">{t('finance.expensesInPeriod')}</div>
               </button>
               <button
                 type="button"
@@ -358,15 +424,50 @@ export default function FinancePage() {
               </button>
               <button
                 type="button"
-                onClick={() => pushViewHistory('metric', 'vat', 'all', 1)}
+                onClick={() => pushViewHistory('metric', 'net', 'all', 1)}
                 className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
               >
-                <div className="text-sm text-slate-500">{t('finance.vatCollected')}</div>
-                <div className="text-xl font-semibold">{formatTzs(overview.totals.vatCollected)}</div>
-                <div className="text-xs text-slate-500 mt-1">
-                  {vatEnabled ? `${Math.round((overview.vat.vat_rate || 0) * 100)}% · ${overview.vat.vat_type}` : t('finance.vatDisabled')}
-                </div>
+                <div className="text-sm text-slate-500">{t('finance.netRevenue')}</div>
+                <div className="text-xl font-semibold">{formatTzs(overview.totals.netRevenue)}</div>
+                <div className="text-xs text-slate-500 mt-1">{vatEnabled ? t('finance.beforeVat') : t('finance.vatDisabled')}</div>
               </button>
+            </div>
+          )}
+
+          {level === 'expenses' && (
+            <div className="bg-white border rounded-lg overflow-hidden">
+              <div className="p-4 border-b">
+                <div className="font-medium">{t('finance.expensesByCategory')}</div>
+                <div className="text-xs text-slate-500">{t('finance.showingFor')}: {t('finance.allSectors')}</div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[520px]">
+                  <thead className="bg-slate-50 border-b">
+                    <tr className="text-left text-slate-600">
+                      <th className="p-3 font-medium">{t('common.date')}</th>
+                      <th className="p-3 font-medium">{t('finance.category')}</th>
+                      <th className="p-3 font-medium text-right">{t('finance.amount')}</th>
+                      <th className="p-3 font-medium">{t('finance.notes')}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {!expensesData ? (
+                      <tr><td className="p-3 text-slate-500" colSpan={4}>{t('common.loading')}</td></tr>
+                    ) : expensesData.expenses.length === 0 ? (
+                      <tr><td className="p-3 text-slate-500" colSpan={4}>{t('finance.noExpenses')}</td></tr>
+                    ) : (
+                      expensesData.expenses.map((e) => (
+                        <tr key={e.id} className="hover:bg-slate-50">
+                          <td className="p-3 whitespace-nowrap">{new Date(e.date).toLocaleDateString()}</td>
+                          <td className="p-3">{e.category}</td>
+                          <td className="p-3 text-right whitespace-nowrap">{formatTzs(e.amount)}</td>
+                          <td className="p-3 text-slate-600">{e.notes || '-'}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
