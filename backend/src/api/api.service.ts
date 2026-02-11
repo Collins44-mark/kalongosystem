@@ -95,7 +95,23 @@ export class ApiService {
         map[s.key] = s.value;
       }
     }
-    return { enableDragDropBooking: map['enableDragDropBooking'] === true };
+    const vatEnabled = map['vat_enabled'] === true;
+    const vatRateRaw = map['vat_rate'];
+    const vatRate =
+      typeof vatRateRaw === 'number'
+        ? vatRateRaw
+        : typeof vatRateRaw === 'string'
+          ? Number(vatRateRaw)
+          : 0;
+    const vatTypeRaw = map['vat_type'];
+    const vatType = vatTypeRaw === 'inclusive' || vatTypeRaw === 'exclusive' ? vatTypeRaw : 'inclusive';
+
+    return {
+      enableDragDropBooking: map['enableDragDropBooking'] === true,
+      vat_enabled: vatEnabled,
+      vat_rate: isFinite(vatRate) ? vatRate : 0,
+      vat_type: vatType,
+    };
   }
 
   /** Update business setting (MANAGER only) */
