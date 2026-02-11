@@ -435,19 +435,69 @@ export class FinanceService {
       // QuickBooks-ready double-entry style
       const header = 'Date,Account,Debit,Credit,Description';
       const lines: string[] = [header];
-      for (const t of txns) {
-        const date = formatDdMmYyyy(t.date);
-        const cashAccount = mapPaymentAccount(t.paymentMode);
-        const revenueAccount = t.sector === 'rooms' ? 'Room Revenue' : t.sector === 'bar' ? 'Bar Revenue' : 'Restaurant Revenue';
-        const descBase = `${t.sector.toUpperCase()} ${t.referenceId}`;
+      type DayAgg = {
+        debitByAccount: Record<string, number>;
+        vatTotal: number;
+        netByRevenueAccount: Record<string, number>;
+      };
+      const byDay = new Map<string, DayAgg>();
 
-        // Debit cash/bank/mobile for gross received
-        lines.push([date, cashAccount, round2(t.grossAmount), 0, `${descBase} payment received`].map(csvEscape).join(','));
-        // Credit revenue for net
-        lines.push([date, revenueAccount, 0, round2(t.netAmount), `${descBase} revenue`].map(csvEscape).join(','));
-        // Credit VAT payable
-        if (round2(t.vatAmount) > 0) {
-          lines.push([date, 'VAT Payable', 0, round2(t.vatAmount), `${descBase} VAT collected`].map(csvEscape).join(','));
+      for (const t of txns) {
+        const day = formatDdMmYyyy(t.date);
+        const cashAccount = mapPaymentAccount(t.paymentMode);
+        const revenueAccount =
+          t.sector === 'rooms' ? 'Room Revenue' : t.sector === 'bar' ? 'Bar Revenue' : 'Restaurant Revenue';
+
+        const agg: DayAgg = byDay.get(day) ?? { debitByAccount: {}, vatTotal: 0, netByRevenueAccount: {} };
+        agg.debitByAccount[cashAccount] = (agg.debitByAccount[cashAccount] ?? 0) + Number(t.grossAmount || 0);
+        agg.netByRevenueAccount[revenueAccount] =
+          (agg.netByRevenueAccount[revenueAccount] ?? 0) + Number(t.netAmount || 0);
+        agg.vatTotal += Number(t.vatAmount || 0);
+        byDay.set(day, agg);
+      }
+
+      const days = [...byDay.keys()].sort((a, b) => {
+        // dd/mm/yyyy string → sortable date
+        const toDate = (s: string) => {
+          const [dd, mm, yyyy] = s.split('/').map((x) => parseInt(x, 10));
+          return new Date(yyyy, (mm || 1) - 1, dd || 1).getTime();
+        };
+        return toDate(a) - toDate(b);
+      });
+
+      for (const day of days) {
+        const agg = byDay.get(day)!;
+
+        // Debit lines (cash/bank/mobile) for totals received
+        for (const [account, debit] of Object.entries(agg.debitByAccount)) {
+          const d = round2(debit);
+          if (d === 0) continue;
+          const desc =
+            account === 'Cash'
+              ? 'Total cash received'
+              : account === 'Bank'
+                ? 'Total bank received'
+                : 'Total mobile money received';
+          lines.push([day, account, d, 0, desc].map(csvEscape).join(','));
+        }
+
+        // Credit VAT payable (total)
+        const vatTotal = round2(agg.vatTotal);
+        if (vatTotal !== 0) {
+          lines.push([day, 'VAT Payable', 0, vatTotal, 'VAT collected'].map(csvEscape).join(','));
+        }
+
+        // Credit revenue accounts (net)
+        for (const [account, credit] of Object.entries(agg.netByRevenueAccount)) {
+          const c = round2(credit);
+          if (c === 0) continue;
+          const desc =
+            account === 'Room Revenue'
+              ? 'Room revenue'
+              : account === 'Bar Revenue'
+                ? 'Bar revenue'
+                : 'Restaurant revenue';
+          lines.push([day, account, 0, c, desc].map(csvEscape).join(','));
         }
       }
       const csv = lines.join('\n') + '\n';

@@ -210,41 +210,30 @@ export default function OverviewPage() {
           <button onClick={() => fetchOverview()} className="px-3 py-1.5 text-sm text-teal-600 hover:underline">
             {t('common.refresh')}
           </button>
-          <div className="flex rounded-full bg-slate-100 p-1 gap-0.5 transition-all duration-200">
-            {(['today', 'week', 'month'] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
-                  filter === f ? 'bg-white text-teal-600 shadow-sm ring-1 ring-teal-200' : 'text-slate-600 hover:text-slate-800'
-                }`}
-              >
-                {f === 'today' ? t('overview.today') : f === 'week' ? t('overview.thisWeek') : t('overview.thisMonth')}
-              </button>
-            ))}
-            <button
-              onClick={() => setFilter('bydate')}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
-                filter === 'bydate' ? 'bg-white text-teal-600 shadow-sm ring-1 ring-teal-200' : 'text-slate-600 hover:text-slate-800'
-              }`}
-            >
-              {t('overview.byDate')}
-            </button>
-          </div>
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value as FilterOption)}
+            className="px-3 py-2 border rounded text-sm bg-white"
+          >
+            <option value="today">{t('overview.today')}</option>
+            <option value="week">{t('overview.thisWeek')}</option>
+            <option value="month">{t('overview.thisMonth')}</option>
+            <option value="bydate">{t('overview.byDate')}</option>
+          </select>
           {filter === 'bydate' && (
-            <div className="flex items-center gap-2 ml-2">
+            <div className="flex items-center gap-2">
               <input
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="px-3 py-1.5 rounded-full border border-slate-200 text-sm"
+                className="px-3 py-2 border rounded text-sm bg-white"
               />
-              <span className="text-slate-400">to</span>
+              <span className="text-slate-400 text-sm">{t('common.to')}</span>
               <input
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                className="px-3 py-1.5 rounded-full border border-slate-200 text-sm"
+                className="px-3 py-2 border rounded text-sm bg-white"
               />
             </div>
           )}
