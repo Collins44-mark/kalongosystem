@@ -8,20 +8,17 @@ async function main() {
   const email = 'markkcollins979@gmail.com'.toLowerCase().trim();
   const password = 'Kentana44';
 
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
-    // Ensure flags are set even if user existed
-    await prisma.user.update({
-      where: { email },
-      data: { isSuperAdmin: true },
-    });
-    console.log('Super admin already exists, ensured isSuperAdmin=true');
-    return;
-  }
-
   const hashed = await bcrypt.hash(password, 10);
-  await prisma.user.create({
-    data: {
+  await prisma.user.upsert({
+    where: { email },
+    update: {
+      password: hashed,
+      isSuperAdmin: true,
+      forcePasswordChange: false,
+      name: 'Super Admin',
+      language: 'en',
+    },
+    create: {
       email,
       password: hashed,
       language: 'en',
@@ -30,7 +27,7 @@ async function main() {
       name: 'Super Admin',
     },
   });
-  console.log('Seeded super admin user:', email);
+  console.log('Seeded/updated super admin user:', email);
 }
 
 main()
