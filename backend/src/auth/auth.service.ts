@@ -9,7 +9,6 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { StaffWorkersService } from '../staff-workers/staff-workers.service';
-import nodemailer from 'nodemailer';
 
 @Injectable()
 export class AuthService {
@@ -185,7 +184,7 @@ export class AuthService {
    * - Generates temporary password
    * - Hashes + stores it
    * - Sets forcePasswordChange=true
-   * - Emails the temp password to the user
+   * - Returns the temp password (no email)
    */
   async forgotPassword(businessId: string, email: string) {
     const cleanBusinessId = (businessId || '').toUpperCase().trim();
@@ -225,14 +224,7 @@ export class AuthService {
       where: { id: user.id },
       data: { password: hashed, forcePasswordChange: true },
     });
-
-    await this.sendTempPasswordEmail({
-      to: cleanEmail,
-      businessId: cleanBusinessId,
-      tempPassword: temp,
-    });
-
-    return { success: true };
+    return { success: true, temporaryPassword: temp };
   }
 
   private generateTempPassword() {
@@ -243,33 +235,6 @@ export class AuthService {
       out += chars[Math.floor(Math.random() * chars.length)];
     }
     return out;
-  }
-
-  private async sendTempPasswordEmail(input: { to: string; businessId: string; tempPassword: string }) {
-    const host = process.env.SMTP_HOST;
-    const port = Number(process.env.SMTP_PORT || 587);
-    const user = process.env.SMTP_USER;
-    const pass = process.env.SMTP_PASS;
-    const from = process.env.SMTP_FROM || process.env.SMTP_USER;
-
-    if (!host || !user || !pass || !from) {
-      // In production we require SMTP config so the flow matches spec
-      throw new BadRequestException('Email service not configured');
-    }
-
-    const transporter = nodemailer.createTransport({
-      host,
-      port,
-      secure: port === 465,
-      auth: { user, pass },
-    });
-
-    await transporter.sendMail({
-      from,
-      to: input.to,
-      subject: `HMS Temporary Password (${input.businessId})`,
-      text: `Your temporary password is: ${input.tempPassword}\n\nBusiness ID: ${input.businessId}\n\nPlease log in and change your password immediately.`,
-    });
   }
 
   async changePassword(userId: string, currentPassword: string, newPassword: string) {

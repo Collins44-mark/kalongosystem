@@ -113,14 +113,18 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      await api('/auth/forgot-password', {
+      const res = await api<{ success: boolean; temporaryPassword?: string }>('/auth/forgot-password', {
         method: 'POST',
         body: JSON.stringify({
           businessId: (forgotBusinessId || businessId).trim().toUpperCase(),
           email: (forgotEmail || email).trim(),
         }),
       });
-      setForgotMsg('If the Business ID + email match an admin account, a temporary password was sent to the email.');
+      if (res?.temporaryPassword) {
+        setForgotMsg(`Temporary password generated: ${res.temporaryPassword}`);
+      } else {
+        setForgotMsg('If the Business ID + email match an admin account, a temporary password was generated.');
+      }
     } catch (err: any) {
       setForgotMsg(err?.message || 'Request failed');
     } finally {
@@ -245,7 +249,7 @@ export default function LoginPage() {
           <div className="mt-3 p-3 border rounded bg-slate-50 space-y-2">
             <div className="text-sm font-medium text-slate-700">Reset admin password</div>
             <div className="text-xs text-slate-600">
-              This is only for MANAGER (admin). Temporary password will be sent to email, then you must change it after login.
+              This is only for MANAGER (admin). The system generates a temporary password, then you must change it after login.
             </div>
             <form onSubmit={submitForgot} className="space-y-2">
               <input
