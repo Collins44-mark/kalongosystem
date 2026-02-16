@@ -11,6 +11,32 @@ export class SuperAdminService {
     private jwtService: JwtService,
   ) {}
 
+  /** One-time seed for super admin user (same as prisma/seed.js). Call via POST /super-admin/seed?secret=SEED_SECRET */
+  async seedSuperAdmin(): Promise<{ ok: boolean; message: string }> {
+    const email = 'markkcollins979@gmail.com'.toLowerCase().trim();
+    const password = 'Kentana44';
+    const hashed = await bcrypt.hash(password, 10);
+    await this.prisma.user.upsert({
+      where: { email },
+      update: {
+        password: hashed,
+        isSuperAdmin: true,
+        forcePasswordChange: false,
+        name: 'Super Admin',
+        language: 'en',
+      },
+      create: {
+        email,
+        password: hashed,
+        language: 'en',
+        isSuperAdmin: true,
+        forcePasswordChange: false,
+        name: 'Super Admin',
+      },
+    });
+    return { ok: true, message: `Super admin user seeded/updated: ${email}. You can log in with Business ID HMS-1.` };
+  }
+
   async login(businessId: string, email: string, password: string) {
     const cleanBusinessId = (businessId || '').toUpperCase().trim();
     const cleanEmail = (email || '').toLowerCase().trim();

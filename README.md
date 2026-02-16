@@ -94,6 +94,21 @@ Or run migrations once via Render Shell: **Shell** tab → run:
 cd backend && npx prisma migrate deploy
 ```
 
+### Seed super admin (no Shell / free tier)
+
+If you can’t use Render Shell (e.g. on free tier):
+
+1. In **Render Dashboard** → your backend service → **Environment** → add:
+   - **Key:** `SEED_SECRET`  
+   - **Value:** a random string (e.g. `mySecretSeed123`)
+2. Save and redeploy the backend.
+3. In your browser, open (use your backend URL and the same secret):
+   ```
+   https://YOUR-BACKEND.onrender.com/super-admin/seed?secret=mySecretSeed123
+   ```
+4. You should see: `{"ok":true,"message":"Super admin user seeded/updated: ..."}`. You can then log in at `/super-admin` with Business ID **HMS-1**, email **markkcollins979@gmail.com**, password **Kentana44**.
+5. (Optional) Remove `SEED_SECRET` from Environment after seeding.
+
 ## Common Render errors
 
 | Error | Fix |

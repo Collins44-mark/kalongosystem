@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { SuperAdminService } from './super-admin.service';
 import { SuperAdminGuard } from './super-admin.guard';
@@ -6,6 +6,16 @@ import { SuperAdminGuard } from './super-admin.guard';
 @Controller('super-admin')
 export class SuperAdminController {
   constructor(private sa: SuperAdminService) {}
+
+  /** One-time seed when Shell is not available. Set env SEED_SECRET on Render, then GET this URL once. */
+  @Get('seed')
+  async seed(@Query('secret') secret: string) {
+    const expected = process.env.SEED_SECRET;
+    if (!expected || secret !== expected) {
+      return { ok: false, message: 'Missing or invalid secret. Set SEED_SECRET on Render and call with ?secret=YOUR_SEED_SECRET.' };
+    }
+    return this.sa.seedSuperAdmin();
+  }
 
   @Post('login')
   async login(@Body() dto: { businessId: string; email: string; password: string }) {
