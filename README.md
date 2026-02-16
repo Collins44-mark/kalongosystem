@@ -2,6 +2,25 @@
 
 Multi-tenant Hotel Management System for Tanzania. Built with Next.js (Vercel) and NestJS (Render).
 
+## Install everything (first time)
+
+1. **Install Node.js** (LTS) if you don’t have it: [nodejs.org](https://nodejs.org) or `brew install node`.
+2. From the project root, run:
+
+   ```bash
+   chmod +x scripts/install-all.sh
+   ./scripts/install-all.sh
+   ```
+
+   Or manually:
+
+   ```bash
+   cd backend && npm install && npx prisma generate && cd ..
+   cd frontend && npm install
+   ```
+
+3. Copy env files and set your database URL (see Quick Start below).
+
 ## Quick Start
 
 ### Backend (local)
