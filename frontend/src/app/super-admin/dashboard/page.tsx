@@ -32,8 +32,8 @@ export default function SuperAdminDashboardPage() {
   useEffect(() => {
     if (!token) return;
     setLoading(true);
-    api<BusinessRow[]>('/super-admin/businesses', { token })
-      .then(setRows)
+    api<{ businesses: BusinessRow[]; total: number }>('/super-admin/businesses', { token })
+      .then((res) => setRows(res.businesses ?? []))
       .catch((e: any) => setError(e?.message || 'Request failed'))
       .finally(() => setLoading(false));
   }, [token]);
@@ -61,7 +61,7 @@ export default function SuperAdminDashboardPage() {
         </div>
 
         <div className="bg-white border rounded-lg overflow-hidden">
-          <div className="p-4 border-b font-medium">Businesses</div>
+          <div className="p-4 border-b font-medium">Businesses ({rows.length})</div>
           {error && <div className="p-4 text-sm text-red-600">{error}</div>}
           {loading ? (
             <div className="p-4 text-sm text-slate-500">Loading...</div>

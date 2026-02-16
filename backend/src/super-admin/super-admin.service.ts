@@ -106,6 +106,7 @@ export class SuperAdminService {
     };
   }
 
+  /** List all registered businesses (no filter - super-admin sees everything). */
   async listBusinesses() {
     const rows = await this.prisma.business.findMany({
       orderBy: { createdAt: 'desc' },
@@ -118,7 +119,7 @@ export class SuperAdminService {
         _count: { select: { businessUsers: true } },
       },
     });
-    return rows.map((b) => ({
+    const list = rows.map((b) => ({
       id: b.id,
       name: b.name,
       businessId: b.businessId,
@@ -126,6 +127,7 @@ export class SuperAdminService {
       status: b.isSuspended ? 'SUSPENDED' : 'ACTIVE',
       totalUsers: b._count.businessUsers,
     }));
+    return { businesses: list, total: list.length };
   }
 
   async getBusinessDetail(businessDbId: string) {

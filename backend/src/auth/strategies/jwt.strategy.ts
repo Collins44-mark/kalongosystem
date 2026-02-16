@@ -15,9 +15,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   async validate(payload: any) {
     if (!payload?.sub) throw new UnauthorizedException('Invalid token payload');
-    if (payload.businessId) {
+    if (payload.businessId || payload?.isSuperAdmin === true || payload?.role === 'SUPER_ADMIN') {
       const user = await this.auth.validateUser(payload);
-      if (!user) throw new UnauthorizedException('User not found for this business. Please log in again.');
+      if (!user) throw new UnauthorizedException('Invalid or expired token. Please log in again.');
       return user;
     }
     return { sub: payload.sub, email: payload.email, businessId: null };
