@@ -18,14 +18,16 @@ type BusinessRow = {
 export default function SuperAdminDashboardPage() {
   const router = useRouter();
   const token = useSuperAdminAuth((s) => s.token);
+  const hasHydrated = useSuperAdminAuth((s) => s._hasHydrated);
   const logout = useSuperAdminAuth((s) => s.logout);
   const [rows, setRows] = useState<BusinessRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!token) router.replace('/super-admin');
-  }, [token, router]);
+    if (!hasHydrated) return;
+    if (!token) router.replace('/login');
+  }, [hasHydrated, token, router]);
 
   useEffect(() => {
     if (!token) return;
@@ -35,6 +37,14 @@ export default function SuperAdminDashboardPage() {
       .catch((e: any) => setError(e?.message || 'Request failed'))
       .finally(() => setLoading(false));
   }, [token]);
+
+  if (!hasHydrated || !token) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <p className="text-slate-600">Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">

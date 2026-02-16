@@ -37,6 +37,26 @@ export class SuperAdminService {
     return { ok: true, message: `Super admin user seeded/updated: ${email}. You can log in with Business ID HMS-1.` };
   }
 
+  /**
+   * Delete a user by email (so they can sign up again). Cascades to BusinessUser.
+   * Does not delete super-admin users. Businesses the user created remain in DB but orphaned.
+   */
+  async deleteUserByEmail(email: string): Promise<{ ok: boolean; message: string }> {
+    const cleanEmail = (email || '').toLowerCase().trim();
+    const user = await this.prisma.user.findUnique({
+      where: { email: cleanEmail },
+      select: { id: true, isSuperAdmin: true },
+    });
+    if (!user) {
+      return { ok: false, message: `No user found with email ${cleanEmail}.` };
+    }
+    if (user.isSuperAdmin) {
+      return { ok: false, message: 'Cannot delete super-admin user. Use a different email.' };
+    }
+    await this.prisma.user.delete({ where: { id: user.id } });
+    return { ok: true, message: `User ${cleanEmail} deleted. You can sign up again with this email.` };
+  }
+
   async login(businessId: string, email: string, password: string) {
     const cleanBusinessId = (businessId || '').toUpperCase().trim();
     const cleanEmail = (email || '').toLowerCase().trim();

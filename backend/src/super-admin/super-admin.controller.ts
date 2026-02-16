@@ -17,6 +17,19 @@ export class SuperAdminController {
     return this.sa.seedSuperAdmin();
   }
 
+  /** Delete a user and their businesses by email (so they can sign up again). Same secret as seed. */
+  @Get('delete-user')
+  async deleteUser(@Query('secret') secret: string, @Query('email') email: string) {
+    const expected = process.env.SEED_SECRET;
+    if (!expected || secret !== expected) {
+      return { ok: false, message: 'Missing or invalid secret. Use ?secret=YOUR_SEED_SECRET&email=user@example.com' };
+    }
+    if (!email || !email.includes('@')) {
+      return { ok: false, message: 'Valid email query parameter required.' };
+    }
+    return this.sa.deleteUserByEmail(email);
+  }
+
   @Post('login')
   async login(@Body() dto: { businessId: string; email: string; password: string }) {
     return this.sa.login(dto.businessId, dto.email, dto.password);

@@ -109,6 +109,16 @@ If you can’t use Render Shell (e.g. on free tier):
 4. You should see: `{"ok":true,"message":"Super admin user seeded/updated: ..."}`. You can then log in at `/super-admin` with Business ID **HMS-1**, email **markkcollins979@gmail.com**, password **Kentana44**.
 5. (Optional) Remove `SEED_SECRET` from Environment after seeding.
 
+### Delete user by email (fix "Email already registered" / can't log in)
+
+If an email is stuck (signup says "already registered" but login says "invalid credentials"), remove that user so they can sign up again. Use the same `SEED_SECRET` as above. **Super-admin users cannot be deleted.**
+
+Open in browser (replace with your backend URL, secret, and the email to remove):
+```
+https://YOUR-BACKEND.onrender.com/super-admin/delete-user?secret=mySecretSeed123&email=user@example.com
+```
+You should see: `{"ok":true,"message":"User user@example.com deleted. You can sign up again with this email."}`. Then run the **seed** URL again if you need the super-admin account fixed.
+
 ## Common Render errors
 
 | Error | Fix |
