@@ -94,7 +94,6 @@ export default function FrontOfficePage() {
   const managerTabs = [
     { id: 'rooms', labelKey: 'frontOffice.roomAvailability' },
     { id: 'setup', labelKey: 'frontOffice.roomSetup' },
-    { id: 'bookings', labelKey: 'frontOffice.bookings' },
     { id: 'history', labelKey: 'frontOffice.bookingHistory' },
     { id: 'folios', labelKey: 'frontOffice.activeFolios' },
     { id: 'new', labelKey: 'frontOffice.newBooking' },
@@ -523,14 +522,12 @@ function RoomSetup({
   const [catPrice, setCatPrice] = useState('');
   const [roomCatId, setRoomCatId] = useState('');
   const [roomNumber, setRoomNumber] = useState('');
-  const [roomName, setRoomName] = useState('');
   const [loading, setLoading] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [editCatName, setEditCatName] = useState('');
   const [editCatPrice, setEditCatPrice] = useState('');
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [editRoomNumber, setEditRoomNumber] = useState('');
-  const [editRoomName, setEditRoomName] = useState('');
   const [editRoomCatId, setEditRoomCatId] = useState('');
   const [openMenu, setOpenMenu] = useState<string | null>(null);
 
@@ -577,12 +574,10 @@ function RoomSetup({
         body: JSON.stringify({
           categoryId: roomCatId,
           roomNumber: roomNumber.trim(),
-          roomName: roomName.trim() || undefined,
         }),
       });
       setRoomCatId('');
       setRoomNumber('');
-      setRoomName('');
       onAction();
     } catch (err) {
       alert((err as Error).message);
@@ -650,7 +645,6 @@ function RoomSetup({
   function editRoom(room: Room) {
     setEditingRoom(room);
     setEditRoomNumber(room.roomNumber);
-    setEditRoomName(room.roomName || '');
     setEditRoomCatId(room.category.id);
   }
 
@@ -663,7 +657,7 @@ function RoomSetup({
         token,
         body: JSON.stringify({
           roomNumber: editRoomNumber.trim(),
-          roomName: editRoomName.trim() || undefined,
+          roomName: editingRoom.roomName ?? undefined,
           categoryId: editRoomCatId,
         }),
       });
@@ -722,7 +716,7 @@ function RoomSetup({
 
       <section className="bg-white border rounded-lg p-4 sm:p-5">
         <h2 className="text-base font-semibold mb-3">{t('frontOffice.step2Room')}</h2>
-        <form onSubmit={createRoom} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 items-end">
+        <form onSubmit={createRoom} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="block text-sm mb-1">{t('frontOffice.roomCategory')}</label>
             <select
@@ -745,15 +739,6 @@ function RoomSetup({
               placeholder={t('frontOffice.roomNumberPlaceholder')}
               className="w-full px-3 py-2 border rounded text-base"
               required
-            />
-          </div>
-          <div>
-            <label className="block text-sm mb-1">{t('frontOffice.roomNameOptional')}</label>
-            <input
-              value={roomName}
-              onChange={(e) => setRoomName(e.target.value)}
-              placeholder={t('frontOffice.roomNamePlaceholder')}
-              className="w-full px-3 py-2 border rounded text-base"
             />
           </div>
           <div className="sm:col-span-2 flex justify-end">
@@ -930,10 +915,6 @@ function RoomSetup({
               <div>
                 <label className="block text-sm mb-1">{t('frontOffice.roomNumber')}</label>
                 <input value={editRoomNumber} onChange={(e) => setEditRoomNumber(e.target.value)} className="w-full px-3 py-2 border rounded" />
-              </div>
-              <div>
-                <label className="block text-sm mb-1">{t('frontOffice.roomNameOptional')}</label>
-                <input value={editRoomName} onChange={(e) => setEditRoomName(e.target.value)} placeholder={t('frontOffice.roomNamePlaceholder')} className="w-full px-3 py-2 border rounded" />
               </div>
             </div>
             <div className="flex gap-2 mt-4">
@@ -1536,16 +1517,16 @@ function NewBookingForm({
         <label className="block text-sm font-medium text-slate-700 mb-1">{t('frontOffice.phone')}</label>
         <input value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-base focus:ring-2 focus:ring-teal-500 focus:border-teal-500" required />
       </div>
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm min-w-0 overflow-hidden">
         <h3 className="text-sm font-semibold text-slate-800 mb-3">{t('frontOffice.stayDates')}</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+          <div className="min-w-0">
             <label className="block text-sm font-medium text-slate-700 mb-1.5">{t('frontOffice.checkIn')}</label>
-            <input type="date" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-base focus:ring-2 focus:ring-teal-500 focus:border-teal-500" required />
+            <input type="date" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="w-full min-w-0 max-w-full px-3 py-2.5 border border-slate-300 rounded-lg text-base focus:ring-2 focus:ring-teal-500 focus:border-teal-500 box-border" required />
           </div>
-          <div>
+          <div className="min-w-0">
             <label className="block text-sm font-medium text-slate-700 mb-1.5">{t('frontOffice.checkOut')}</label>
-            <input type="date" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-base focus:ring-2 focus:ring-teal-500 focus:border-teal-500" required />
+            <input type="date" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="w-full min-w-0 max-w-full px-3 py-2.5 border border-slate-300 rounded-lg text-base focus:ring-2 focus:ring-teal-500 focus:border-teal-500 box-border" required />
           </div>
         </div>
         <div className="mt-3 flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-2.5">
