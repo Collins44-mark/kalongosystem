@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { useAuth } from '@/store/auth';
+import { useSuperAdminAuth, type SuperAdminUser } from '@/store/superAdminAuth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
 import { defaultDashboardRoute } from '@/lib/homeRoute';
@@ -17,21 +17,12 @@ export default function LoginPage() {
   const setAuthWithWorker = useAuth((s) => s.setAuthWithWorker);
   const setPendingWorkerSelection = useAuth((s) => s.setPendingWorkerSelection);
   const pendingWorkerSelection = useAuth((s) => s.pendingWorkerSelection);
+  const setSuperAdminAuth = useSuperAdminAuth((s) => s.setAuth);
   const { t } = useTranslation();
   const [businessId, setBusinessId] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [forgotOpen, setForgotOpen] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotBusinessId, setForgotBusinessId] = useState('');
-  const [forgotMsg, setForgotMsg] = useState('');
-  const [recoverOpen, setRecoverOpen] = useState(false);
-  const [recoverEmail, setRecoverEmail] = useState('');
-  const [recoverPassword, setRecoverPassword] = useState('');
-  const [recoverMsg, setRecoverMsg] = useState('');
-  const [recoverIds, setRecoverIds] = useState<string[]>([]);
-  const [recoverLoading, setRecoverLoading] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [workerId, setWorkerId] = useState('');
@@ -43,37 +34,54 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      const res = await api<{
-        accessToken?: string;
-        access_token?: string;
-        user: LoginUser;
-        needsWorkerSelection?: boolean;
-        workers?: Worker[];
-        forcePasswordChange?: boolean;
-      }>('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({
-          businessId: businessId.trim().toUpperCase(),
-          email: email.trim(),
-          password,
-        }),
-      });
-      const token = res.accessToken ?? res.access_token;
-      if (!token) throw new Error('No token received from server');
-      const user = res.user as LoginUser;
+      const bid = businessId.trim().toUpperCase();
+      const em = email.trim();
+      const body = { businessId: bid, email: em, password };
 
-      // Force-change only for MANAGER (admin), not role-based workers.
-      if (res.forcePasswordChange && user.role === 'MANAGER') {
-        setAuth(token, user);
-        router.replace('/change-password');
-      } else if (res.needsWorkerSelection && res.workers && res.workers.length > 0) {
-        setLoginToken(token);
-        setLoginUser(user);
-        setPendingWorkerSelection(res.workers);
-        setWorkerId(res.workers[0]?.id ?? '');
-      } else {
+      // Try business login first
+      try {
+        const res = await api<{
+          accessToken?: string;
+          access_token?: string;
+          user: LoginUser;
+          needsWorkerSelection?: boolean;
+          workers?: Worker[];
+          forcePasswordChange?: boolean;
+        }>('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        });
+        const token = res.accessToken ?? res.access_token;
+        if (!token) throw new Error('No token received from server');
+        const user = res.user as LoginUser;
+
+        if (res.forcePasswordChange && user.role === 'MANAGER') {
+          setAuth(token, user);
+          router.replace('/change-password');
+          return;
+        }
+        if (res.needsWorkerSelection && res.workers && res.workers.length > 0) {
+          setLoginToken(token);
+          setLoginUser(user);
+          setPendingWorkerSelection(res.workers);
+          setWorkerId(res.workers[0]?.id ?? '');
+          return;
+        }
         setAuth(token, user);
         router.replace(defaultDashboardRoute(user.role));
+        return;
+      } catch (businessErr: unknown) {
+        // If business login failed, try super-admin login (same form)
+        const saRes = await api<{ accessToken: string; user: unknown }>('/super-admin/login', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }).catch(() => null);
+        if (saRes?.accessToken && saRes?.user) {
+          setSuperAdminAuth(saRes.accessToken, saRes.user as SuperAdminUser);
+          router.replace('/super-admin/dashboard');
+          return;
+        }
+        throw businessErr;
       }
     } catch (err: unknown) {
       setError((err as Error).message || 'Login failed');
@@ -111,50 +119,6 @@ export default function LoginPage() {
     setLoginUser(null);
     setWorkerId('');
     setError('');
-  }
-
-  async function submitRecover(e: React.FormEvent) {
-    e.preventDefault();
-    setRecoverMsg('');
-    setRecoverIds([]);
-    setRecoverLoading(true);
-    try {
-      const res = await api<{ businessIds: string[] }>('/auth/recover-business-ids', {
-        method: 'POST',
-        body: JSON.stringify({ email: recoverEmail.trim(), password: recoverPassword }),
-      });
-      setRecoverIds(res.businessIds || []);
-      setRecoverMsg(res.businessIds?.length ? `Your Business ID(s): ${res.businessIds.join(', ')}. Use one of these on the login form.` : 'No businesses found for this account.');
-    } catch (err: unknown) {
-      setRecoverMsg((err as Error).message || 'Invalid email or password.');
-    } finally {
-      setRecoverLoading(false);
-    }
-  }
-
-  async function submitForgot(e: React.FormEvent) {
-    e.preventDefault();
-    setForgotMsg('');
-    setError('');
-    setLoading(true);
-    try {
-      const res = await api<{ success: boolean; temporaryPassword?: string }>('/auth/forgot-password', {
-        method: 'POST',
-        body: JSON.stringify({
-          businessId: (forgotBusinessId || businessId).trim().toUpperCase(),
-          email: (forgotEmail || email).trim(),
-        }),
-      });
-      if (res?.temporaryPassword) {
-        setForgotMsg(`Temporary password generated: ${res.temporaryPassword}`);
-      } else {
-        setForgotMsg('If the Business ID + email match an admin account, a temporary password was generated.');
-      }
-    } catch (err: any) {
-      setForgotMsg(err?.message || 'Request failed');
-    } finally {
-      setLoading(false);
-    }
   }
 
   // Worker selection screen (after login when role has workers)
@@ -222,7 +186,6 @@ export default function LoginPage() {
               placeholder="HMS-12345"
               required
             />
-            <p className="mt-1 text-xs text-slate-500">Use the exact Business ID you received when you signed up (e.g. HMS-93619). No spaces.</p>
           </div>
           <div>
             <label className="block text-sm text-slate-600 mb-1">{t('auth.email')}</label>
@@ -274,86 +237,6 @@ export default function LoginPage() {
         >
           {loading ? t('auth.loggingIn') : t('auth.login')}
         </button>
-
-        <button
-          type="button"
-          onClick={() => { setForgotOpen((v) => !v); setForgotMsg(''); setRecoverOpen(false); }}
-          className="mt-3 w-full text-sm text-slate-600 hover:text-slate-800"
-        >
-          Forgot password?
-        </button>
-        <button
-          type="button"
-          onClick={() => { setRecoverOpen((v) => !v); setRecoverMsg(''); setRecoverIds([]); setForgotOpen(false); }}
-          className="mt-1 w-full text-sm text-slate-600 hover:text-slate-800"
-        >
-          Forgot Business ID?
-        </button>
-
-        {recoverOpen && (
-          <div className="mt-3 p-3 border rounded bg-slate-50 space-y-2">
-            <div className="text-sm font-medium text-slate-700">Recover your Business ID</div>
-            <div className="text-xs text-slate-600">
-              Enter the email and password you used when you signed up. We&apos;ll show your Business ID(s).
-            </div>
-            <form onSubmit={submitRecover} className="space-y-2">
-              <input
-                type="email"
-                value={recoverEmail}
-                onChange={(e) => setRecoverEmail(e.target.value)}
-                className="w-full px-3 py-2 border rounded text-sm"
-                placeholder="Your email"
-                required
-              />
-              <input
-                type="password"
-                value={recoverPassword}
-                onChange={(e) => setRecoverPassword(e.target.value)}
-                className="w-full px-3 py-2 border rounded text-sm"
-                placeholder="Your password"
-                required
-              />
-              <button type="submit" disabled={recoverLoading} className="w-full py-2 bg-slate-700 text-white rounded text-sm disabled:opacity-50">
-                {recoverLoading ? '...' : 'Show my Business ID(s)'}
-              </button>
-            </form>
-            {recoverMsg && <div className="text-xs text-slate-700">{recoverMsg}</div>}
-          </div>
-        )}
-
-        {forgotOpen && (
-          <div className="mt-3 p-3 border rounded bg-slate-50 space-y-2">
-            <div className="text-sm font-medium text-slate-700">Reset admin password</div>
-            <div className="text-xs text-slate-600">
-              This is only for MANAGER (admin). The system generates a temporary password, then you must change it after login.
-            </div>
-            <form onSubmit={submitForgot} className="space-y-2">
-              <input
-                value={forgotBusinessId}
-                onChange={(e) => setForgotBusinessId(e.target.value)}
-                className="w-full px-3 py-2 border rounded text-sm"
-                placeholder="Business ID (HMS-12345)"
-              />
-              <input
-                value={forgotEmail}
-                onChange={(e) => setForgotEmail(e.target.value)}
-                className="w-full px-3 py-2 border rounded text-sm"
-                placeholder="Admin email"
-              />
-              <button type="submit" disabled={loading} className="w-full py-2 bg-slate-900 text-white rounded text-sm disabled:opacity-50">
-                {loading ? '...' : 'Send temporary password'}
-              </button>
-            </form>
-            {forgotMsg && <div className="text-xs text-slate-700">{forgotMsg}</div>}
-          </div>
-        )}
-
-        <p className="mt-4 text-center text-sm text-slate-500">
-          {t('auth.noAccount')} <Link href="/signup" className="text-teal-600">{t('auth.signUpLink')}</Link>
-        </p>
-        <p className="mt-2 text-center text-sm text-slate-500">
-          Platform admin? <Link href="/super-admin" className="text-teal-600">Log in here</Link> (Business ID: HMS-1).
-        </p>
       </form>
     </div>
   );

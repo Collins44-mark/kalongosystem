@@ -112,24 +112,6 @@ export class AuthService {
     return code;
   }
 
-  /** Recover Business IDs for an email+password (so user can see which Business ID to use for login). */
-  async recoverBusinessIds(email: string, password: string): Promise<{ businessIds: string[] }> {
-    const cleanEmail = (email || '').toLowerCase().trim();
-    const cleanPassword = (password || '').trim();
-    const user = await this.prisma.user.findUnique({
-      where: { email: cleanEmail },
-      select: { id: true, password: true },
-    });
-    if (!user) throw new UnauthorizedException('Invalid credentials');
-    const valid = await bcrypt.compare(cleanPassword, user.password);
-    if (!valid) throw new UnauthorizedException('Invalid credentials');
-    const list = await this.prisma.businessUser.findMany({
-      where: { userId: user.id },
-      include: { business: { select: { businessId: true } } },
-    });
-    return { businessIds: list.map((bu) => bu.business.businessId) };
-  }
-
   /** Login: Business ID + Email + Password. Returns JWT with tenant context. */
   async login(businessId: string, email: string, password: string) {
     const cleanBusinessId = (businessId || '').toUpperCase().trim();
@@ -194,65 +176,6 @@ export class AuthService {
       needsWorkerSelection,
       workers: needsWorkerSelection ? workers.map((w) => ({ id: w.id, fullName: w.fullName })) : [],
     };
-  }
-
-  /**
-   * Forgot password (MANAGER only):
-   * - Validates businessId + email match a MANAGER BusinessUser
-   * - Generates temporary password
-   * - Hashes + stores it
-   * - Sets forcePasswordChange=true
-   * - Returns the temp password (no email)
-   */
-  async forgotPassword(businessId: string, email: string) {
-    const cleanBusinessId = (businessId || '').toUpperCase().trim();
-    const cleanEmail = (email || '').toLowerCase().trim();
-
-    if (!/^HMS-\d+$/i.test(cleanBusinessId)) {
-      throw new BadRequestException('Business ID must be like HMS-12345');
-    }
-
-    const user = await this.prisma.user.findUnique({
-      where: { email: cleanEmail },
-      select: { id: true, email: true, isSuperAdmin: true },
-    });
-    if (!user || user.isSuperAdmin) {
-      // Do not reveal which part failed
-      return { success: true };
-    }
-
-    const bu = await this.prisma.businessUser.findFirst({
-      where: {
-        userId: user.id,
-        role: 'MANAGER',
-        business: { businessId: cleanBusinessId },
-        isDisabled: false,
-      },
-      include: { business: { include: { subscription: true } } },
-    });
-    if (!bu) return { success: true };
-
-    if (bu.business?.isSuspended === true) {
-      throw new ForbiddenException('Your subscription is inactive. Contact support.');
-    }
-
-    const temp = this.generateTempPassword();
-    const hashed = await bcrypt.hash(temp, 10);
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { password: hashed, forcePasswordChange: true },
-    });
-    return { success: true, temporaryPassword: temp };
-  }
-
-  private generateTempPassword() {
-    // simple but reasonably strong: 10 chars alnum
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
-    let out = '';
-    for (let i = 0; i < 10; i++) {
-      out += chars[Math.floor(Math.random() * chars.length)];
-    }
-    return out;
   }
 
   async changePassword(userId: string, currentPassword: string, newPassword: string) {
