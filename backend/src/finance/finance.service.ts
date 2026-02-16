@@ -420,22 +420,26 @@ export class FinanceService {
     const txns: Txn[] = [];
 
     if (sector === 'all' || sector === 'rooms') {
-      const payments = await this.prisma.folioPayment.findMany({
-        where: { booking: { businessId }, createdAt: { gte: from, lte: to } },
-        include: { booking: { select: { id: true, folioNumber: true } } },
-        orderBy: { createdAt: 'desc' },
+      const bookings = await this.prisma.booking.findMany({
+        where: {
+          businessId,
+          status: 'CHECKED_OUT',
+          checkOut: { gte: from, lte: to },
+        },
+        orderBy: { checkOut: 'desc' },
+        select: { id: true, folioNumber: true, totalAmount: true, checkOut: true, paymentMode: true },
       });
-      for (const p of payments) {
-        const gross = Number(p.amount);
+      for (const b of bookings) {
+        const gross = Number(b.totalAmount);
         const split = this.splitTaxFromGross(gross, tax.enabled, tax.rateBySector.rooms);
         txns.push({
-          date: p.createdAt,
-          referenceId: p.bookingId,
+          date: b.checkOut,
+          referenceId: b.folioNumber || b.id,
           sector: 'rooms',
           netAmount: this.round2(split.net),
           vatAmount: this.round2(split.tax),
           grossAmount: this.round2(split.gross),
-          paymentMode: p.paymentMode,
+          paymentMode: b.paymentMode || '—',
         });
       }
     }

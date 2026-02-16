@@ -101,7 +101,6 @@ export default function FrontOfficePage() {
   ];
   const staffTabs = [
     { id: 'rooms', labelKey: 'frontOffice.roomAvailability' },
-    { id: 'bookings', labelKey: 'frontOffice.bookings' },
     { id: 'history', labelKey: 'frontOffice.bookingHistory' },
     { id: 'folios', labelKey: 'frontOffice.activeFolios' },
     { id: 'new', labelKey: 'frontOffice.newBooking' },
@@ -342,17 +341,6 @@ export default function FrontOfficePage() {
           onAction={refresh}
           t={t}
           onCategoryAdded={(cat) => setCategories((prev) => [...prev, { id: cat.id, name: cat.name, pricePerNight: String(cat.pricePerNight || '0') }])}
-        />
-      )}
-
-      {activeTab === 'bookings' && (
-        <BookingList
-          bookings={activeBookings}
-          token={token!}
-          isManager={isManager}
-          rooms={rooms}
-          onAction={refresh}
-          t={t}
         />
       )}
 
@@ -1372,51 +1360,65 @@ function FolioList({
   return (
     <div className="space-y-4">
       <p className="text-sm text-slate-600">{t('frontOffice.activeFoliosDesc')}</p>
-      {folios.map((b) => (
-        <div key={b.id} className="p-4 sm:p-5 bg-white border rounded-lg">
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-3">
-            <div>
-              <div className="font-medium">{b.guestName} {b.guestPhone && `· ${b.guestPhone}`}</div>
-              <div className="text-sm text-slate-600">Room {b.room.roomNumber} · {b.room.category?.name}</div>
-              <div className="text-xs text-slate-500">
-                {new Date(b.checkIn).toLocaleDateString()} - {new Date(b.checkOut).toLocaleDateString()} · {b.nights} {t('frontOffice.nights')} · {b.folioNumber ?? b.id}
-                {b.servedBy && ` · Served by: ${b.servedBy}`}
-              </div>
-            </div>
-            <div className="text-left sm:text-right">
-              <div className="font-semibold">{formatTzs(parseFloat(b.totalAmount))}</div>
-              <div className="text-xs text-slate-500">{t('frontOffice.totalCharges')}</div>
-              <div className="mt-1 flex items-center gap-2 justify-start sm:justify-end">
-                {badge(b)}
-                <span className="text-xs text-slate-500">
-                  Paid: {formatTzs(parseFloat(b.paidAmount || '0'))} · Balance: {formatTzs(parseFloat(b.balance || '0'))}
-                </span>
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2 pt-3 border-t">
-            <button onClick={() => checkOut(b.id)} className="px-3 py-1.5 bg-teal-600 text-white rounded text-sm touch-manipulation">
-              {t('frontOffice.checkOutBtn')}
-            </button>
-            <ExtendStayModal booking={b} token={token} onDone={onAction} t={t} />
-            <AddPaymentModal booking={b} token={token} onDone={onAction} t={t} />
-            {isManager && <ViewPaymentsModal booking={b} token={token} t={t} />}
-            {vacantRooms.length > 0 && (
-              <select
-                value=""
-                onChange={(e) => { const v = e.target.value; if (v) changeRoom(b.id, v); e.target.value = ''; }}
-                className="px-2 py-1.5 border rounded text-sm touch-manipulation"
-              >
-                <option value="">{t('frontOffice.changeRoom')}</option>
-                {vacantRooms.filter((r) => r.id !== b.room.id).map((r) => (
-                  <option key={r.id} value={r.id}>{r.roomNumber}</option>
-                ))}
-              </select>
-            )}
-          </div>
+      <div className="bg-white border rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead className="bg-slate-50 border-b">
+              <tr className="text-left text-slate-600">
+                <th className="p-3 font-medium">{t('frontOffice.guestName')}</th>
+                <th className="p-3 font-medium">{t('frontOffice.phone')}</th>
+                <th className="p-3 font-medium">{t('frontOffice.roomCategory')}</th>
+                <th className="p-3 font-medium">{t('frontOffice.checkIn')}</th>
+                <th className="p-3 font-medium">{t('frontOffice.checkOut')}</th>
+                <th className="p-3 font-medium text-right">{t('frontOffice.total')}</th>
+                <th className="p-3 font-medium text-right">{t('frontOffice.paidAmount')}</th>
+                <th className="p-3 font-medium">{t('frontOffice.status')}</th>
+                <th className="p-3 font-medium w-40">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {folios.length === 0 ? (
+                <tr><td className="p-3 text-slate-500" colSpan={9}>{t('frontOffice.noActiveFolios')}</td></tr>
+              ) : (
+                folios.map((b) => (
+                  <tr key={b.id} className="hover:bg-slate-50">
+                    <td className="p-3 font-medium">{b.guestName}</td>
+                    <td className="p-3 text-slate-600">{b.guestPhone || '—'}</td>
+                    <td className="p-3">Room {b.room.roomNumber} · {b.room.category?.name}</td>
+                    <td className="p-3 whitespace-nowrap">{new Date(b.checkIn).toLocaleDateString()}</td>
+                    <td className="p-3 whitespace-nowrap">{new Date(b.checkOut).toLocaleDateString()}</td>
+                    <td className="p-3 text-right whitespace-nowrap">{formatTzs(parseFloat(b.totalAmount))}</td>
+                    <td className="p-3 text-right whitespace-nowrap">{formatTzs(parseFloat(b.paidAmount || '0'))}</td>
+                    <td className="p-3">{badge(b)}</td>
+                    <td className="p-3">
+                      <div className="flex flex-wrap gap-1">
+                        <button onClick={() => checkOut(b.id)} className="px-2 py-1 bg-teal-600 text-white rounded text-xs touch-manipulation">
+                          {t('frontOffice.checkOutBtn')}
+                        </button>
+                        <ExtendStayModal booking={b} token={token} onDone={onAction} t={t} />
+                        <AddPaymentModal booking={b} token={token} onDone={onAction} t={t} />
+                        {isManager && <ViewPaymentsModal booking={b} token={token} t={t} />}
+                        {vacantRooms.length > 0 && (
+                          <select
+                            value=""
+                            onChange={(e) => { const v = e.target.value; if (v) changeRoom(b.id, v); e.target.value = ''; }}
+                            className="px-2 py-1 border rounded text-xs touch-manipulation"
+                          >
+                            <option value="">{t('frontOffice.changeRoom')}</option>
+                            {vacantRooms.filter((r) => r.id !== b.room.id).map((r) => (
+                              <option key={r.id} value={r.id}>{r.roomNumber}</option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
-      ))}
-      {folios.length === 0 && <p className="text-slate-500">{t('frontOffice.noActiveFolios')}</p>}
+      </div>
     </div>
   );
 }
@@ -1528,16 +1530,16 @@ function NewBookingForm({
         <label className="block text-sm font-medium text-slate-700 mb-1">{t('frontOffice.phone')}</label>
         <input value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-base focus:ring-2 focus:ring-teal-500 focus:border-teal-500" required />
       </div>
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm w-full max-w-full box-border">
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm w-full max-w-full box-border overflow-hidden">
         <h3 className="text-sm font-semibold text-slate-800 mb-3">{t('frontOffice.stayDates')}</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full min-w-0">
-          <div className="min-w-0 w-full">
+        <div className="flex flex-col gap-4 w-full">
+          <div className="w-full">
             <label className="block text-sm font-medium text-slate-700 mb-1.5">{t('frontOffice.checkIn')}</label>
-            <input type="date" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="w-full min-w-0 max-w-full px-3 py-2.5 border border-slate-300 rounded-lg text-base focus:ring-2 focus:ring-teal-500 focus:border-teal-500 box-border" required />
+            <input type="date" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="w-full max-w-full px-3 py-2.5 border border-slate-300 rounded-lg text-base focus:ring-2 focus:ring-teal-500 focus:border-teal-500 box-border" required />
           </div>
-          <div className="min-w-0 w-full">
+          <div className="w-full">
             <label className="block text-sm font-medium text-slate-700 mb-1.5">{t('frontOffice.checkOut')}</label>
-            <input type="date" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="w-full min-w-0 max-w-full px-3 py-2.5 border border-slate-300 rounded-lg text-base focus:ring-2 focus:ring-teal-500 focus:border-teal-500 box-border" required />
+            <input type="date" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="w-full max-w-full px-3 py-2.5 border border-slate-300 rounded-lg text-base focus:ring-2 focus:ring-teal-500 focus:border-teal-500 box-border" required />
           </div>
         </div>
         <div className="mt-3 flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-2.5">
