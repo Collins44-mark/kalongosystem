@@ -11,7 +11,18 @@ export class SuperAdminService {
     private jwtService: JwtService,
   ) {}
 
-  /** One-time seed for super admin user (same as prisma/seed.js). Call via POST /super-admin/seed?secret=SEED_SECRET */
+  /** Ensure super-admin user exists (called on startup). Creates/updates if missing. */
+  async ensureSuperAdminExists(): Promise<void> {
+    const email = 'markkcollins979@gmail.com'.toLowerCase().trim();
+    const existing = await this.prisma.user.findUnique({
+      where: { email },
+      select: { isSuperAdmin: true },
+    });
+    if (existing?.isSuperAdmin === true) return;
+    await this.seedSuperAdmin();
+  }
+
+  /** One-time seed for super admin user (same as prisma/seed.js). Call via GET /super-admin/seed?secret=SEED_SECRET */
   async seedSuperAdmin(): Promise<{ ok: boolean; message: string }> {
     const email = 'markkcollins979@gmail.com'.toLowerCase().trim();
     const password = 'Kentana44';

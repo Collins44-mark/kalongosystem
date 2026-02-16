@@ -2,11 +2,19 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
+import { SuperAdminService } from './super-admin/super-admin.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.useGlobalFilters(new AllExceptionsFilter());
+
+  try {
+    const superAdmin = app.get(SuperAdminService);
+    await superAdmin.ensureSuperAdminExists();
+  } catch (e) {
+    console.warn('Could not ensure super-admin user (DB may be unavailable):', (e as Error).message);
+  }
 
   // Enable CORS for frontend (Vercel, localhost)
   const allowedOrigins = [
