@@ -1444,6 +1444,7 @@ function NewBookingForm({
   const [checkIn, setCheckIn] = useState('');
   const [checkOut, setCheckOut] = useState('');
   const [totalOverride, setTotalOverride] = useState<string>('');
+  const [paymentMode, setPaymentMode] = useState('');
   const [checkInImmediately, setCheckInImmediately] = useState(true);
   const [loading, setLoading] = useState(false);
   const isManager = ['MANAGER', 'ADMIN', 'OWNER'].includes(user?.role || '');
@@ -1478,6 +1479,7 @@ function NewBookingForm({
         nights,
         totalAmount: totalForSave,
         currency: 'TZS',
+        paymentMode: paymentMode || undefined,
         checkInImmediately: checkInImmediately || undefined,
       };
       await api('/hotel/bookings', {
@@ -1526,14 +1528,14 @@ function NewBookingForm({
         <label className="block text-sm font-medium text-slate-700 mb-1">{t('frontOffice.phone')}</label>
         <input value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-base focus:ring-2 focus:ring-teal-500 focus:border-teal-500" required />
       </div>
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm min-w-0 overflow-hidden">
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm w-full max-w-full box-border">
         <h3 className="text-sm font-semibold text-slate-800 mb-3">{t('frontOffice.stayDates')}</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
-          <div className="min-w-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full min-w-0">
+          <div className="min-w-0 w-full">
             <label className="block text-sm font-medium text-slate-700 mb-1.5">{t('frontOffice.checkIn')}</label>
             <input type="date" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="w-full min-w-0 max-w-full px-3 py-2.5 border border-slate-300 rounded-lg text-base focus:ring-2 focus:ring-teal-500 focus:border-teal-500 box-border" required />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 w-full">
             <label className="block text-sm font-medium text-slate-700 mb-1.5">{t('frontOffice.checkOut')}</label>
             <input type="date" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="w-full min-w-0 max-w-full px-3 py-2.5 border border-slate-300 rounded-lg text-base focus:ring-2 focus:ring-teal-500 focus:border-teal-500 box-border" required />
           </div>
@@ -1577,6 +1579,15 @@ function NewBookingForm({
               <span className="font-semibold text-slate-900">{formatCurrency(calculatedTotal, 'TZS')}</span>
             )}
           </div>
+        </div>
+        <div className="mt-3 pt-3 border-t border-slate-200">
+          <label className="block text-sm font-medium text-slate-700 mb-1">{t('frontOffice.paymentModeLabel')}</label>
+          <select value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)} className="w-full max-w-full px-3 py-2 border border-slate-300 rounded text-sm bg-white">
+            <option value="">—</option>
+            {PAYMENT_MODES.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
         </div>
       </div>
       <button type="submit" disabled={loading} className="px-4 py-3 bg-teal-600 text-white rounded touch-manipulation min-h-[44px] w-full sm:w-auto">

@@ -435,12 +435,25 @@ export default function FinancePage() {
           )}
 
           {level === 'expenses' && (
-            <div className="bg-white border rounded-lg overflow-hidden">
-              <div className="p-4 border-b">
-                <div className="font-medium">{t('finance.expensesByCategory')}</div>
-                <div className="text-xs text-slate-500">{t('finance.showingFor')}: {t('finance.allSectors')}</div>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {(['HOUSEKEEPING', 'MAINTENANCE', 'UTILITIES', 'OTHERS'] as const).map((cat) => {
+                  const amount = expensesData?.byCategory?.[cat] ?? 0;
+                  const label = cat === 'HOUSEKEEPING' ? t('finance.housekeeping') : cat === 'MAINTENANCE' ? t('finance.maintenance') : cat === 'UTILITIES' ? t('finance.utilities') : t('finance.others');
+                  return (
+                    <div key={cat} className="bg-white border rounded-lg p-4 text-left">
+                      <div className="text-sm text-slate-500">{label}</div>
+                      <div className="text-xl font-semibold text-slate-800 mt-1">{formatTzs(amount)}</div>
+                    </div>
+                  );
+                })}
               </div>
-              <div className="overflow-x-auto">
+              <div className="bg-white border rounded-lg overflow-hidden">
+                <div className="p-4 border-b">
+                  <div className="font-medium">{t('finance.expensesByCategory')}</div>
+                  <div className="text-xs text-slate-500">{t('finance.showingFor')}: {t('finance.allSectors')}</div>
+                </div>
+                <div className="overflow-x-auto">
                 <table className="w-full text-sm min-w-[520px]">
                   <thead className="bg-slate-50 border-b">
                     <tr className="text-left text-slate-600">
@@ -467,6 +480,7 @@ export default function FinancePage() {
                     )}
                   </tbody>
                 </table>
+              </div>
               </div>
             </div>
           )}
