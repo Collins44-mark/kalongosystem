@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
+import { useDashboardBack } from '@/app/dashboard/layout';
 import { CalendarView } from './CalendarView';
 import { useSearch } from '@/store/search';
 
@@ -99,12 +100,20 @@ export default function FrontOfficePage() {
     { id: 'new', labelKey: 'frontOffice.newBooking' },
   ];
   const staffTabs = [
+    { id: 'rooms', labelKey: 'frontOffice.roomAvailability' },
     { id: 'bookings', labelKey: 'frontOffice.bookings' },
     { id: 'history', labelKey: 'frontOffice.bookingHistory' },
     { id: 'folios', labelKey: 'frontOffice.activeFolios' },
     { id: 'new', labelKey: 'frontOffice.newBooking' },
   ];
   const tabs = isManager ? managerTabs : staffTabs;
+  const setBackVisible = useDashboardBack()?.setBackVisible;
+
+  useEffect(() => {
+    if (typeof setBackVisible !== 'function') return;
+    const isMainView = activeTab === tabs[0].id && roomsView === 'grid';
+    setBackVisible(!isMainView);
+  }, [activeTab, roomsView, tabs, setBackVisible]);
 
   // Support "back" within this page (tabs / calendar view) from the global header back button.
   useEffect(() => {
@@ -285,7 +294,7 @@ export default function FrontOfficePage() {
 
       {activeTab === 'rooms' && (
         <>
-          {enableDragDropBooking && (
+          {enableDragDropBooking && isManager && (
             <div className="flex gap-2 mb-3">
               <button
                 type="button"
@@ -434,10 +443,10 @@ function RoomAvailability({
     return (
       <button
         type="button"
-        onClick={() => isManager && onFilterChange(statusByVariant[variant])}
-        className={`rounded-xl p-5 shadow-md min-h-[100px] flex flex-col justify-center text-left w-full transition-all ${
+        onClick={() => onFilterChange(statusByVariant[variant])}
+        className={`rounded-xl p-5 shadow-md min-h-[100px] flex flex-col justify-center text-left w-full transition-all cursor-pointer hover:shadow-lg ${
           styles[variant]
-        } ${isManager ? 'cursor-pointer hover:shadow-lg' : 'cursor-default'}`}
+        }`}
       >
         <div className={`text-sm font-medium ${variant === 'total' ? 'opacity-90' : 'text-slate-500'}`}>{label}</div>
         <div className={`text-2xl font-bold mt-0.5 ${valueColor}`}>{value}</div>
@@ -1435,6 +1444,8 @@ function NewBookingForm({
   const [checkIn, setCheckIn] = useState('');
   const [checkOut, setCheckOut] = useState('');
   const [totalOverride, setTotalOverride] = useState<string>('');
+  const [paymentMode, setPaymentMode] = useState('');
+  const [paidAmount, setPaidAmount] = useState<string>('');
   const [checkInImmediately, setCheckInImmediately] = useState(true);
   const [loading, setLoading] = useState(false);
   const isManager = ['MANAGER', 'ADMIN', 'OWNER'].includes(user?.role || '');
@@ -1460,6 +1471,7 @@ function NewBookingForm({
     if (!roomId || nights < 1 || !guestPhone.trim()) return;
     setLoading(true);
     try {
+      const paid = paidAmount ? parseFloat(paidAmount.replace(/[^\d.]/g, '')) : 0;
       const body: Record<string, unknown> = {
         roomId,
         guestName,
@@ -1469,14 +1481,20 @@ function NewBookingForm({
         nights,
         totalAmount: totalForSave,
         currency: 'TZS',
+        paymentMode: paid > 0 ? (paymentMode || 'CASH') : undefined,
         checkInImmediately: checkInImmediately || undefined,
       };
+      if (paid > 0 && paid <= totalForSave) {
+        body.paidAmount = paid;
+        body.paymentMode = body.paymentMode || 'CASH';
+      }
       await api('/hotel/bookings', {
         method: 'POST',
         token: activeToken,
         body: JSON.stringify(body),
       });
       if (typeof window !== 'undefined') try { localStorage.setItem('hms-data-updated', Date.now().toString()); } catch { /* ignore */ }
+      setPaidAmount('');
       onDone();
     } catch (e) {
       const err = e as Error & { status?: number };
@@ -1567,6 +1585,29 @@ function NewBookingForm({
             ) : (
               <span className="font-semibold text-slate-900">{formatCurrency(calculatedTotal, 'TZS')}</span>
             )}
+          </div>
+        </div>
+        <div className="mt-3 space-y-2 pt-3 border-t border-slate-200">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">{t('frontOffice.paymentModeLabel')}</label>
+            <select value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded text-sm">
+              <option value="">—</option>
+              {PAYMENT_MODES.map((p) => (
+                <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">{t('frontOffice.paidAmount')}</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={paidAmount}
+              onChange={(e) => setPaidAmount(e.target.value.replace(/[^\d.]/g, ''))}
+              placeholder="0"
+              className="w-full px-3 py-2 border border-slate-300 rounded text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+            <p className="text-xs text-slate-500 mt-0.5">{t('frontOffice.paidAmountHint')}</p>
           </div>
         </div>
       </div>

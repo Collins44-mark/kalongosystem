@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/store/auth';
@@ -11,6 +11,12 @@ import { defaultDashboardRoute, isOverviewAllowed } from '@/lib/homeRoute';
 import { isManagerLevel } from '@/lib/roles';
 import { NotificationsPanel } from '@/components/NotificationsPanel';
 import { HeaderSearch } from '@/components/HeaderSearch';
+
+export const DashboardBackContext = createContext<{ setBackVisible: (v: boolean) => void } | null>(null);
+export function useDashboardBack() {
+  const ctx = useContext(DashboardBackContext);
+  return ctx;
+}
 
 function MenuIcon({ open }: { open: boolean }) {
   return (
@@ -166,6 +172,12 @@ export default function DashboardLayout({
   const visibleLinks = SIDEBAR_LINKS.filter((l) => l.roles.includes(roleForNav));
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const isAdmin = isManagerLevel(user?.role);
+  const defaultRoute = defaultDashboardRoute(user?.role);
+  const [backVisibleFromPage, setBackVisibleFromPage] = useState(false);
+  useEffect(() => {
+    setBackVisibleFromPage(false);
+  }, [pathname]);
+  const showBackButton = pathname !== defaultRoute || backVisibleFromPage;
 
   if (!_hasHydrated || !token || !user) return null;
 
@@ -251,36 +263,48 @@ export default function DashboardLayout({
       <main className="flex-1 overflow-auto min-w-0">
         <header className="h-12 sm:h-12 bg-white border-b flex items-center justify-between px-3 sm:px-4 gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <button
-              type="button"
-              onClick={() => {
-                const defaultRoute = defaultDashboardRoute(user.role);
-                if (pathname === defaultRoute) return;
-                try {
-                  if (typeof window !== 'undefined') {
-                    const ev = new CustomEvent('hms-back', { cancelable: true });
-                    const notCancelled = window.dispatchEvent(ev);
-                    if (!notCancelled) return;
+            {showBackButton && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (pathname === defaultRoute) {
+                    try {
+                      if (typeof window !== 'undefined') {
+                        const ev = new CustomEvent('hms-back', { cancelable: true });
+                        const notCancelled = window.dispatchEvent(ev);
+                        if (!notCancelled) return;
+                      }
+                      router.push(defaultRoute);
+                    } catch {
+                      router.push(defaultRoute);
+                    }
+                    return;
                   }
-                  if (typeof window !== 'undefined' && window.history.length > 1) {
-                    router.back();
-                  } else {
+                  try {
+                    if (typeof window !== 'undefined') {
+                      const ev = new CustomEvent('hms-back', { cancelable: true });
+                      const notCancelled = window.dispatchEvent(ev);
+                      if (!notCancelled) return;
+                    }
+                    if (typeof window !== 'undefined' && window.history.length > 1) {
+                      router.back();
+                    } else {
+                      router.push(defaultRoute);
+                    }
+                  } catch {
                     router.push(defaultRoute);
                   }
-                } catch {
-                  router.push(defaultRoute);
-                }
-              }}
-              className="px-2 py-1.5 rounded hover:bg-slate-100 text-slate-600 flex-shrink-0 text-xs sm:text-sm inline-flex items-center gap-1 disabled:opacity-50 disabled:pointer-events-none"
-              disabled={pathname === defaultDashboardRoute(user.role)}
-              aria-label={t('common.back')}
-              title={t('common.back')}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              <span className="hidden sm:inline">{t('common.back')}</span>
-            </button>
+                }}
+                className="px-2 py-1.5 rounded hover:bg-slate-100 text-slate-600 flex-shrink-0 text-xs sm:text-sm inline-flex items-center gap-1"
+                aria-label={t('common.back')}
+                title={t('common.back')}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                <span className="hidden sm:inline">{t('common.back')}</span>
+              </button>
+            )}
             {isAdmin && <NotificationsPanel />}
             <button
               type="button"
@@ -375,7 +399,9 @@ export default function DashboardLayout({
               </div>
             </div>
           ) : (
-            children
+            <DashboardBackContext.Provider value={{ setBackVisible: setBackVisibleFromPage }}>
+              {children}
+            </DashboardBackContext.Provider>
           )}
         </div>
       </main>
