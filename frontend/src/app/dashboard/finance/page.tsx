@@ -68,6 +68,7 @@ export default function FinancePage() {
   const [expenseDate, setExpenseDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [expenseNotes, setExpenseNotes] = useState('');
   const [savingExpense, setSavingExpense] = useState(false);
+  const [selectedExpenseCategory, setSelectedExpenseCategory] = useState<string | null>(null);
 
   if (!canAccess) {
     return (
@@ -88,12 +89,18 @@ export default function FinancePage() {
 
   useEffect(() => {
     const onBack = (e: Event) => {
+      if (level === 'expenses' && selectedExpenseCategory) {
+        setSelectedExpenseCategory(null);
+        e.preventDefault();
+        return;
+      }
       const prev = viewHistory.current.pop();
       if (prev) {
         setLevel(prev.level);
         setMetric(prev.metric);
         setSector(prev.sector);
         setPage(prev.page);
+        if (prev.level === 'expenses') setSelectedExpenseCategory(null);
         e.preventDefault();
         return;
       }
@@ -102,12 +109,13 @@ export default function FinancePage() {
         setMetric('net');
         setSector('all');
         setPage(1);
+        setSelectedExpenseCategory(null);
         e.preventDefault();
       }
     };
     window.addEventListener('hms-back', onBack);
     return () => window.removeEventListener('hms-back', onBack);
-  }, [level, metric, sector, page]);
+  }, [level, metric, sector, page, selectedExpenseCategory]);
 
   const dateRange = (() => {
     const now = new Date();
@@ -306,7 +314,10 @@ export default function FinancePage() {
   const breadcrumb = (() => {
     const m = metric === 'net' ? t('finance.netRevenue') : metric === 'gross' ? t('finance.grossSales') : metric === 'vat' ? t('finance.vatCollected') : t('finance.expenses');
     if (level === 'overview') return t('finance.title');
-    if (level === 'expenses') return `${t('finance.title')} · ${t('finance.expenses')}`;
+    if (level === 'expenses') {
+      const catLabel = selectedExpenseCategory === 'HOUSEKEEPING' ? t('finance.housekeeping') : selectedExpenseCategory === 'MAINTENANCE' ? t('finance.maintenance') : selectedExpenseCategory === 'UTILITIES' ? t('finance.utilities') : selectedExpenseCategory === 'OTHERS' ? t('finance.others') : '';
+      return selectedExpenseCategory ? `${t('finance.title')} · ${t('finance.expenses')} · ${catLabel}` : `${t('finance.title')} · ${t('finance.expenses')}`;
+    }
     if (level === 'metric') return `${t('finance.title')} · ${m}`;
     return `${t('finance.title')} · ${m} · ${labelSector(sector)}`;
   })();
@@ -321,17 +332,23 @@ export default function FinancePage() {
             <button
               type="button"
               onClick={() => {
+                if (level === 'expenses' && selectedExpenseCategory) {
+                  setSelectedExpenseCategory(null);
+                  return;
+                }
                 const prev = viewHistory.current.pop();
                 if (prev) {
                   setLevel(prev.level);
                   setMetric(prev.metric);
                   setSector(prev.sector);
                   setPage(prev.page);
+                  if (prev.level === 'expenses') setSelectedExpenseCategory(null);
                 } else {
                   setLevel('overview');
                   setMetric('net');
                   setSector('all');
                   setPage(1);
+                  setSelectedExpenseCategory(null);
                 }
               }}
               className="text-sm text-slate-600 hover:text-slate-800 hover:underline"
@@ -436,52 +453,75 @@ export default function FinancePage() {
 
           {level === 'expenses' && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {(['HOUSEKEEPING', 'MAINTENANCE', 'UTILITIES', 'OTHERS'] as const).map((cat) => {
-                  const amount = expensesData?.byCategory?.[cat] ?? 0;
-                  const label = cat === 'HOUSEKEEPING' ? t('finance.housekeeping') : cat === 'MAINTENANCE' ? t('finance.maintenance') : cat === 'UTILITIES' ? t('finance.utilities') : t('finance.others');
-                  return (
-                    <div key={cat} className="bg-white border rounded-lg p-4 text-left">
-                      <div className="text-sm text-slate-500">{label}</div>
-                      <div className="text-xl font-semibold text-slate-800 mt-1">{formatTzs(amount)}</div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="bg-white border rounded-lg overflow-hidden">
-                <div className="p-4 border-b">
-                  <div className="font-medium">{t('finance.expensesByCategory')}</div>
-                  <div className="text-xs text-slate-500">{t('finance.showingFor')}: {t('finance.allSectors')}</div>
+              {selectedExpenseCategory === null ? (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {(['HOUSEKEEPING', 'MAINTENANCE', 'UTILITIES', 'OTHERS'] as const).map((cat) => {
+                    const amount = expensesData?.byCategory?.[cat] ?? 0;
+                    const label = cat === 'HOUSEKEEPING' ? t('finance.housekeeping') : cat === 'MAINTENANCE' ? t('finance.maintenance') : cat === 'UTILITIES' ? t('finance.utilities') : t('finance.others');
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setSelectedExpenseCategory(cat)}
+                        className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
+                      >
+                        <div className="text-sm text-slate-500">{label}</div>
+                        <div className="text-xl font-semibold text-slate-800 mt-1">{formatTzs(amount)}</div>
+                        <div className="text-xs text-slate-500 mt-1">{t('finance.viewDetails')}</div>
+                      </button>
+                    );
+                  })}
                 </div>
-                <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[520px]">
-                  <thead className="bg-slate-50 border-b">
-                    <tr className="text-left text-slate-600">
-                      <th className="p-3 font-medium">{t('common.date')}</th>
-                      <th className="p-3 font-medium">{t('finance.category')}</th>
-                      <th className="p-3 font-medium text-right">{t('finance.amount')}</th>
-                      <th className="p-3 font-medium">{t('finance.notes')}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {!expensesData ? (
-                      <tr><td className="p-3 text-slate-500" colSpan={4}>{t('common.loading')}</td></tr>
-                    ) : expensesData.expenses.length === 0 ? (
-                      <tr><td className="p-3 text-slate-500" colSpan={4}>{t('finance.noExpenses')}</td></tr>
-                    ) : (
-                      expensesData.expenses.map((e) => (
-                        <tr key={e.id} className="hover:bg-slate-50">
-                          <td className="p-3 whitespace-nowrap">{new Date(e.date).toLocaleDateString()}</td>
-                          <td className="p-3">{e.category}</td>
-                          <td className="p-3 text-right whitespace-nowrap">{formatTzs(e.amount)}</td>
-                          <td className="p-3 text-slate-600">{e.notes || '-'}</td>
+              ) : (
+                <div className="bg-white border rounded-lg overflow-hidden">
+                  <div className="p-4 border-b flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="font-medium">{t('finance.expensesByCategory')}</div>
+                      <div className="text-xs text-slate-500">
+                        {selectedExpenseCategory === 'HOUSEKEEPING' ? t('finance.housekeeping') : selectedExpenseCategory === 'MAINTENANCE' ? t('finance.maintenance') : selectedExpenseCategory === 'UTILITIES' ? t('finance.utilities') : t('finance.others')}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedExpenseCategory(null)}
+                      className="text-sm text-slate-600 hover:text-slate-800 hover:underline"
+                    >
+                      {t('common.back')}
+                    </button>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm min-w-[520px]">
+                      <thead className="bg-slate-50 border-b">
+                        <tr className="text-left text-slate-600">
+                          <th className="p-3 font-medium">{t('common.date')}</th>
+                          <th className="p-3 font-medium">{t('finance.category')}</th>
+                          <th className="p-3 font-medium text-right">{t('finance.amount')}</th>
+                          <th className="p-3 font-medium">{t('finance.notes')}</th>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              </div>
+                      </thead>
+                      <tbody className="divide-y">
+                        {!expensesData ? (
+                          <tr><td className="p-3 text-slate-500" colSpan={4}>{t('common.loading')}</td></tr>
+                        ) : (() => {
+                          const filtered = expensesData.expenses.filter((e) => e.category === selectedExpenseCategory);
+                          return filtered.length === 0 ? (
+                            <tr><td className="p-3 text-slate-500" colSpan={4}>{t('finance.noExpenses')}</td></tr>
+                          ) : (
+                            filtered.map((e) => (
+                              <tr key={e.id} className="hover:bg-slate-50">
+                                <td className="p-3 whitespace-nowrap">{new Date(e.date).toLocaleDateString()}</td>
+                                <td className="p-3">{e.category}</td>
+                                <td className="p-3 text-right whitespace-nowrap">{formatTzs(e.amount)}</td>
+                                <td className="p-3 text-slate-600">{e.notes || '-'}</td>
+                              </tr>
+                            ))
+                          );
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
