@@ -1444,8 +1444,6 @@ function NewBookingForm({
   const [checkIn, setCheckIn] = useState('');
   const [checkOut, setCheckOut] = useState('');
   const [totalOverride, setTotalOverride] = useState<string>('');
-  const [paymentMode, setPaymentMode] = useState('');
-  const [paidAmount, setPaidAmount] = useState<string>('');
   const [checkInImmediately, setCheckInImmediately] = useState(true);
   const [loading, setLoading] = useState(false);
   const isManager = ['MANAGER', 'ADMIN', 'OWNER'].includes(user?.role || '');
@@ -1471,7 +1469,6 @@ function NewBookingForm({
     if (!roomId || nights < 1 || !guestPhone.trim()) return;
     setLoading(true);
     try {
-      const paid = paidAmount ? parseFloat(paidAmount.replace(/[^\d.]/g, '')) : 0;
       const body: Record<string, unknown> = {
         roomId,
         guestName,
@@ -1481,20 +1478,14 @@ function NewBookingForm({
         nights,
         totalAmount: totalForSave,
         currency: 'TZS',
-        paymentMode: paid > 0 ? (paymentMode || 'CASH') : undefined,
         checkInImmediately: checkInImmediately || undefined,
       };
-      if (paid > 0 && paid <= totalForSave) {
-        body.paidAmount = paid;
-        body.paymentMode = body.paymentMode || 'CASH';
-      }
       await api('/hotel/bookings', {
         method: 'POST',
         token: activeToken,
         body: JSON.stringify(body),
       });
       if (typeof window !== 'undefined') try { localStorage.setItem('hms-data-updated', Date.now().toString()); } catch { /* ignore */ }
-      setPaidAmount('');
       onDone();
     } catch (e) {
       const err = e as Error & { status?: number };
@@ -1585,29 +1576,6 @@ function NewBookingForm({
             ) : (
               <span className="font-semibold text-slate-900">{formatCurrency(calculatedTotal, 'TZS')}</span>
             )}
-          </div>
-        </div>
-        <div className="mt-3 space-y-2 pt-3 border-t border-slate-200">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">{t('frontOffice.paymentModeLabel')}</label>
-            <select value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded text-sm">
-              <option value="">—</option>
-              {PAYMENT_MODES.map((p) => (
-                <option key={p.value} value={p.value}>{p.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">{t('frontOffice.paidAmount')}</label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={paidAmount}
-              onChange={(e) => setPaidAmount(e.target.value.replace(/[^\d.]/g, ''))}
-              placeholder="0"
-              className="w-full px-3 py-2 border border-slate-300 rounded text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-            />
-            <p className="text-xs text-slate-500 mt-0.5">{t('frontOffice.paidAmountHint')}</p>
           </div>
         </div>
       </div>
