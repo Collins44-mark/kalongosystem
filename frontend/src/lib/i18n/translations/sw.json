@@ -345,6 +345,7 @@
   "settings.staffUsers": "Wafanyakazi",
   "settings.staffUsersDesc": "Unda akaunti za wafanyakazi kwa timu yako. Inakuja hivi karibuni.",
   "settings.createStaffUser": "Unda Mtumiaji wa Mfanyakazi",
+  "settings.roles": "Majukumu",
   "settings.userRoles": "Watumiaji na Majukumu",
   "settings.userRolesDesc": "Unda na simamia watumiaji wa biashara yako.",
   "settings.createUser": "Unda Mtumiaji",

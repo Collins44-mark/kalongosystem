@@ -345,6 +345,7 @@
   "settings.staffUsers": "Staff Users",
   "settings.staffUsersDesc": "Create staff accounts for your team. Coming soon.",
   "settings.createStaffUser": "Create Staff User",
+  "settings.roles": "Roles",
   "settings.userRoles": "User & Roles",
   "settings.userRolesDesc": "Create and manage users for your business.",
   "settings.createUser": "Create User",

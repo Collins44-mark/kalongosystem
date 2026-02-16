@@ -293,17 +293,19 @@ export default function DashboardLayout({
           </div>
           <div className="relative flex-shrink-0 flex items-center gap-2">
             <HeaderSearch />
-            <button
-              type="button"
-              onClick={() => {
-                logout();
-                router.replace('/login');
-              }}
-              className="px-2 py-1.5 text-xs sm:text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded"
-              title={t('nav.logout')}
-            >
-              {t('nav.logout')}
-            </button>
+            {!isAdmin && (
+              <button
+                type="button"
+                onClick={() => {
+                  logout();
+                  router.replace('/login');
+                }}
+                className="px-2 py-1.5 text-xs sm:text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded"
+                title={t('nav.logout')}
+              >
+                {t('nav.logout')}
+              </button>
+            )}
             {canSwitchWorker && (
               <div className="flex items-center gap-2">
                 <select

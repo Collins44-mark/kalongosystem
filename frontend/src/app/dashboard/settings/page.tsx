@@ -43,31 +43,32 @@ export default function SettingsPage() {
     <div className="space-y-6">
       <h1 className="text-xl font-semibold mb-4">{t('settings.title')}</h1>
 
-      <div className="bg-white border rounded p-4 max-w-md">
-        <h2 className="font-medium mb-2">{t('settings.business')}</h2>
-        {meLoading ? (
-          <div className="animate-pulse space-y-2">
-            <div className="h-4 bg-slate-200 rounded w-2/3" />
-            <div className="h-4 bg-slate-200 rounded w-1/2" />
-          </div>
-        ) : me?.business ? (
-          <div className="text-sm space-y-1">
-            <div>{t('settings.name')}: {me.business.name}</div>
-            <div>{t('settings.businessId')}: {me.business.code}</div>
-          </div>
-        ) : null}
-      </div>
-
-      {sub && (
-        <div className="bg-white border rounded p-4 max-w-md">
-          <h2 className="font-medium mb-2">{t('settings.subscription')}</h2>
-          <div className="text-sm space-y-1">
-            <div>{t('settings.plan')}: {sub.plan}</div>
-            <div>{t('settings.status')}: {sub.status}</div>
-            <div>{t('settings.trialEnds')}: {new Date(sub.trialEndsAt).toLocaleDateString()}</div>
-          </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
+        <div className="bg-white border rounded p-4">
+          <h2 className="font-medium mb-2">{t('settings.business')}</h2>
+          {meLoading ? (
+            <div className="animate-pulse space-y-2">
+              <div className="h-4 bg-slate-200 rounded w-2/3" />
+              <div className="h-4 bg-slate-200 rounded w-1/2" />
+            </div>
+          ) : me?.business ? (
+            <div className="text-sm space-y-1">
+              <div>{t('settings.name')}: {me.business.name}</div>
+              <div>{t('settings.businessId')}: {me.business.code}</div>
+            </div>
+          ) : null}
         </div>
-      )}
+        {sub && (
+          <div className="bg-white border rounded p-4">
+            <h2 className="font-medium mb-2">{t('settings.subscription')}</h2>
+            <div className="text-sm space-y-1">
+              <div>{t('settings.plan')}: {sub.plan}</div>
+              <div>{t('settings.status')}: {sub.status}</div>
+              <div>{t('settings.trialEnds')}: {new Date(sub.trialEndsAt).toLocaleDateString()}</div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {isManager && token && (
         <>

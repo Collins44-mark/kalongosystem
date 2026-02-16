@@ -29,8 +29,6 @@ export function StaffWorkersSection({ token, t }: { token: string; t: (k: string
   const [newFullName, setNewFullName] = useState('');
   const [newRole, setNewRole] = useState('FRONT_OFFICE');
   const [creating, setCreating] = useState(false);
-  const [activityLogs, setActivityLogs] = useState<{ workerId?: string } | null>(null);
-  const [logs, setLogs] = useState<unknown[]>([]);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [editing, setEditing] = useState<StaffWorker | null>(null);
   const [editName, setEditName] = useState('');
@@ -167,17 +165,6 @@ export function StaffWorkersSection({ token, t }: { token: string; t: (k: string
     }
   }
 
-  async function viewActivity(workerId?: string) {
-    setActivityLogs(workerId ? { workerId } : {});
-    try {
-      const q = workerId ? `?workerId=${workerId}` : '';
-      const res = await api<unknown[]>(`/api/staff-workers/activity${q}`, { token });
-      setLogs(Array.isArray(res) ? res : []);
-    } catch {
-      setLogs([]);
-    }
-  }
-
   return (
     <div className="bg-white border rounded p-4 max-w-3xl">
       <h2 className="font-medium mb-2">{t('settings.staffWorkers')}</h2>
@@ -198,12 +185,6 @@ export function StaffWorkersSection({ token, t }: { token: string; t: (k: string
           className="px-3 py-1 bg-teal-600 text-white rounded text-sm"
         >
           {t('settings.addStaffWorker')}
-        </button>
-        <button
-          onClick={() => viewActivity()}
-          className="px-3 py-1 bg-slate-200 rounded text-sm"
-        >
-          {t('settings.viewActivityLogs')}
         </button>
       </div>
 
@@ -249,9 +230,6 @@ export function StaffWorkersSection({ token, t }: { token: string; t: (k: string
                             </button>
                             <button onClick={() => { setOpenMenu(null); toggleBlock(w); }} className={`block w-full text-left px-3 py-2 text-sm ${w.status === 'ACTIVE' ? 'text-amber-600' : 'text-green-600'} hover:bg-slate-50`}>
                               {w.status === 'ACTIVE' ? t('settings.block') : t('settings.unblock')}
-                            </button>
-                            <button onClick={() => viewActivity(w.id)} className="block w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
-                              {t('settings.activity')}
                             </button>
                             <button onClick={() => deleteWorker(w)} className="block w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50">
                               {t('common.delete')}
@@ -337,30 +315,6 @@ export function StaffWorkersSection({ token, t }: { token: string; t: (k: string
         </div>
       )}
 
-      {activityLogs !== null && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white p-4 rounded max-w-2xl w-full max-h-[80vh] overflow-auto">
-            <h3 className="font-medium mb-3">{t('settings.activityLogs')}</h3>
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {logs.map((l: any, i) => (
-                <div key={l?.id ?? i} className="text-sm py-2 border-b">
-                  <span className="font-medium">{l.workerName || l.role || '—'}</span>
-                  {' · '}
-                  {l.actionType}
-                  {l.entityType && ` (${l.entityType})`}
-                  <span className="text-slate-500 text-xs ml-2">
-                    {l.createdAt ? new Date(l.createdAt).toLocaleString() : ''}
-                  </span>
-                </div>
-              ))}
-              {logs.length === 0 && <p className="text-slate-500">{t('settings.noActivityLogs')}</p>}
-            </div>
-            <button onClick={() => setActivityLogs(null)} className="mt-4 px-4 py-2 bg-slate-200 rounded">
-              {t('common.close')}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
