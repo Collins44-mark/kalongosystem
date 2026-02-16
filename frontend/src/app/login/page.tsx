@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/store/auth';
-import { useSuperAdminAuth, type SuperAdminUser } from '@/store/superAdminAuth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
 import { defaultDashboardRoute } from '@/lib/homeRoute';
@@ -17,7 +16,6 @@ export default function LoginPage() {
   const setAuthWithWorker = useAuth((s) => s.setAuthWithWorker);
   const setPendingWorkerSelection = useAuth((s) => s.setPendingWorkerSelection);
   const pendingWorkerSelection = useAuth((s) => s.pendingWorkerSelection);
-  const setSuperAdminAuth = useSuperAdminAuth((s) => s.setAuth);
   const { t } = useTranslation();
   const [businessId, setBusinessId] = useState('');
   const [email, setEmail] = useState('');
@@ -38,51 +36,35 @@ export default function LoginPage() {
       const em = email.trim();
       const body = { businessId: bid, email: em, password };
 
-      // Try business login first
-      try {
-        const res = await api<{
-          accessToken?: string;
-          access_token?: string;
-          user: LoginUser;
-          needsWorkerSelection?: boolean;
-          workers?: Worker[];
-          forcePasswordChange?: boolean;
-        }>('/auth/login', {
-          method: 'POST',
-          body: JSON.stringify(body),
-        });
-        const token = res.accessToken ?? res.access_token;
-        if (!token) throw new Error('No token received from server');
-        const user = res.user as LoginUser;
+      const res = await api<{
+        accessToken?: string;
+        access_token?: string;
+        user: LoginUser;
+        needsWorkerSelection?: boolean;
+        workers?: Worker[];
+        forcePasswordChange?: boolean;
+      }>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      const token = res.accessToken ?? res.access_token;
+      if (!token) throw new Error('No token received from server');
+      const user = res.user as LoginUser;
 
-        if (res.forcePasswordChange && user.role === 'MANAGER') {
-          setAuth(token, user);
-          router.replace('/change-password');
-          return;
-        }
-        if (res.needsWorkerSelection && res.workers && res.workers.length > 0) {
-          setLoginToken(token);
-          setLoginUser(user);
-          setPendingWorkerSelection(res.workers);
-          setWorkerId(res.workers[0]?.id ?? '');
-          return;
-        }
+      if (res.forcePasswordChange && user.role === 'MANAGER') {
         setAuth(token, user);
-        router.replace(defaultDashboardRoute(user.role));
+        router.replace('/change-password');
         return;
-      } catch (businessErr: unknown) {
-        // If business login failed, try super-admin login (same form)
-        const saRes = await api<{ accessToken: string; user: unknown }>('/super-admin/login', {
-          method: 'POST',
-          body: JSON.stringify(body),
-        }).catch(() => null);
-        if (saRes?.accessToken && saRes?.user) {
-          setSuperAdminAuth(saRes.accessToken, saRes.user as SuperAdminUser);
-          router.replace('/super-admin/dashboard');
-          return;
-        }
-        throw businessErr;
       }
+      if (res.needsWorkerSelection && res.workers && res.workers.length > 0) {
+        setLoginToken(token);
+        setLoginUser(user);
+        setPendingWorkerSelection(res.workers);
+        setWorkerId(res.workers[0]?.id ?? '');
+        return;
+      }
+      setAuth(token, user);
+      router.replace(defaultDashboardRoute(user.role));
     } catch (err: unknown) {
       setError((err as Error).message || 'Login failed');
     } finally {
