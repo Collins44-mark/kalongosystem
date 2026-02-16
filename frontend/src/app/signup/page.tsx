@@ -10,6 +10,8 @@ import { useTranslation } from '@/lib/i18n/context';
 type SignupRes = {
   accessToken: string;
   user: { id: string; email: string; businessId: string; role: string };
+  business?: { name: string; businessId: string };
+  message?: string;
 };
 
 export default function SignupPage() {
@@ -21,6 +23,7 @@ export default function SignupPage() {
   const [businessName, setBusinessName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState<SignupRes | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -35,13 +38,43 @@ export default function SignupPage() {
           business_name: businessName.trim(),
         }),
       });
-      setAuth(res.accessToken, res.user);
-      router.replace('/dashboard');
+      setSuccess(res);
     } catch (err: unknown) {
       setError((err as Error).message || 'Signup failed');
     } finally {
       setLoading(false);
     }
+  }
+
+  function goToDashboard() {
+    if (success) {
+      setAuth(success.accessToken, success.user);
+      router.replace('/dashboard');
+    }
+  }
+
+  if (success) {
+    const bid = success.user?.businessId || success.business?.businessId || '';
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="w-full max-w-sm p-6 bg-white rounded-lg shadow-md text-center">
+          <h1 className="text-xl font-semibold mb-2 text-teal-700">Account created</h1>
+          <p className="text-sm text-slate-600 mb-4">{success.message || '14-day trial started.'}</p>
+          <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+            <p className="text-xs text-slate-600 mb-1">Save this for login</p>
+            <p className="text-lg font-mono font-bold text-slate-800">Business ID: {bid}</p>
+            <p className="text-xs text-slate-500 mt-2">Use this exact Business ID with your email and password on the login page.</p>
+          </div>
+          <button
+            type="button"
+            onClick={goToDashboard}
+            className="w-full py-2 bg-teal-600 text-white rounded hover:bg-teal-700"
+          >
+            Go to dashboard
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (

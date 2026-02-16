@@ -112,6 +112,24 @@ export class AuthService {
     return code;
   }
 
+  /** Recover Business IDs for an email+password (so user can see which Business ID to use for login). */
+  async recoverBusinessIds(email: string, password: string): Promise<{ businessIds: string[] }> {
+    const cleanEmail = (email || '').toLowerCase().trim();
+    const cleanPassword = (password || '').trim();
+    const user = await this.prisma.user.findUnique({
+      where: { email: cleanEmail },
+      select: { id: true, password: true },
+    });
+    if (!user) throw new UnauthorizedException('Invalid credentials');
+    const valid = await bcrypt.compare(cleanPassword, user.password);
+    if (!valid) throw new UnauthorizedException('Invalid credentials');
+    const list = await this.prisma.businessUser.findMany({
+      where: { userId: user.id },
+      include: { business: { select: { businessId: true } } },
+    });
+    return { businessIds: list.map((bu) => bu.business.businessId) };
+  }
+
   /** Login: Business ID + Email + Password. Returns JWT with tenant context. */
   async login(businessId: string, email: string, password: string) {
     const cleanBusinessId = (businessId || '').toUpperCase().trim();
@@ -135,7 +153,7 @@ export class AuthService {
       },
       include: { business: { include: { subscription: true } } },
     });
-    if (!bu) throw new UnauthorizedException('Invalid business or credentials');
+    if (!bu) throw new UnauthorizedException('No account for this Business ID and email. Use the exact Business ID from signup (e.g. HMS-12345) and the same email and password.');
 
     if (bu.business?.isSuspended === true) {
       throw new ForbiddenException('Your subscription is inactive. Contact support.');

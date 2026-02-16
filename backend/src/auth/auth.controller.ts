@@ -49,6 +49,15 @@ class ForgotPasswordDto {
   email: string;
 }
 
+class RecoverBusinessIdsDto {
+  @IsEmail()
+  email: string;
+
+  @IsString()
+  @MinLength(6)
+  password: string;
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(private auth: AuthService) {}
@@ -92,5 +101,10 @@ export class AuthController {
   @Post('forgot-password')
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.auth.forgotPassword(dto.businessId, dto.email);
+  }
+
+  @Post('recover-business-ids')
+  async recoverBusinessIds(@Body() dto: RecoverBusinessIdsDto) {
+    return this.auth.recoverBusinessIds(dto.email, dto.password);
   }
 }

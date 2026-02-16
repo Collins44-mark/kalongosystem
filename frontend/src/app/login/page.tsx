@@ -26,6 +26,12 @@ export default function LoginPage() {
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotBusinessId, setForgotBusinessId] = useState('');
   const [forgotMsg, setForgotMsg] = useState('');
+  const [recoverOpen, setRecoverOpen] = useState(false);
+  const [recoverEmail, setRecoverEmail] = useState('');
+  const [recoverPassword, setRecoverPassword] = useState('');
+  const [recoverMsg, setRecoverMsg] = useState('');
+  const [recoverIds, setRecoverIds] = useState<string[]>([]);
+  const [recoverLoading, setRecoverLoading] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [workerId, setWorkerId] = useState('');
@@ -105,6 +111,25 @@ export default function LoginPage() {
     setLoginUser(null);
     setWorkerId('');
     setError('');
+  }
+
+  async function submitRecover(e: React.FormEvent) {
+    e.preventDefault();
+    setRecoverMsg('');
+    setRecoverIds([]);
+    setRecoverLoading(true);
+    try {
+      const res = await api<{ businessIds: string[] }>('/auth/recover-business-ids', {
+        method: 'POST',
+        body: JSON.stringify({ email: recoverEmail.trim(), password: recoverPassword }),
+      });
+      setRecoverIds(res.businessIds || []);
+      setRecoverMsg(res.businessIds?.length ? `Your Business ID(s): ${res.businessIds.join(', ')}. Use one of these on the login form.` : 'No businesses found for this account.');
+    } catch (err: unknown) {
+      setRecoverMsg((err as Error).message || 'Invalid email or password.');
+    } finally {
+      setRecoverLoading(false);
+    }
   }
 
   async function submitForgot(e: React.FormEvent) {
@@ -197,6 +222,7 @@ export default function LoginPage() {
               placeholder="HMS-12345"
               required
             />
+            <p className="mt-1 text-xs text-slate-500">Use the exact Business ID you received when you signed up (e.g. HMS-93619). No spaces.</p>
           </div>
           <div>
             <label className="block text-sm text-slate-600 mb-1">{t('auth.email')}</label>
@@ -251,11 +277,49 @@ export default function LoginPage() {
 
         <button
           type="button"
-          onClick={() => { setForgotOpen((v) => !v); setForgotMsg(''); }}
+          onClick={() => { setForgotOpen((v) => !v); setForgotMsg(''); setRecoverOpen(false); }}
           className="mt-3 w-full text-sm text-slate-600 hover:text-slate-800"
         >
           Forgot password?
         </button>
+        <button
+          type="button"
+          onClick={() => { setRecoverOpen((v) => !v); setRecoverMsg(''); setRecoverIds([]); setForgotOpen(false); }}
+          className="mt-1 w-full text-sm text-slate-600 hover:text-slate-800"
+        >
+          Forgot Business ID?
+        </button>
+
+        {recoverOpen && (
+          <div className="mt-3 p-3 border rounded bg-slate-50 space-y-2">
+            <div className="text-sm font-medium text-slate-700">Recover your Business ID</div>
+            <div className="text-xs text-slate-600">
+              Enter the email and password you used when you signed up. We&apos;ll show your Business ID(s).
+            </div>
+            <form onSubmit={submitRecover} className="space-y-2">
+              <input
+                type="email"
+                value={recoverEmail}
+                onChange={(e) => setRecoverEmail(e.target.value)}
+                className="w-full px-3 py-2 border rounded text-sm"
+                placeholder="Your email"
+                required
+              />
+              <input
+                type="password"
+                value={recoverPassword}
+                onChange={(e) => setRecoverPassword(e.target.value)}
+                className="w-full px-3 py-2 border rounded text-sm"
+                placeholder="Your password"
+                required
+              />
+              <button type="submit" disabled={recoverLoading} className="w-full py-2 bg-slate-700 text-white rounded text-sm disabled:opacity-50">
+                {recoverLoading ? '...' : 'Show my Business ID(s)'}
+              </button>
+            </form>
+            {recoverMsg && <div className="text-xs text-slate-700">{recoverMsg}</div>}
+          </div>
+        )}
 
         {forgotOpen && (
           <div className="mt-3 p-3 border rounded bg-slate-50 space-y-2">
@@ -286,6 +350,9 @@ export default function LoginPage() {
 
         <p className="mt-4 text-center text-sm text-slate-500">
           {t('auth.noAccount')} <Link href="/signup" className="text-teal-600">{t('auth.signUpLink')}</Link>
+        </p>
+        <p className="mt-2 text-center text-sm text-slate-500">
+          Platform admin? <Link href="/super-admin" className="text-teal-600">Log in here</Link> (Business ID: HMS-1).
         </p>
       </form>
     </div>
