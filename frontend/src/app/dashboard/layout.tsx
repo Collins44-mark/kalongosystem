@@ -254,8 +254,9 @@ export default function DashboardLayout({
             <button
               type="button"
               onClick={() => {
+                const defaultRoute = defaultDashboardRoute(user.role);
+                if (pathname === defaultRoute) return;
                 try {
-                  // Allow pages to handle "back" within the same route (tabs, internal views).
                   if (typeof window !== 'undefined') {
                     const ev = new CustomEvent('hms-back', { cancelable: true });
                     const notCancelled = window.dispatchEvent(ev);
@@ -264,13 +265,14 @@ export default function DashboardLayout({
                   if (typeof window !== 'undefined' && window.history.length > 1) {
                     router.back();
                   } else {
-                    router.push(defaultDashboardRoute(user.role));
+                    router.push(defaultRoute);
                   }
                 } catch {
-                  router.push(defaultDashboardRoute(user.role));
+                  router.push(defaultRoute);
                 }
               }}
-              className="px-2 py-1.5 rounded hover:bg-slate-100 text-slate-600 flex-shrink-0 text-xs sm:text-sm inline-flex items-center gap-1"
+              className="px-2 py-1.5 rounded hover:bg-slate-100 text-slate-600 flex-shrink-0 text-xs sm:text-sm inline-flex items-center gap-1 disabled:opacity-50 disabled:pointer-events-none"
+              disabled={pathname === defaultDashboardRoute(user.role)}
               aria-label={t('common.back')}
               title={t('common.back')}
             >
@@ -291,6 +293,17 @@ export default function DashboardLayout({
           </div>
           <div className="relative flex-shrink-0 flex items-center gap-2">
             <HeaderSearch />
+            <button
+              type="button"
+              onClick={() => {
+                logout();
+                router.replace('/login');
+              }}
+              className="px-2 py-1.5 text-xs sm:text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded"
+              title={t('nav.logout')}
+            >
+              {t('nav.logout')}
+            </button>
             {canSwitchWorker && (
               <div className="flex items-center gap-2">
                 <select

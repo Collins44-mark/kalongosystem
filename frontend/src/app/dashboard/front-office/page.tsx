@@ -1453,9 +1453,6 @@ function NewBookingForm({
   const [guestPhone, setGuestPhone] = useState('');
   const [checkIn, setCheckIn] = useState('');
   const [checkOut, setCheckOut] = useState('');
-  const [currency, setCurrency] = useState('TZS');
-  const [paymentMode, setPaymentMode] = useState('');
-  const [paidAmount, setPaidAmount] = useState<string>('');
   const [totalOverride, setTotalOverride] = useState<string>('');
   const [checkInImmediately, setCheckInImmediately] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -1475,39 +1472,30 @@ function NewBookingForm({
   const pricePerNight = room ? parseFloat(room.category.pricePerNight) : category ? parseFloat(category.pricePerNight) : 0;
   const calculatedTotal = nights * pricePerNight;
   const totalTzs = totalOverride ? parseFloat(totalOverride.replace(/[^\d.]/g, '')) || calculatedTotal : calculatedTotal;
-  const curr = CURRENCIES.find((c) => c.code === currency) || CURRENCIES[0];
-  const totalDisplay = totalTzs / curr.rate;
   const totalForSave = isManager ? totalTzs : calculatedTotal;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!roomId || nights < 1) return;
+    if (!roomId || nights < 1 || !guestPhone.trim()) return;
     setLoading(true);
     try {
-      const paid = paidAmount ? parseFloat(paidAmount.replace(/[^\d.]/g, '')) : 0;
       const body: Record<string, unknown> = {
         roomId,
         guestName,
-        guestPhone: guestPhone || undefined,
+        guestPhone: guestPhone.trim(),
         checkIn,
         checkOut,
         nights,
         totalAmount: totalForSave,
-        currency,
-        paymentMode: paid > 0 ? (paymentMode || 'CASH') : undefined,
+        currency: 'TZS',
         checkInImmediately: checkInImmediately || undefined,
       };
-      if (paid > 0 && paid <= totalForSave) {
-        body.paidAmount = paid;
-        body.paymentMode = body.paymentMode || 'CASH';
-      }
       await api('/hotel/bookings', {
         method: 'POST',
         token: activeToken,
         body: JSON.stringify(body),
       });
       if (typeof window !== 'undefined') try { localStorage.setItem('hms-data-updated', Date.now().toString()); } catch { /* ignore */ }
-      setPaidAmount('');
       onDone();
     } catch (e) {
       const err = e as Error & { status?: number };
@@ -1545,86 +1533,61 @@ function NewBookingForm({
         <input value={guestName} onChange={(e) => setGuestName(e.target.value)} className="w-full px-3 py-2.5 border rounded text-base" required />
       </div>
       <div>
-        <label className="block text-sm mb-1">{t('frontOffice.phoneOptional')}</label>
-        <input value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} className="w-full px-3 py-2.5 border rounded text-base" />
+        <label className="block text-sm font-medium text-slate-700 mb-1">{t('frontOffice.phone')}</label>
+        <input value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-base focus:ring-2 focus:ring-teal-500 focus:border-teal-500" required />
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm mb-1">{t('frontOffice.checkIn')}</label>
-          <input type="date" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="w-full px-3 py-2.5 border rounded text-base" required />
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <h3 className="text-sm font-semibold text-slate-800 mb-3">{t('frontOffice.stayDates')}</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">{t('frontOffice.checkIn')}</label>
+            <input type="date" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-base focus:ring-2 focus:ring-teal-500 focus:border-teal-500" required />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">{t('frontOffice.checkOut')}</label>
+            <input type="date" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-base focus:ring-2 focus:ring-teal-500 focus:border-teal-500" required />
+          </div>
         </div>
-        <div>
-          <label className="block text-sm mb-1">{t('frontOffice.checkOut')}</label>
-          <input type="date" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="w-full px-3 py-2.5 border rounded text-base" required />
-        </div>
-      </div>
-      <div className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          id="checkInImmediately"
-          checked={checkInImmediately}
-          onChange={(e) => setCheckInImmediately(e.target.checked)}
-          className="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
-        />
-        <label htmlFor="checkInImmediately" className="text-sm text-slate-700">
-          {t('frontOffice.checkInImmediately')}
-        </label>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm mb-1">Currency</label>
-          <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="w-full px-3 py-2.5 border rounded text-base">
-            {CURRENCIES.map((c) => (
-              <option key={c.code} value={c.code}>{c.name}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm mb-1">{t('frontOffice.paymentModeLabel')}</label>
-          <select value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)} className="w-full px-3 py-2.5 border rounded text-base">
-            <option value="">—</option>
-            {PAYMENT_MODES.map((p) => (
-              <option key={p.value} value={p.value}>{p.label}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm mb-1">{t('frontOffice.paidAmount')}</label>
+        <div className="mt-3 flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-2.5">
           <input
-            type="text"
-            inputMode="decimal"
-            value={paidAmount}
-            onChange={(e) => setPaidAmount(e.target.value.replace(/[^\d.]/g, ''))}
-            placeholder="0"
-            className="w-full px-3 py-2.5 border rounded text-base [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            type="checkbox"
+            id="checkInImmediately"
+            checked={checkInImmediately}
+            onChange={(e) => setCheckInImmediately(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
           />
-          <p className="text-xs text-slate-500 mt-0.5">{t('frontOffice.paidAmountHint')}</p>
+          <label htmlFor="checkInImmediately" className="text-sm text-slate-700">
+            {t('frontOffice.checkInImmediately')}
+          </label>
         </div>
       </div>
-      <div className="p-3 sm:p-4 bg-slate-50 rounded-lg text-sm space-y-2">
-        <div>{t('frontOffice.nights')}: {nights}</div>
-        <div>Price/night: {formatCurrency(pricePerNight, 'TZS')}</div>
-        <div>
-          <label className="block text-sm mb-1">{t('frontOffice.totalAmount')}</label>
-          {isManager ? (
-            <input
-              type="text"
-              inputMode="decimal"
-              value={totalOverride || (calculatedTotal ? String(Math.round(calculatedTotal)) : '')}
-              onChange={(e) => setTotalOverride(e.target.value.replace(/[^\d.]/g, ''))}
-              placeholder={calculatedTotal ? String(Math.round(calculatedTotal)) : '0'}
-              className="w-full px-3 py-2 border rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-            />
-          ) : (
-            <input
-              type="text"
-              readOnly
-              value={calculatedTotal ? String(Math.round(calculatedTotal)) : '0'}
-              className="w-full px-3 py-2 border rounded bg-white text-slate-700"
-            />
-          )}
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
+        <h3 className="text-sm font-semibold text-slate-800 mb-3">{t('frontOffice.total')}</h3>
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-slate-600">{t('frontOffice.nights')}</span>
+            <span className="font-medium">{nights}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-600">{t('frontOffice.pricePerNight')}</span>
+            <span className="font-medium">{formatCurrency(pricePerNight, 'TZS')}</span>
+          </div>
+          <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+            <span className="font-semibold text-slate-800">{t('frontOffice.totalAmount')}</span>
+            {isManager ? (
+              <input
+                type="text"
+                inputMode="decimal"
+                value={totalOverride || (calculatedTotal ? String(Math.round(calculatedTotal)) : '')}
+                onChange={(e) => setTotalOverride(e.target.value.replace(/[^\d.]/g, ''))}
+                placeholder={calculatedTotal ? String(Math.round(calculatedTotal)) : '0'}
+                className="w-28 px-2 py-1.5 text-right border border-slate-300 rounded text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+            ) : (
+              <span className="font-semibold text-slate-900">{formatCurrency(calculatedTotal, 'TZS')}</span>
+            )}
+          </div>
         </div>
-        <div className="font-medium">{t('frontOffice.display')}: {formatCurrency((isManager ? totalTzs : calculatedTotal) / curr.rate, currency)}</div>
       </div>
       <button type="submit" disabled={loading} className="px-4 py-3 bg-teal-600 text-white rounded touch-manipulation min-h-[44px] w-full sm:w-auto">
         {t('frontOffice.createBooking')}

@@ -52,8 +52,7 @@ class CreateBookingDto {
   @IsString()
   guestName: string;
   @IsString()
-  @IsOptional()
-  guestPhone?: string;
+  guestPhone: string;
   @IsDateString()
   checkIn: string;
   @IsDateString()
