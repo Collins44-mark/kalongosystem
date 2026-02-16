@@ -41,12 +41,7 @@ export default function SuperAdminLoginPage() {
         setError('Invalid response from server');
       }
     } catch (err: unknown) {
-      const msg = (err as Error)?.message || 'Invalid credentials';
-      const base = typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '') : '';
-      const seedHint = base
-        ? ` If the account does not exist yet, run: ${base}/super-admin/seed?secret=YOUR_SEED_SECRET`
-        : ' Run the seed URL (see README) to create the super-admin account.';
-      setError(msg === 'Invalid credentials' ? `Invalid credentials.${seedHint}` : msg);
+      setError((err as Error)?.message || 'Invalid credentials');
     } finally {
       setLoading(false);
     }
