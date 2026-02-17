@@ -37,65 +37,22 @@ export class BarService {
 
   /** Low-stock bar items (for overview inventory alerts): quantity <= minQuantity on linked inventory */
   async getLowStock(businessId: string, branchId: string): Promise<{ id: string; name: string; quantity: number; minQuantity: number }[]> {
-    const bid = branchId || 'main';
-    const items = await this.prisma.barItem.findMany({
-      where: { businessId, branchId: bid },
-      select: { id: true, name: true, inventoryItemId: true },
-    });
+    // Reuse getItems() to ensure consistency with bar page display
+    const allItems = await this.getItems(businessId, branchId);
     
-    // Get inventory items linked via inventoryItemId (don't filter by branchId to match getItems behavior)
-    const invIds = items.map((i) => i.inventoryItemId).filter(Boolean) as string[];
-    const invLinked = invIds.length > 0
-      ? await this.prisma.inventoryItem.findMany({
-          where: { id: { in: invIds }, businessId },
-          select: { id: true, quantity: true, minQuantity: true },
-        })
-      : [];
-    const invLinkedMap = new Map(invLinked.map((i) => [i.id, i]));
-    
-    // Also check inventory items by name pattern "BAR:<barItemName>" for items without inventoryItemId
-    const itemsWithoutLink = items.filter((i) => !i.inventoryItemId);
-    const invByName = itemsWithoutLink.length > 0
-      ? await this.prisma.inventoryItem.findMany({
-          where: {
-            businessId,
-            name: { in: itemsWithoutLink.map((i) => `BAR:${i.name}`) },
-          },
-          select: { id: true, name: true, quantity: true, minQuantity: true },
-        })
-      : [];
-    const invByNameMap = new Map(invByName.map((i) => [i.name.replace(/^BAR:/, ''), i]));
-    
-    const low: { id: string; name: string; quantity: number; minQuantity: number }[] = [];
-    
-    // Check items with inventoryItemId
-    for (const it of items) {
-      if (!it.inventoryItemId) continue;
-      const ii = invLinkedMap.get(it.inventoryItemId);
-      if (!ii) continue;
-      const minQty = ii.minQuantity ?? 0;
-      if (ii.quantity > minQty) continue;
-      low.push({
-        id: it.id,
-        name: it.name,
-        quantity: ii.quantity,
-        minQuantity: minQty,
-      });
-    }
-    
-    // Check items without inventoryItemId but with matching inventory by name
-    for (const it of itemsWithoutLink) {
-      const ii = invByNameMap.get(it.name);
-      if (!ii) continue;
-      const minQty = ii.minQuantity ?? 0;
-      if (ii.quantity > minQty) continue;
-      low.push({
-        id: it.id,
-        name: it.name,
-        quantity: ii.quantity,
-        minQuantity: minQty,
-      });
-    }
+    // Filter using same logic as frontend: stock > 0 && min != null && stock <= min
+    const low = allItems
+      .filter((item) => {
+        const stock = item.stock ?? 0;
+        const min = item.minQuantity ?? null;
+        return stock > 0 && min != null && stock <= min;
+      })
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+        quantity: item.stock!,
+        minQuantity: item.minQuantity!,
+      }));
     
     return low;
   }
