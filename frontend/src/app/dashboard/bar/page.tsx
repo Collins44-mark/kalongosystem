@@ -177,10 +177,24 @@ export default function BarPage() {
     const existing = cart.find((c) => c.itemId === item.id);
     const price = parseFloat(item.price);
     if (existing) {
+      if (existing.qty >= stock) {
+        setMessage(t('bar.outOfStockCannotOrder'));
+        return;
+      }
       setCart(cart.map((c) => (c.itemId === item.id ? { ...c, qty: c.qty + 1 } : c)));
     } else {
       setCart([...cart, { itemId: item.id, name: item.name, price, qty: 1 }]);
     }
+  }
+
+  function updateCartQty(itemId: string, delta: number) {
+    setCart((prev) => {
+      const entry = prev.find((c) => c.itemId === itemId);
+      if (!entry) return prev;
+      const newQty = Math.max(0, entry.qty + delta);
+      if (newQty === 0) return prev.filter((c) => c.itemId !== itemId);
+      return prev.map((c) => (c.itemId === itemId ? { ...c, qty: newQty } : c));
+    });
   }
 
   function removeFromCart(itemId: string) {
@@ -203,6 +217,7 @@ export default function BarPage() {
       if (typeof window !== 'undefined') try { localStorage.setItem('hms-data-updated', Date.now().toString()); } catch { /* ignore */ }
       setMessage(t('bar.orderConfirmed'));
       setCart([]);
+      setAutoTick((t) => t + 1);
     } catch (e) {
       setMessage((e as Error).message);
     } finally {
@@ -536,9 +551,32 @@ export default function BarPage() {
           <h2 className="font-medium mb-2">{t('bar.order')}</h2>
           <div className="bg-white border rounded p-4 space-y-2">
             {cart.map((c) => (
-              <div key={c.itemId} className="flex justify-between items-center">
-                <span>{c.name} x{c.qty}</span>
-                <button onClick={() => removeFromCart(c.itemId)} className="text-red-600 text-sm">{t('common.remove')}</button>
+              <div key={c.itemId} className="flex justify-between items-center gap-2">
+                <span className="min-w-0 truncate">{c.name}</span>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); updateCartQty(c.itemId, -1); }}
+                    className="w-8 h-8 rounded border border-slate-300 bg-white text-slate-700 font-medium hover:bg-slate-50"
+                    aria-label={t('common.remove')}
+                  >
+                    −
+                  </button>
+                  <span className="w-8 text-center text-sm font-medium">{c.qty}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const item = items.find((i) => i.id === c.itemId);
+                      if (item) addToCart(item);
+                    }}
+                    className="w-8 h-8 rounded border border-slate-300 bg-white text-slate-700 font-medium hover:bg-slate-50"
+                    aria-label={t('bar.addItem')}
+                  >
+                    +
+                  </button>
+                </div>
+                <button type="button" onClick={() => removeFromCart(c.itemId)} className="text-red-600 text-sm whitespace-nowrap">{t('common.remove')}</button>
               </div>
             ))}
             {cart.length === 0 && <p className="text-slate-500 text-sm">{t('common.noItems')}</p>}
