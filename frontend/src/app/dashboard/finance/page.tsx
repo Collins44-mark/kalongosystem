@@ -8,6 +8,13 @@ import { isManagerLevel } from '@/lib/roles';
 import { useSearch } from '@/store/search';
 import { notifyError, notifySuccess } from '@/store/notifications';
 
+function toLocalDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 type Period = 'today' | 'week' | 'month' | 'bydate';
 type Sector = 'all' | 'rooms' | 'bar' | 'restaurant';
 type Metric = 'net' | 'gross' | 'vat' | 'expenses';
@@ -119,30 +126,19 @@ export default function FinancePage() {
 
   const dateRange = (() => {
     const now = new Date();
-    const endOfDay = (d: Date) => {
-      const x = new Date(d);
-      x.setHours(23, 59, 59, 999);
-      return x;
-    };
-    const startOfDay = (d: Date) => {
-      const x = new Date(d);
-      x.setHours(0, 0, 0, 0);
-      return x;
-    };
     if (period === 'bydate' && dateFrom && dateTo) {
       return { from: dateFrom, to: dateTo };
     }
     if (period === 'month') {
       const start = new Date(now.getFullYear(), now.getMonth(), 1);
-      return { from: start.toISOString().slice(0, 10), to: endOfDay(now).toISOString().slice(0, 10) };
+      return { from: toLocalDateString(start), to: toLocalDateString(now) };
     }
     if (period === 'week') {
       const start = new Date(now);
       start.setDate(start.getDate() - 7);
-      return { from: start.toISOString().slice(0, 10), to: endOfDay(now).toISOString().slice(0, 10) };
+      return { from: toLocalDateString(start), to: toLocalDateString(now) };
     }
-    const today = startOfDay(now);
-    return { from: today.toISOString().slice(0, 10), to: endOfDay(now).toISOString().slice(0, 10) };
+    return { from: toLocalDateString(now), to: toLocalDateString(now) };
   })();
 
   useEffect(() => {

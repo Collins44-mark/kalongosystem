@@ -1141,10 +1141,16 @@ function ExtendStayModal({ booking, token, onDone, t }: { booking: Booking; toke
         {t('frontOffice.extend')}
       </button>
       {show && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white p-4 rounded max-w-sm w-full">
-            <h3 className="font-medium mb-2">{t('frontOffice.extendStay')}</h3>
-            <input type="date" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="w-full px-3 py-2 border rounded mb-2" />
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-4 rounded-lg max-w-sm w-full min-w-0 overflow-hidden">
+            <h3 className="font-medium mb-3">{t('frontOffice.extendStay')}</h3>
+            <label className="block text-sm text-slate-600 mb-1">{t('frontOffice.checkOut')}</label>
+            <input
+              type="date"
+              value={checkOut}
+              onChange={(e) => setCheckOut(e.target.value)}
+              className="w-full min-w-0 max-w-full box-border px-3 py-2 border rounded mb-4 text-base"
+            />
             <div className="flex gap-2">
               <button onClick={submit} disabled={loading} className="px-4 py-2 bg-teal-600 text-white rounded">{t('frontOffice.extend')}</button>
               <button onClick={() => setShow(false)} className="px-4 py-2 bg-slate-200 rounded">{t('common.cancel')}</button>
@@ -1251,6 +1257,12 @@ function ViewPaymentsModal({ booking, token, t }: { booking: Booking; token: str
     }
   }, [show, booking.id, token]);
 
+  const total = parseFloat(booking.totalAmount || '0');
+  const sortedPayments = [...payments].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  const totalPaid = payments.reduce((s, p) => s + parseFloat(p.amount || '0'), 0);
+  const balance = Math.max(0, total - totalPaid);
+  const paidAtBooking = sortedPayments.length > 0 ? parseFloat(sortedPayments[0].amount) : 0;
+
   return (
     <>
       <button onClick={() => setShow(true)} className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded text-sm touch-manipulation">
@@ -1262,24 +1274,47 @@ function ViewPaymentsModal({ booking, token, t }: { booking: Booking; token: str
             <h3 className="font-medium mb-3">{t('frontOffice.paymentHistory')} — {booking.guestName}</h3>
             {loading ? (
               <p className="text-slate-500">Loading...</p>
-            ) : payments.length === 0 ? (
-              <p className="text-slate-500">{t('frontOffice.noPayments')}</p>
             ) : (
-              <ul className="space-y-2">
-                {payments.map((p) => (
-                  <li key={p.id} className="flex justify-between text-sm py-2 border-b gap-3">
-                    <span className="min-w-0">
-                      <span className="font-medium">{formatTzs(parseFloat(p.amount))}</span> · {PAYMENT_MODES.find(m => m.value === p.paymentMode)?.label ?? p.paymentMode}
-                      {(p.createdByWorkerName || p.createdByRole) && (
-                        <span className="block text-xs text-slate-500 truncate">
-                          Received by: {p.createdByWorkerName ?? p.createdByRole ?? '-'}
+              <>
+                <div className="mb-4 p-3 bg-slate-50 rounded-lg space-y-1.5 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">{t('frontOffice.bookingTotal')}</span>
+                    <span className="font-medium">{formatTzs(total)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">{t('frontOffice.amountPaidOnBooking')}</span>
+                    <span className="font-medium">{formatTzs(paidAtBooking)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">{t('frontOffice.totalPaid')}</span>
+                    <span className="font-medium">{formatTzs(totalPaid)}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-slate-200 pt-2 mt-2">
+                    <span className="text-slate-700 font-medium">{t('frontOffice.balance')}</span>
+                    <span className={`font-medium ${balance > 0 ? 'text-amber-700' : 'text-green-700'}`}>{formatTzs(balance)}</span>
+                  </div>
+                </div>
+                {payments.length === 0 ? (
+                  <p className="text-slate-500">{t('frontOffice.noPayments')}</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {sortedPayments.map((p, i) => (
+                      <li key={p.id} className="flex justify-between text-sm py-2 border-b gap-3">
+                        <span className="min-w-0">
+                          <span className="font-medium">{formatTzs(parseFloat(p.amount))}</span> · {PAYMENT_MODES.find(m => m.value === p.paymentMode)?.label ?? p.paymentMode}
+                          {i === 0 && <span className="ml-1 text-xs text-slate-500">({t('frontOffice.atBooking')})</span>}
+                          {(p.createdByWorkerName || p.createdByRole) && (
+                            <span className="block text-xs text-slate-500 truncate">
+                              Received by: {p.createdByWorkerName ?? p.createdByRole ?? '-'}
+                            </span>
+                          )}
                         </span>
-                      )}
-                    </span>
-                    <span className="text-slate-500 text-xs whitespace-nowrap">{new Date(p.createdAt).toLocaleString()}</span>
-                  </li>
-                ))}
-              </ul>
+                        <span className="text-slate-500 text-xs whitespace-nowrap">{new Date(p.createdAt).toLocaleString()}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
             )}
             <button onClick={() => setShow(false)} className="mt-4 w-full px-4 py-2 bg-slate-200 rounded touch-manipulation">{t('common.close')}</button>
           </div>

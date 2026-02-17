@@ -168,6 +168,11 @@
   "frontOffice.calendarListHint": "Gusa malipo ili kuhariri tarehe au chumba.",
   "frontOffice.days": "siku",
   "frontOffice.confirmChange": "Thibitisha mabadiliko",
+  "frontOffice.bookingTotal": "Jumla ya malipo",
+  "frontOffice.amountPaidOnBooking": "Kiasi kililolipwa wakati wa kukodisha",
+  "frontOffice.totalPaid": "Jumla iliyolipwa",
+  "frontOffice.balance": "Salio",
+  "frontOffice.atBooking": "wakati wa kukodisha",
 
   "bar.title": "Baa",
   "bar.selectItemsDesc": "Chagua vitu na thibitisha ordera. Bei zinasomwa tu.",

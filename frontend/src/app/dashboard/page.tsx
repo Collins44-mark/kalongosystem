@@ -41,6 +41,13 @@ const EMPTY_FINANCE: FinanceData = {
 
 type FilterOption = 'today' | 'week' | 'month' | 'bydate';
 
+function toLocalDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export default function OverviewPage() {
   const router = useRouter();
   const { token, user } = useAuth();
@@ -68,24 +75,23 @@ export default function OverviewPage() {
       return { financeFrom: dateFrom, financeTo: dateTo };
     }
     if (filter === 'bydate') {
-      const today = now.toISOString().slice(0, 10);
-      return { financeFrom: today, financeTo: today };
+      return { financeFrom: toLocalDateString(now), financeTo: toLocalDateString(now) };
     }
     if (filter === 'today') {
       const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const end = new Date(start);
       end.setHours(23, 59, 59, 999);
-      return { financeFrom: start.toISOString().slice(0, 10), financeTo: end.toISOString().slice(0, 10) };
+      return { financeFrom: toLocalDateString(start), financeTo: toLocalDateString(end) };
     }
     if (filter === 'week') {
       const end = new Date(now);
       const start = new Date(now);
       start.setDate(start.getDate() - 7);
-      return { financeFrom: start.toISOString().slice(0, 10), financeTo: end.toISOString().slice(0, 10) };
+      return { financeFrom: toLocalDateString(start), financeTo: toLocalDateString(end) };
     }
     if (filter === 'month') {
       const start = new Date(now.getFullYear(), now.getMonth(), 1);
-      return { financeFrom: start.toISOString().slice(0, 10), financeTo: now.toISOString().slice(0, 10) };
+      return { financeFrom: toLocalDateString(start), financeTo: toLocalDateString(now) };
     }
     return { financeFrom: '', financeTo: '' };
   })();

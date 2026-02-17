@@ -168,6 +168,11 @@
   "frontOffice.calendarListHint": "Tap a booking to edit dates or room.",
   "frontOffice.days": "days",
   "frontOffice.confirmChange": "Confirm changes",
+  "frontOffice.bookingTotal": "Booking total",
+  "frontOffice.amountPaidOnBooking": "Amount paid on booking",
+  "frontOffice.totalPaid": "Total paid",
+  "frontOffice.balance": "Balance",
+  "frontOffice.atBooking": "at booking",
 
   "bar.title": "Bar",
   "bar.selectItemsDesc": "Select items and confirm order. Prices are read-only.",
