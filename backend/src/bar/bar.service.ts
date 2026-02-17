@@ -35,6 +35,35 @@ export class BarService {
     });
   }
 
+  /** Low-stock bar items (for overview inventory alerts): quantity <= minQuantity on linked inventory */
+  async getLowStock(businessId: string, branchId: string): Promise<{ id: string; name: string; quantity: number; minQuantity: number }[]> {
+    const bid = branchId || 'main';
+    const items = await this.prisma.barItem.findMany({
+      where: { businessId, branchId: bid },
+      select: { id: true, name: true, inventoryItemId: true },
+    });
+    const invIds = items.map((i) => i.inventoryItemId).filter(Boolean) as string[];
+    if (invIds.length === 0) return [];
+    const inv = await this.prisma.inventoryItem.findMany({
+      where: { id: { in: invIds }, businessId, branchId: bid },
+      select: { id: true, quantity: true, minQuantity: true },
+    });
+    const invMap = new Map(inv.map((i) => [i.id, i]));
+    const low: { id: string; name: string; quantity: number; minQuantity: number }[] = [];
+    for (const it of items) {
+      if (!it.inventoryItemId) continue;
+      const ii = invMap.get(it.inventoryItemId);
+      if (!ii || ii.quantity > ii.minQuantity) continue;
+      low.push({
+        id: it.id,
+        name: it.name,
+        quantity: ii.quantity,
+        minQuantity: ii.minQuantity,
+      });
+    }
+    return low;
+  }
+
   // ==========================
   // Permissions (BAR)
   // Stored in business_settings:

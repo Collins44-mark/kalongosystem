@@ -33,14 +33,15 @@ export class InventoryService {
   }
 
   async getLowStock(businessId: string, branchId: string) {
+    const bid = branchId || 'main';
     const items = await this.prisma.inventoryItem.findMany({
-      where: { businessId, branchId },
+      where: { businessId, branchId: bid },
     });
     return items.filter((i) => i.quantity <= i.minQuantity);
   }
 
   async getTotalValueAtRisk(businessId: string, branchId: string) {
-    const low = await this.getLowStock(businessId, branchId);
+    const low = await this.getLowStock(businessId, branchId || 'main');
     let value = 0;
     for (const i of low) {
       value += Number(i.unitPrice) * i.quantity;
