@@ -42,17 +42,37 @@ export class BarService {
       where: { businessId, branchId: bid },
       select: { id: true, name: true, inventoryItemId: true },
     });
+    
+    // Get inventory items linked via inventoryItemId
     const invIds = items.map((i) => i.inventoryItemId).filter(Boolean) as string[];
-    if (invIds.length === 0) return [];
-    const inv = await this.prisma.inventoryItem.findMany({
-      where: { id: { in: invIds }, businessId, branchId: bid },
-      select: { id: true, quantity: true, minQuantity: true },
-    });
-    const invMap = new Map(inv.map((i) => [i.id, i]));
+    const invLinked = invIds.length > 0
+      ? await this.prisma.inventoryItem.findMany({
+          where: { id: { in: invIds }, businessId, branchId: bid },
+          select: { id: true, quantity: true, minQuantity: true },
+        })
+      : [];
+    const invLinkedMap = new Map(invLinked.map((i) => [i.id, i]));
+    
+    // Also check inventory items by name pattern "BAR:<barItemName>" for items without inventoryItemId
+    const itemsWithoutLink = items.filter((i) => !i.inventoryItemId);
+    const invByName = itemsWithoutLink.length > 0
+      ? await this.prisma.inventoryItem.findMany({
+          where: {
+            businessId,
+            branchId: bid,
+            name: { in: itemsWithoutLink.map((i) => `BAR:${i.name}`) },
+          },
+          select: { id: true, name: true, quantity: true, minQuantity: true },
+        })
+      : [];
+    const invByNameMap = new Map(invByName.map((i) => [i.name.replace(/^BAR:/, ''), i]));
+    
     const low: { id: string; name: string; quantity: number; minQuantity: number }[] = [];
+    
+    // Check items with inventoryItemId
     for (const it of items) {
       if (!it.inventoryItemId) continue;
-      const ii = invMap.get(it.inventoryItemId);
+      const ii = invLinkedMap.get(it.inventoryItemId);
       if (!ii || ii.quantity > ii.minQuantity) continue;
       low.push({
         id: it.id,
@@ -61,6 +81,19 @@ export class BarService {
         minQuantity: ii.minQuantity,
       });
     }
+    
+    // Check items without inventoryItemId but with matching inventory by name
+    for (const it of itemsWithoutLink) {
+      const ii = invByNameMap.get(it.name);
+      if (!ii || ii.quantity > ii.minQuantity) continue;
+      low.push({
+        id: it.id,
+        name: it.name,
+        quantity: ii.quantity,
+        minQuantity: ii.minQuantity,
+      });
+    }
+    
     return low;
   }
 
