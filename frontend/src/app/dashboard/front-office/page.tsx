@@ -149,20 +149,10 @@ export default function FrontOfficePage() {
   useEffect(() => {
     if (!token) return;
     const params = new URLSearchParams();
-    if (activeTab === 'history') {
-      params.set('scope', 'all');
-      if (bookingFrom && bookingTo) {
-        params.set('from', bookingFrom);
-        params.set('to', bookingTo);
-      }
-    } else if (isManager) {
-      params.set('scope', 'all');
-      if (bookingFrom && bookingTo) {
-        params.set('from', bookingFrom);
-        params.set('to', bookingTo);
-      }
-    } else {
-      params.set('scope', 'today');
+    params.set('scope', 'all');
+    if (bookingFrom && bookingTo) {
+      params.set('from', bookingFrom);
+      params.set('to', bookingTo);
     }
     Promise.allSettled([
       api<Category[]>('/hotel/categories', { token }),
@@ -185,20 +175,10 @@ export default function FrontOfficePage() {
   function refresh() {
     if (!token) return;
     const params = new URLSearchParams();
-    if (activeTab === 'history') {
-      params.set('scope', 'all');
-      if (bookingFrom && bookingTo) {
-        params.set('from', bookingFrom);
-        params.set('to', bookingTo);
-      }
-    } else if (isManager) {
-      params.set('scope', 'all');
-      if (bookingFrom && bookingTo) {
-        params.set('from', bookingFrom);
-        params.set('to', bookingTo);
-      }
-    } else {
-      params.set('scope', 'today');
+    params.set('scope', 'all');
+    if (bookingFrom && bookingTo) {
+      params.set('from', bookingFrom);
+      params.set('to', bookingTo);
     }
     Promise.allSettled([
       api<Category[]>('/hotel/categories', { token }),
@@ -1292,7 +1272,7 @@ function ViewPaymentsModal({ booking, token, t }: { booking: Booking; token: str
                       <span className="font-medium">{formatTzs(parseFloat(p.amount))}</span> · {PAYMENT_MODES.find(m => m.value === p.paymentMode)?.label ?? p.paymentMode}
                       {(p.createdByWorkerName || p.createdByRole) && (
                         <span className="block text-xs text-slate-500 truncate">
-                          Received by: {[p.createdByRole, p.createdByWorkerName].filter(Boolean).join(' | ')}
+                          Received by: {p.createdByWorkerName ?? p.createdByRole ?? '-'}
                         </span>
                       )}
                     </span>

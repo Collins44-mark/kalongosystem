@@ -678,7 +678,7 @@ export default function BarPage() {
                           {new Date(r.createdAt).toLocaleString()}
                         </div>
                         <div className="text-xs text-slate-600">
-                          {t('bar.restockedBy')}: {r.createdByRole}{r.createdByWorkerName ? ` / ${r.createdByWorkerName}` : ''}
+                          {t('bar.restockedBy')}: {r.createdByWorkerName ?? r.createdByRole ?? '-'}
                         </div>
                       </button>
                     ))}
@@ -738,7 +738,7 @@ export default function BarPage() {
               <button onClick={() => setSelectedRestock(null)} className="text-slate-500">✕</button>
             </div>
             <div className="text-sm text-slate-600 mb-3">
-              {new Date(selectedRestock.createdAt).toLocaleString()} · {t('bar.restockedBy')}: {selectedRestock.createdByRole}{selectedRestock.createdByWorkerName ? ` / ${selectedRestock.createdByWorkerName}` : ''}
+              {new Date(selectedRestock.createdAt).toLocaleString()} · {t('bar.restockedBy')}: {selectedRestock.createdByWorkerName ?? selectedRestock.createdByRole ?? '-'}
             </div>
             <div className="bg-white border rounded overflow-hidden">
               <table className="w-full text-sm">

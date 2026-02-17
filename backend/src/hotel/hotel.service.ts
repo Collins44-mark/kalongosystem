@@ -280,6 +280,8 @@ export class HotelService {
           status,
           folioNumber,
           createdBy,
+          createdByWorkerId: createdByWorker?.workerId ?? null,
+          createdByWorkerName: createdByWorker?.workerName ?? null,
         },
         include: { room: { include: { category: true } } },
       });
@@ -418,7 +420,7 @@ export class HotelService {
       const summary = this.computePaymentSummary(b.totalAmount, b.payments || []);
       return {
         ...b,
-        servedBy: b.createdBy ? userMap.get(b.createdBy) ?? b.createdBy : null,
+        servedBy: b.createdByWorkerName ?? (b.createdBy ? userMap.get(b.createdBy) ?? b.createdBy : null),
         paidAmount: summary.paidAmount.toFixed(2),
         balance: summary.balance.toFixed(2),
         paymentStatus: summary.paymentStatus,
