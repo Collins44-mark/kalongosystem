@@ -156,6 +156,7 @@
   "frontOffice.cancelled": "Cancelled",
   "frontOffice.noBookings": "No bookings",
   "frontOffice.servedBy": "Served by",
+  "frontOffice.paymentStatus": "Payment Status",
   "frontOffice.totalCharges": "Total charges",
   "frontOffice.setMaintenance": "Set maintenance",
   "frontOffice.setAvailable": "Set available",

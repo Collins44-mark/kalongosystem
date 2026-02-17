@@ -989,6 +989,8 @@ function BookingList({
                 <th className="p-3 font-medium">{t('frontOffice.nights')}</th>
                 <th className="p-3 font-medium">{t('frontOffice.total')}</th>
                 <th className="p-3 font-medium">{t('frontOffice.status')}</th>
+                <th className="p-3 font-medium">{t('frontOffice.paymentStatus')}</th>
+                <th className="p-3 font-medium text-right">{t('frontOffice.balance')}</th>
                 <th className="p-3 font-medium">{t('frontOffice.folio')}</th>
                 <th className="p-3 font-medium">{t('frontOffice.servedBy')}</th>
               </tr>
@@ -1015,6 +1017,18 @@ function BookingList({
                       {b.status}
                     </span>
                   </td>
+                  <td className="p-3">
+                    {b.paymentStatus && (
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
+                        b.paymentStatus === 'FULLY_PAID' ? 'bg-green-50 text-green-700'
+                        : b.paymentStatus === 'PARTIALLY_PAID' ? 'bg-amber-50 text-amber-700'
+                        : 'bg-slate-100 text-slate-700'
+                      }`}>
+                        {b.paymentStatus === 'FULLY_PAID' ? 'Paid' : b.paymentStatus === 'PARTIALLY_PAID' ? 'Pending' : 'Unpaid'}
+                      </span>
+                    )}
+                  </td>
+                  <td className="p-3 text-right font-medium">{formatTzs(parseFloat(b.balance || '0'))}</td>
                   <td className="p-3 text-slate-700">{b.folioNumber ?? b.id}</td>
                   <td className="p-3 text-slate-700">{b.servedBy ?? '-'}</td>
                 </tr>
@@ -1388,13 +1402,14 @@ function FolioList({
                 <th className="p-3 font-medium">{t('frontOffice.checkOut')}</th>
                 <th className="p-3 font-medium text-right">{t('frontOffice.total')}</th>
                 <th className="p-3 font-medium text-right">{t('frontOffice.paidAmount')}</th>
-                <th className="p-3 font-medium">{t('frontOffice.status')}</th>
+                <th className="p-3 font-medium text-right">{t('frontOffice.balance')}</th>
+                <th className="p-3 font-medium">{t('frontOffice.paymentStatus')}</th>
                 <th className="p-3 font-medium w-40">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {folios.length === 0 ? (
-                <tr><td className="p-3 text-slate-500" colSpan={9}>{t('frontOffice.noActiveFolios')}</td></tr>
+                <tr><td className="p-3 text-slate-500" colSpan={10}>{t('frontOffice.noActiveFolios')}</td></tr>
               ) : (
                 folios.map((b) => (
                   <tr key={b.id} className="hover:bg-slate-50">
@@ -1405,6 +1420,7 @@ function FolioList({
                     <td className="p-3 whitespace-nowrap">{new Date(b.checkOut).toLocaleDateString()}</td>
                     <td className="p-3 text-right whitespace-nowrap">{formatTzs(parseFloat(b.totalAmount))}</td>
                     <td className="p-3 text-right whitespace-nowrap">{formatTzs(parseFloat(b.paidAmount || '0'))}</td>
+                    <td className="p-3 text-right whitespace-nowrap font-medium">{formatTzs(parseFloat(b.balance || '0'))}</td>
                     <td className="p-3">{badge(b)}</td>
                     <td className="p-3">
                       <div className="flex flex-wrap gap-1">
