@@ -119,11 +119,11 @@ export class FinanceService {
   }
 
   async getHotelRevenue(businessId: string, from?: Date, to?: Date) {
-    const where: any = { businessId, status: 'CHECKED_OUT' };
+    const where: any = { businessId, status: { in: ['CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT'] } };
     if (from || to) {
-      where.checkOut = {};
-      if (from) where.checkOut.gte = from;
-      if (to) where.checkOut.lte = to;
+      where.createdAt = {};
+      if (from) where.createdAt.gte = from;
+      if (to) where.createdAt.lte = to;
     }
     const r = await this.prisma.booking.aggregate({
       where,
@@ -270,13 +270,13 @@ export class FinanceService {
       }));
     }
 
-    // hotel
-    const where: Record<string, unknown> = { businessId, status: 'CHECKED_OUT' };
-    if (Object.keys(dateFilter).length) where.checkOut = dateFilter;
+    // hotel: revenue by booking date (paid at booking)
+    const where: Record<string, unknown> = { businessId, status: { in: ['CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT'] } };
+    if (Object.keys(dateFilter).length) where.createdAt = dateFilter;
     const bookings = await this.prisma.booking.findMany({
       where,
       include: { room: { include: { category: true } } },
-      orderBy: { checkOut: 'desc' },
+      orderBy: { createdAt: 'desc' },
     });
     const creatorIds = [...new Set(bookings.map((b) => b.createdBy).filter(Boolean) as string[])];
     const users = creatorIds.length
@@ -288,10 +288,10 @@ export class FinanceService {
     const userMap = new Map(users.map((u) => [u.id, u.email]));
     return bookings.map((b) => ({
       id: b.id,
-      date: b.checkOut,
+      date: b.createdAt,
       orderId: b.folioNumber ?? b.id,
       amount: Number(b.totalAmount),
-      paymentMode: '—',
+      paymentMode: b.paymentMode ? `${b.paymentMode} (Paid direct)` : 'Paid direct',
       staff: (b.createdBy && userMap.get(b.createdBy)) ?? b.createdBy ?? '—',
     }));
   }
@@ -332,12 +332,13 @@ export class FinanceService {
   async getOverview(businessId: string, from: Date, to: Date) {
     const tax = await this.getTaxConfig(businessId);
 
+    // Room revenue = when booking is made (paid at booking). Filter by booking date so daily view matches.
     const [roomsAgg, barAgg, restAgg] = await Promise.all([
       this.prisma.booking.aggregate({
         where: {
           businessId,
-          status: 'CHECKED_OUT',
-          checkOut: { gte: from, lte: to },
+          status: { in: ['CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT'] },
+          createdAt: { gte: from, lte: to },
         },
         _sum: { totalAmount: true },
       }),
@@ -423,23 +424,24 @@ export class FinanceService {
       const bookings = await this.prisma.booking.findMany({
         where: {
           businessId,
-          status: 'CHECKED_OUT',
-          checkOut: { gte: from, lte: to },
+          status: { in: ['CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT'] },
+          createdAt: { gte: from, lte: to },
         },
-        orderBy: { checkOut: 'desc' },
-        select: { id: true, folioNumber: true, totalAmount: true, checkOut: true, paymentMode: true },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, folioNumber: true, totalAmount: true, createdAt: true, paymentMode: true },
       });
       for (const b of bookings) {
         const gross = Number(b.totalAmount);
         const split = this.splitTaxFromGross(gross, tax.enabled, tax.rateBySector.rooms);
+        const mode = b.paymentMode ? `${b.paymentMode} (Paid direct)` : 'Paid direct';
         txns.push({
-          date: b.checkOut,
+          date: b.createdAt,
           referenceId: b.folioNumber || b.id,
           sector: 'rooms',
           netAmount: this.round2(split.net),
           vatAmount: this.round2(split.tax),
           grossAmount: this.round2(split.gross),
-          paymentMode: b.paymentMode || '—',
+          paymentMode: mode,
         });
       }
     }
