@@ -15,6 +15,7 @@ type DashboardData = {
   rooms?: Room[];
   inventoryAlerts: {
     lowStock: { id: string; name: string; quantity: number; minQuantity: number; severity: string }[];
+    barLowStockCount?: number;
     totalValueAtRisk: number;
   };
   period: string;
@@ -29,7 +30,7 @@ type FinanceData = {
 
 const EMPTY_DASHBOARD: Omit<DashboardData, 'period'> = {
   roomSummary: { total: 0, occupied: 0, vacant: 0, reserved: 0, underMaintenance: 0 },
-  inventoryAlerts: { lowStock: [], totalValueAtRisk: 0 },
+  inventoryAlerts: { lowStock: [], barLowStockCount: 0, totalValueAtRisk: 0 },
 };
 
 const EMPTY_FINANCE: FinanceData = {
@@ -293,6 +294,11 @@ export default function OverviewPage() {
           <div>
             <h3 className="font-semibold text-slate-800">{t('overview.inventoryAlerts')}</h3>
             <p className="text-sm text-slate-500">{t('overview.itemsBelowMin')}</p>
+            {(displayData.inventoryAlerts.barLowStockCount ?? 0) > 0 && (
+              <p className="text-sm text-amber-700 font-medium mt-0.5">
+                {t('overview.barItemsBelowMin')}: {displayData.inventoryAlerts.barLowStockCount}
+              </p>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-3">

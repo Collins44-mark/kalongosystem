@@ -32,9 +32,10 @@ export class OverviewService {
 
     // Exclude inventory items that are bar-linked (BAR:...) so we show them once via bar with display name
     const invLowFiltered = Array.isArray(invLow) ? invLow.filter((i: any) => !String(i.name || '').startsWith('BAR:')) : [];
+    const barLowList = Array.isArray(barLow) ? barLow : [];
     const lowStockList = [
-      ...invLowFiltered.map((i: any) => ({ id: i.id, name: i.name, quantity: i.quantity, minQuantity: i.minQuantity })),
-      ...(Array.isArray(barLow) ? barLow : []),
+      ...invLowFiltered.map((i: any) => ({ id: i.id, name: i.name, quantity: i.quantity, minQuantity: i.minQuantity, source: 'inventory' as const })),
+      ...barLowList.map((i: any) => ({ ...i, source: 'bar' as const })),
     ];
 
     return {
@@ -48,6 +49,7 @@ export class OverviewService {
           minQuantity: i.minQuantity,
           severity: i.quantity === 0 ? 'RED' : 'YELLOW',
         })),
+        barLowStockCount: barLowList.length,
         totalValueAtRisk: typeof valueAtRisk === 'number' ? valueAtRisk : 0,
       },
       period,

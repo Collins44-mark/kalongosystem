@@ -77,6 +77,7 @@
   "overview.netProfit": "Net Profit",
   "overview.inventoryAlerts": "Inventory Alerts",
   "overview.itemsBelowMin": "Items below minimum stock",
+  "overview.barItemsBelowMin": "Bar items below minimum",
   "overview.businessHealth": "Business Health",
   "overview.lowStockItems": "Low Stock Items",
   "overview.valueAtRisk": "Value at risk",
