@@ -307,17 +307,13 @@ export class HotelService {
       return b;
     });
 
-    // Calculate payment status based on initial payment
+    // Customer pays at booking: if no amount entered, treat as full payment (Paid)
     const total = Number(totalAmount);
-    const paid = initialPaid;
+    const paid = initialPaid > 0 ? initialPaid : total;
     const balance = Math.max(0, total - paid);
     const paymentStatus =
-      paid <= 0
-        ? 'UNPAID'
-        : balance <= 0
-          ? 'FULLY_PAID'
-          : 'PARTIALLY_PAID';
-    
+      balance <= 0 ? 'FULLY_PAID' : 'PARTIALLY_PAID';
+
     return {
       ...booking,
       paidAmount: paid.toFixed(2),
@@ -426,8 +422,14 @@ export class HotelService {
       : [];
     const userMap = new Map(users.map((u) => [u.id, u.email]));
     return bookings.map((b) => {
-      // Calculate actual payment status based on payments vs total
-      const summary = this.computePaymentSummary(b.totalAmount, b.payments || []);
+      const total = Number(b.totalAmount);
+      const paymentsList = b.payments || [];
+      const paymentsSum = paymentsList.reduce((s, p) => s + Number(p.amount || 0), 0);
+      // New booking with no payment records = customer pays at booking (Paid)
+      const summary =
+        paymentsList.length === 0
+          ? { paidAmount: total, balance: 0, paymentStatus: 'FULLY_PAID' as const }
+          : this.computePaymentSummary(b.totalAmount, paymentsList);
       return {
         ...b,
         servedBy: b.createdByWorkerName ?? (b.createdBy ? userMap.get(b.createdBy) ?? b.createdBy : null),

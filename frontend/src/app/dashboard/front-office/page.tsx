@@ -1478,6 +1478,7 @@ function NewBookingForm({
   const [checkIn, setCheckIn] = useState('');
   const [checkOut, setCheckOut] = useState('');
   const [totalOverride, setTotalOverride] = useState<string>('');
+  const [paidAmount, setPaidAmount] = useState<string>('');
   const [paymentMode, setPaymentMode] = useState('');
   const [checkInImmediately, setCheckInImmediately] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -1504,6 +1505,7 @@ function NewBookingForm({
     if (!roomId || nights < 1 || !guestPhone.trim()) return;
     setLoading(true);
     try {
+      const paid = paidAmount.trim() ? parseFloat(paidAmount.replace(/[^\d.]/g, '')) : undefined;
       const body: Record<string, unknown> = {
         roomId,
         guestName,
@@ -1516,6 +1518,7 @@ function NewBookingForm({
         paymentMode: paymentMode || undefined,
         checkInImmediately: checkInImmediately || undefined,
       };
+      if (paid != null && paid >= 0) body.paidAmount = paid;
       await api('/hotel/bookings', {
         method: 'POST',
         token: activeToken,
@@ -1613,6 +1616,18 @@ function NewBookingForm({
               <span className="font-semibold text-slate-900">{formatCurrency(calculatedTotal, 'TZS')}</span>
             )}
           </div>
+        </div>
+        <div className="mt-3 pt-3 border-t border-slate-200 space-y-2">
+          <label className="block text-sm font-medium text-slate-700">{t('frontOffice.paidAmount')}</label>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={paidAmount}
+            onChange={(e) => setPaidAmount(e.target.value.replace(/[^\d.]/g, ''))}
+            placeholder={totalForSave ? String(Math.round(totalForSave)) : '0'}
+            className="w-full px-3 py-2 border border-slate-300 rounded text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
+          <p className="text-xs text-slate-500">{t('frontOffice.paidAmountHint')}</p>
         </div>
         <div className="mt-3 pt-3 border-t border-slate-200">
           <label className="block text-sm font-medium text-slate-700 mb-1">{t('frontOffice.paymentModeLabel')}</label>
