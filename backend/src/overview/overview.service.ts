@@ -30,13 +30,34 @@ export class OverviewService {
     const barLow = barLowResult.status === 'fulfilled' ? barLowResult.value : [];
     const valueAtRisk = valueResult.status === 'fulfilled' ? valueResult.value : 0;
 
-    // Exclude inventory items that are bar-linked (BAR:...) so we show them once via bar with display name
-    const invLowFiltered = Array.isArray(invLow) ? invLow.filter((i: any) => !String(i.name || '').startsWith('BAR:')) : [];
+    // Bar items from bar.getLowStock (preferred - uses bar item names)
     const barLowList = Array.isArray(barLow) ? barLow : [];
+    const barNamesSet = new Set(barLowList.map((b: any) => String(b.name || '').toLowerCase()));
+    
+    // Inventory items: include non-BAR items, and BAR items as fallback (if not already in barLowList)
+    const invBarItems = Array.isArray(invLow) ? invLow.filter((i: any) => String(i.name || '').startsWith('BAR:')) : [];
+    const invNonBarItems = Array.isArray(invLow) ? invLow.filter((i: any) => !String(i.name || '').startsWith('BAR:')) : [];
+    
+    // BAR inventory items that aren't already covered by bar.getLowStock (by name match)
+    const invBarFallback = invBarItems.filter((i: any) => {
+      const barName = String(i.name || '').replace(/^BAR:/, '').trim().toLowerCase();
+      return barName && !barNamesSet.has(barName);
+    });
+    
+    // Merge: inventory (non-BAR) + bar low stock + BAR inventory fallback
     const lowStockList = [
-      ...invLowFiltered.map((i: any) => ({ id: i.id, name: i.name, quantity: i.quantity, minQuantity: i.minQuantity, source: 'inventory' as const })),
-      ...barLowList.map((i: any) => ({ ...i, source: 'bar' as const })),
+      ...invNonBarItems.map((i: any) => ({ id: i.id, name: i.name, quantity: i.quantity, minQuantity: i.minQuantity })),
+      ...barLowList,
+      ...invBarFallback.map((i: any) => ({
+        id: i.id,
+        name: String(i.name || '').replace(/^BAR:/, '').trim() || i.name, // Strip BAR: prefix
+        quantity: i.quantity,
+        minQuantity: i.minQuantity,
+      })),
     ];
+    
+    // Count bar items (from bar.getLowStock + BAR inventory fallback)
+    const totalBarLowCount = barLowList.length + invBarFallback.length;
 
     return {
       roomSummary,
@@ -49,7 +70,7 @@ export class OverviewService {
           minQuantity: i.minQuantity,
           severity: i.quantity === 0 ? 'RED' : 'YELLOW',
         })),
-        barLowStockCount: barLowList.length,
+        barLowStockCount: totalBarLowCount,
         totalValueAtRisk: typeof valueAtRisk === 'number' ? valueAtRisk : 0,
       },
       period,
