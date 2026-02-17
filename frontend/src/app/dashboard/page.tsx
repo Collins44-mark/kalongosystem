@@ -67,6 +67,10 @@ export default function OverviewPage() {
     if (filter === 'bydate' && dateFrom && dateTo) {
       return { financeFrom: dateFrom, financeTo: dateTo };
     }
+    if (filter === 'bydate') {
+      const today = now.toISOString().slice(0, 10);
+      return { financeFrom: today, financeTo: today };
+    }
     if (filter === 'today') {
       const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const end = new Date(start);

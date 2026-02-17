@@ -190,6 +190,7 @@ export class FinanceService {
     return { revenue: rev.total, expenses: expTotal, netProfit: rev.total - expTotal };
   }
 
+  /** Sales overview and expenses use the same date range; net profit = net revenue − expenses. */
   async getDashboard(businessId: string, branchId: string, from?: Date, to?: Date) {
     const now = new Date();
     const rangeFrom = from || new Date(now.getFullYear(), now.getMonth(), now.getDate());

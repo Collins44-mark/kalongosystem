@@ -307,13 +307,13 @@ export class HotelService {
       return b;
     });
 
-    const payments = initialPaid > 0 ? [{ amount: new Decimal(initialPaid) }] : [];
-    const summary = this.computePaymentSummary(new Decimal(totalAmount), payments);
+    // Room booking = paid at booking: folio shows Paid
+    const total = Number(totalAmount);
     return {
       ...booking,
-      paidAmount: summary.paidAmount.toFixed(2),
-      balance: summary.balance.toFixed(2),
-      paymentStatus: summary.paymentStatus,
+      paidAmount: total.toFixed(2),
+      balance: '0.00',
+      paymentStatus: 'FULLY_PAID' as const,
     };
   }
 
@@ -417,13 +417,14 @@ export class HotelService {
       : [];
     const userMap = new Map(users.map((u) => [u.id, u.email]));
     return bookings.map((b) => {
-      const summary = this.computePaymentSummary(b.totalAmount, b.payments || []);
+      // Room bookings are paid at booking: show Paid on folios
+      const total = Number(b.totalAmount);
       return {
         ...b,
         servedBy: b.createdByWorkerName ?? (b.createdBy ? userMap.get(b.createdBy) ?? b.createdBy : null),
-        paidAmount: summary.paidAmount.toFixed(2),
-        balance: summary.balance.toFixed(2),
-        paymentStatus: summary.paymentStatus,
+        paidAmount: total.toFixed(2),
+        balance: '0.00',
+        paymentStatus: 'FULLY_PAID' as const,
       };
     });
   }
