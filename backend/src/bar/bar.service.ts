@@ -43,11 +43,11 @@ export class BarService {
       select: { id: true, name: true, inventoryItemId: true },
     });
     
-    // Get inventory items linked via inventoryItemId
+    // Get inventory items linked via inventoryItemId (don't filter by branchId to match getItems behavior)
     const invIds = items.map((i) => i.inventoryItemId).filter(Boolean) as string[];
     const invLinked = invIds.length > 0
       ? await this.prisma.inventoryItem.findMany({
-          where: { id: { in: invIds }, businessId, branchId: bid },
+          where: { id: { in: invIds }, businessId },
           select: { id: true, quantity: true, minQuantity: true },
         })
       : [];
@@ -59,7 +59,6 @@ export class BarService {
       ? await this.prisma.inventoryItem.findMany({
           where: {
             businessId,
-            branchId: bid,
             name: { in: itemsWithoutLink.map((i) => `BAR:${i.name}`) },
           },
           select: { id: true, name: true, quantity: true, minQuantity: true },
