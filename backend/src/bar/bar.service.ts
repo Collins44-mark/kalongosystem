@@ -73,24 +73,28 @@ export class BarService {
     for (const it of items) {
       if (!it.inventoryItemId) continue;
       const ii = invLinkedMap.get(it.inventoryItemId);
-      if (!ii || ii.quantity > ii.minQuantity) continue;
+      if (!ii) continue;
+      const minQty = ii.minQuantity ?? 0;
+      if (ii.quantity > minQty) continue;
       low.push({
         id: it.id,
         name: it.name,
         quantity: ii.quantity,
-        minQuantity: ii.minQuantity,
+        minQuantity: minQty,
       });
     }
     
     // Check items without inventoryItemId but with matching inventory by name
     for (const it of itemsWithoutLink) {
       const ii = invByNameMap.get(it.name);
-      if (!ii || ii.quantity > ii.minQuantity) continue;
+      if (!ii) continue;
+      const minQty = ii.minQuantity ?? 0;
+      if (ii.quantity > minQty) continue;
       low.push({
         id: it.id,
         name: it.name,
         quantity: ii.quantity,
-        minQuantity: ii.minQuantity,
+        minQuantity: minQty,
       });
     }
     
