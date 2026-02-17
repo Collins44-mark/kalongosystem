@@ -1041,7 +1041,7 @@ function BookingList({
                   : b.paymentStatus === 'PARTIALLY_PAID' ? 'bg-amber-50 text-amber-700'
                   : 'bg-slate-100 text-slate-700'
                 }`}>
-                  {b.paymentStatus.replace('_', ' ')}
+                  {b.paymentStatus === 'FULLY_PAID' ? 'Paid' : b.paymentStatus === 'PARTIALLY_PAID' ? 'Pending' : 'Unpaid'}
                 </span>
               )}
             </div>
@@ -1348,7 +1348,8 @@ function FolioList({
         : status === 'PARTIALLY_PAID'
           ? 'bg-amber-50 text-amber-700'
           : 'bg-slate-100 text-slate-700';
-    return <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${styles}`}>{status.replace('_', ' ')}</span>;
+    const label = status === 'FULLY_PAID' ? 'Paid' : status === 'PARTIALLY_PAID' ? 'Pending' : 'Unpaid';
+    return <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${styles}`}>{label}</span>;
   };
 
   async function checkOut(id: string) {

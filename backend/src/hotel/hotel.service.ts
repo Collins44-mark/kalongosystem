@@ -307,13 +307,22 @@ export class HotelService {
       return b;
     });
 
-    // Customer pays at booking: new booking is always FULLY_PAID
+    // Calculate payment status based on initial payment
     const total = Number(totalAmount);
+    const paid = initialPaid;
+    const balance = Math.max(0, total - paid);
+    const paymentStatus =
+      paid <= 0
+        ? 'UNPAID'
+        : balance <= 0
+          ? 'FULLY_PAID'
+          : 'PARTIALLY_PAID';
+    
     return {
       ...booking,
-      paidAmount: total.toFixed(2),
-      balance: '0.00',
-      paymentStatus: 'FULLY_PAID' as const,
+      paidAmount: paid.toFixed(2),
+      balance: balance.toFixed(2),
+      paymentStatus: paymentStatus as 'UNPAID' | 'PARTIALLY_PAID' | 'FULLY_PAID',
     };
   }
 
@@ -417,33 +426,15 @@ export class HotelService {
       : [];
     const userMap = new Map(users.map((u) => [u.id, u.email]));
     return bookings.map((b) => {
-      const total = Number(b.totalAmount);
-      const paymentsSum = (b.payments || []).reduce((s, p) => s + Number(p.amount || 0), 0);
-      
-      // Customer pays at booking: new booking is FULLY_PAID
-      // If extended (totalAmount > payments), show unpaid balance for extension
-      const wasExtended = paymentsSum < total;
-      
-      if (!wasExtended) {
-        // Original booking (not extended): always FULLY_PAID
-        return {
-          ...b,
-          servedBy: b.createdByWorkerName ?? (b.createdBy ? userMap.get(b.createdBy) ?? b.createdBy : null),
-          paidAmount: total.toFixed(2),
-          balance: '0.00',
-          paymentStatus: 'FULLY_PAID' as const,
-        };
-      } else {
-        // Extended booking: show actual payment summary (unpaid balance for extension)
-        const summary = this.computePaymentSummary(b.totalAmount, b.payments || []);
-        return {
-          ...b,
-          servedBy: b.createdByWorkerName ?? (b.createdBy ? userMap.get(b.createdBy) ?? b.createdBy : null),
-          paidAmount: summary.paidAmount.toFixed(2),
-          balance: summary.balance.toFixed(2),
-          paymentStatus: summary.paymentStatus,
-        };
-      }
+      // Calculate actual payment status based on payments vs total
+      const summary = this.computePaymentSummary(b.totalAmount, b.payments || []);
+      return {
+        ...b,
+        servedBy: b.createdByWorkerName ?? (b.createdBy ? userMap.get(b.createdBy) ?? b.createdBy : null),
+        paidAmount: summary.paidAmount.toFixed(2),
+        balance: summary.balance.toFixed(2),
+        paymentStatus: summary.paymentStatus,
+      };
     });
   }
 
