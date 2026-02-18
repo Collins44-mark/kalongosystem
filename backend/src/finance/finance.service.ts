@@ -875,29 +875,48 @@ async function renderFinanceTransactionsPdf(input: {
       y = boxTop + boxH + 18;
 
       // Transactions table
-      // Column widths tuned to avoid wrapping on tablet/print
-      const fixed = {
-        date: 70, // fixed small width (DD/MM/YYYY)
-        sector: 95, // medium (Rooms/Restaurant)
-        net: 90, // medium
-        vat: 85, // medium
-        gross: 95, // medium
-        mode: 130, // medium width
+      // Use the full printable width for balanced margins + even distribution.
+      // Make Sector slightly narrower to reduce the Sector→Net visual gap.
+      const fixed = { date: 70, mode: 120 };
+      const remaining = pageWidth - fixed.date - fixed.mode;
+      const colW = {
+        date: fixed.date,
+        sector: 90,
+        net: 80,
+        vat: 70,
+        gross: remaining - (90 + 80 + 70),
+        mode: fixed.mode,
       };
-      // Center the table inside page margins (avoid touching edges)
-      const tableW = fixed.date + fixed.sector + fixed.net + fixed.vat + fixed.gross + fixed.mode;
-      const tableX = x + Math.max(0, (pageWidth - tableW) / 2);
-      const colW = { ...fixed };
-      const padX = 7;
+      const tableW = colW.date + colW.sector + colW.net + colW.vat + colW.gross + colW.mode;
+      // Table spans full width inside margins; keep it visually centered.
+      const tableX = x + (pageWidth - tableW) / 2;
+      const padX = 6;
       const headerH = 28;
       const rowH = 24;
       const bottomLimit = doc.page.height - doc.page.margins.bottom - 30;
+
+      const drawColumnDividers = (topY: number, h: number, color: string) => {
+        doc.save();
+        doc.strokeColor(color).lineWidth(1);
+        let vx = tableX + colW.date;
+        doc.moveTo(vx, topY).lineTo(vx, topY + h).stroke();
+        vx += colW.sector;
+        doc.moveTo(vx, topY).lineTo(vx, topY + h).stroke();
+        vx += colW.net;
+        doc.moveTo(vx, topY).lineTo(vx, topY + h).stroke();
+        vx += colW.vat;
+        doc.moveTo(vx, topY).lineTo(vx, topY + h).stroke();
+        vx += colW.gross;
+        doc.moveTo(vx, topY).lineTo(vx, topY + h).stroke();
+        doc.restore();
+      };
 
       const drawHeaderRow = () => {
         doc.save();
         doc.rect(tableX, y, tableW, headerH).fillColor('#f1f5f9').fill();
         doc.restore();
         doc.rect(tableX, y, tableW, headerH).strokeColor('#d0d7de').lineWidth(1).stroke();
+        drawColumnDividers(y, headerH, '#d0d7de');
         doc.font('Helvetica-Bold').fontSize(10).fillColor('#000');
         let cx = tableX;
         doc.text('Date', cx + padX, y + 9, { width: colW.date - padX * 2, align: 'left' });
@@ -924,8 +943,9 @@ async function renderFinanceTransactionsPdf(input: {
           doc.rect(tableX, y, tableW, rowH).fillColor('#f8fafc').fill();
           doc.restore();
         }
-        // Row border
+        // Row border + subtle column separators
         doc.rect(tableX, y, tableW, rowH).strokeColor('#e5e7eb').lineWidth(1).stroke();
+        drawColumnDividers(y, rowH, '#e5e7eb');
         let cx = tableX;
         const dateTxt = formatDdMmYyyy(r.date);
         drawCellText(doc, dateTxt, cx + padX, y + 7, colW.date - padX * 2, { align: 'left', baseSize: 10, minSize: 9, font: 'Helvetica' });
@@ -962,27 +982,23 @@ async function renderFinanceTransactionsPdf(input: {
         drawHeaderRow();
       }
       // Top border above totals row
-      doc.moveTo(tableX, y).lineTo(tableX + tableW, y).lineWidth(2).strokeColor('#111827').stroke();
+      doc.moveTo(tableX, y).lineTo(tableX + tableW, y).lineWidth(3).strokeColor('#111827').stroke();
       doc.strokeColor('#000');
       doc.save();
       doc.rect(tableX, y, tableW, totalsRowH).fillColor('#e5e7eb').fill();
       doc.restore();
       doc.rect(tableX, y, tableW, totalsRowH).strokeColor('#d0d7de').lineWidth(1).stroke();
+      drawColumnDividers(y, totalsRowH, '#d0d7de');
 
-      // Totals section: show labels + values under numeric columns (currency label only here)
-      const labelY = y + 7;
-      const valueY = y + 20;
-      doc.font('Helvetica-Bold').fontSize(10).fillColor('#000');
-      // Leave Date + Sector blank to keep layout minimal
+      // Totals section: one "TOTAL" label on the left, then numeric totals aligned under columns.
+      doc.font('Helvetica-Bold').fontSize(11).fillColor('#000');
+      doc.text('TOTAL', tableX + padX, y + 11, { width: colW.date + colW.sector - padX * 2, align: 'left' });
       let cx = tableX + colW.date + colW.sector;
-      doc.text('TOTAL NET', cx + padX, labelY, { width: colW.net - padX * 2, align: 'right' });
-      doc.text(formatTsh(input.summary.totalNetSales), cx + padX, valueY, { width: colW.net - padX * 2, align: 'right' });
+      doc.text(formatNumberTz(input.summary.totalNetSales), cx + padX, y + 11, { width: colW.net - padX * 2, align: 'right' });
       cx += colW.net;
-      doc.text('TOTAL VAT', cx + padX, labelY, { width: colW.vat - padX * 2, align: 'right' });
-      doc.text(formatTsh(input.summary.totalVat), cx + padX, valueY, { width: colW.vat - padX * 2, align: 'right' });
+      doc.text(formatNumberTz(input.summary.totalVat), cx + padX, y + 11, { width: colW.vat - padX * 2, align: 'right' });
       cx += colW.vat;
-      doc.text('TOTAL GROSS', cx + padX, labelY, { width: colW.gross - padX * 2, align: 'right' });
-      doc.text(formatTsh(input.summary.totalGrossSales), cx + padX, valueY, { width: colW.gross - padX * 2, align: 'right' });
+      doc.text(formatNumberTz(input.summary.totalGrossSales), cx + padX, y + 11, { width: colW.gross - padX * 2, align: 'right' });
       y += totalsRowH;
 
       doc.end();
