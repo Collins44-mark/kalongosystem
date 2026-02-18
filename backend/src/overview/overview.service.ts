@@ -20,7 +20,7 @@ export class OverviewService {
       this.hotel.getRoomSummary(businessId, bid),
       this.hotel.getRooms(businessId),
       this.inventory.getLowStock(businessId, bid),
-      this.bar.getLowStock(businessId, bid),
+      this.bar.getLowStock(businessId, 'main'), // bar items are typically on main; ensures overview matches bar page
       this.inventory.getTotalValueAtRisk(businessId, bid),
     ]);
 
@@ -30,7 +30,6 @@ export class OverviewService {
     const barLow = barLowResult.status === 'fulfilled' ? barLowResult.value : [];
     const valueAtRisk = valueResult.status === 'fulfilled' ? valueResult.value : 0;
 
-    // Bar items from bar.getLowStock (preferred - uses bar item names)
     const barLowList = Array.isArray(barLow) ? barLow : [];
     const barNamesSet = new Set(barLowList.map((b: any) => String(b.name || '').toLowerCase()));
     

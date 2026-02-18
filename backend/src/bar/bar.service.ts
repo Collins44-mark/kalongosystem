@@ -7,8 +7,9 @@ export class BarService {
   constructor(private prisma: PrismaService) {}
 
   async getItems(businessId: string, branchId: string) {
+    const bid = branchId || 'main';
     const items = await this.prisma.barItem.findMany({
-      where: { businessId, branchId },
+      where: { businessId, branchId: bid },
       include: { },
       orderBy: { name: 'asc' },
     });
@@ -37,8 +38,9 @@ export class BarService {
 
   /** Low-stock bar items (for overview inventory alerts): quantity <= minQuantity on linked inventory */
   async getLowStock(businessId: string, branchId: string): Promise<{ id: string; name: string; quantity: number; minQuantity: number }[]> {
+    const bid = branchId || 'main';
     // Reuse getItems() to ensure consistency with bar page display
-    const allItems = await this.getItems(businessId, branchId);
+    const allItems = await this.getItems(businessId, bid);
     
     // Filter using same logic as frontend: stock > 0 && min != null && stock <= min
     const low = allItems
