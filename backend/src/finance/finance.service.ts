@@ -872,32 +872,29 @@ async function renderFinanceTransactionsPdf(input: {
       // Column widths tuned to avoid wrapping on tablet/print
       const fixed = {
         date: 70, // fixed small width (DD/MM/YYYY)
-        sector: 85, // medium (Rooms/Restaurant)
-        net: 80, // medium
-        vat: 75, // medium
-        gross: 85, // medium
-        mode: 120, // medium fixed (must not wrap)
+        sector: 95, // medium (Rooms/Restaurant)
+        net: 90, // medium
+        vat: 85, // medium
+        gross: 95, // medium
+        mode: 130, // medium width
       };
-      const reference = Math.max(
-        120,
-        pageWidth - (fixed.date + fixed.sector + fixed.net + fixed.vat + fixed.gross + fixed.mode),
-      );
-      const colW = { ...fixed, reference };
+      // Center the table inside page margins (avoid touching edges)
+      const tableW = fixed.date + fixed.sector + fixed.net + fixed.vat + fixed.gross + fixed.mode;
+      const tableX = x + Math.max(0, (pageWidth - tableW) / 2);
+      const colW = { ...fixed };
       const padX = 8;
       const rowH = 24;
       const bottomLimit = doc.page.height - doc.page.margins.bottom - 30;
 
       const drawHeaderRow = () => {
         doc.save();
-        doc.rect(x, y, pageWidth, rowH).fillColor('#f1f5f9').fill();
+        doc.rect(tableX, y, tableW, rowH).fillColor('#f1f5f9').fill();
         doc.restore();
-        doc.rect(x, y, pageWidth, rowH).strokeColor('#d0d7de').lineWidth(1).stroke();
+        doc.rect(tableX, y, tableW, rowH).strokeColor('#d0d7de').lineWidth(1).stroke();
         doc.font('Helvetica-Bold').fontSize(10).fillColor('#000');
-        let cx = x;
+        let cx = tableX;
         doc.text('Date', cx + padX, y + 7, { width: colW.date - padX * 2, align: 'left' });
         cx += colW.date;
-        doc.text('Reference', cx + padX, y + 7, { width: colW.reference - padX * 2, align: 'left' });
-        cx += colW.reference;
         doc.text('Sector', cx + padX, y + 7, { width: colW.sector - padX * 2, align: 'left' });
         cx += colW.sector;
         doc.text('Net (TSh)', cx + padX, y + 7, { width: colW.net - padX * 2, align: 'right' });
@@ -917,17 +914,15 @@ async function renderFinanceTransactionsPdf(input: {
         // Alternating background
         if (idx % 2 === 1) {
           doc.save();
-          doc.rect(x, y, pageWidth, rowH).fillColor('#f8fafc').fill();
+          doc.rect(tableX, y, tableW, rowH).fillColor('#f8fafc').fill();
           doc.restore();
         }
         // Row border
-        doc.rect(x, y, pageWidth, rowH).strokeColor('#e5e7eb').lineWidth(1).stroke();
-        let cx = x;
+        doc.rect(tableX, y, tableW, rowH).strokeColor('#e5e7eb').lineWidth(1).stroke();
+        let cx = tableX;
         const dateTxt = formatDdMmYyyy(r.date);
         drawCellText(doc, dateTxt, cx + padX, y + 7, colW.date - padX * 2, { align: 'left', baseSize: 10, minSize: 9, font: 'Helvetica' });
         cx += colW.date;
-        drawCellText(doc, String(r.reference || ''), cx + padX, y + 7, colW.reference - padX * 2, { align: 'left', baseSize: 10, minSize: 8, font: 'Helvetica' });
-        cx += colW.reference;
         drawCellText(doc, formatSectorLabel(r.sector), cx + padX, y + 7, colW.sector - padX * 2, { align: 'left', baseSize: 10, minSize: 9, font: 'Helvetica' });
         cx += colW.sector;
         drawCellText(doc, formatTsh(r.net), cx + padX, y + 7, colW.net - padX * 2, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
@@ -960,17 +955,17 @@ async function renderFinanceTransactionsPdf(input: {
         drawHeaderRow();
       }
       // Top border above totals row
-      doc.moveTo(x, y).lineTo(x + pageWidth, y).lineWidth(2).strokeColor('#111827').stroke();
+      doc.moveTo(tableX, y).lineTo(tableX + tableW, y).lineWidth(2).strokeColor('#111827').stroke();
       doc.strokeColor('#000');
       doc.save();
-      doc.rect(x, y, pageWidth, totalsRowH).fillColor('#e5e7eb').fill();
+      doc.rect(tableX, y, tableW, totalsRowH).fillColor('#e5e7eb').fill();
       doc.restore();
-      doc.rect(x, y, pageWidth, totalsRowH).strokeColor('#d0d7de').lineWidth(1).stroke();
+      doc.rect(tableX, y, tableW, totalsRowH).strokeColor('#d0d7de').lineWidth(1).stroke();
 
       doc.font('Helvetica-Bold').fontSize(11).fillColor('#000');
-      // Label spans first 3 columns
-      doc.text('TOTALS', x + padX, y + 8, { width: colW.date + colW.reference + colW.sector - padX * 2, align: 'left' });
-      let cx = x + colW.date + colW.reference + colW.sector;
+      // Label spans Date + Sector columns
+      doc.text('TOTALS', tableX + padX, y + 8, { width: colW.date + colW.sector - padX * 2, align: 'left' });
+      let cx = tableX + colW.date + colW.sector;
       doc.text(formatTsh(input.summary.totalNetSales), cx + padX, y + 8, { width: colW.net - padX * 2, align: 'right' });
       cx += colW.net;
       doc.text(formatTsh(input.summary.totalVat), cx + padX, y + 8, { width: colW.vat - padX * 2, align: 'right' });
