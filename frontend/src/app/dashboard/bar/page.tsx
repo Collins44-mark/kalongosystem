@@ -77,14 +77,14 @@ export default function BarPage() {
   const [ordersTo, setOrdersTo] = useState('');
   const [autoTick, setAutoTick] = useState(0);
 
-  // Lock body scroll when restock or restock-detail modal is open so background does not move
+  // Lock body scroll when restock, restock-detail, or add-item modal is open so background does not move
   useEffect(() => {
-    if (showRestock || selectedRestock) {
+    if (showRestock || selectedRestock || showAddItem) {
       const prev = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
       return () => { document.body.style.overflow = prev; };
     }
-  }, [showRestock, selectedRestock]);
+  }, [showRestock, selectedRestock, showAddItem]);
 
   // Refresh data when user returns to tab or when another tab/action signals an update (e.g. order created).
   useEffect(() => {
@@ -854,8 +854,8 @@ export default function BarPage() {
       )}
 
       {showAddItem && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded max-w-sm w-full p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto overscroll-contain">
+          <div className="bg-white rounded max-w-sm w-full p-4 my-4 shrink-0">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-medium">{t('bar.addItem')}</h3>
               <button onClick={() => setShowAddItem(false)} className="text-slate-500">✕</button>
