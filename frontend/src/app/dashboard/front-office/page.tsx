@@ -1151,7 +1151,7 @@ function ExtendStayModal({ booking, token, onDone, t }: { booking: Booking; toke
 
   return (
     <>
-      <button onClick={() => setShow(true)} className="px-3 py-1 bg-amber-600 text-white rounded text-sm">
+      <button onClick={() => setShow(true)} className="min-w-[6.5rem] px-3 py-1.5 bg-amber-600 text-white rounded text-xs touch-manipulation text-center">
         {t('frontOffice.extend')}
       </button>
       {show && (
@@ -1214,7 +1214,7 @@ function AddPaymentModal({ booking, token, onDone, t }: { booking: Booking; toke
 
   return (
     <>
-      <button onClick={() => setShow(true)} className="px-3 py-1.5 bg-emerald-600 text-white rounded text-sm touch-manipulation">
+      <button onClick={() => setShow(true)} className="min-w-[6.5rem] px-3 py-1.5 bg-emerald-600 text-white rounded text-xs touch-manipulation text-center">
         {t('frontOffice.addPayment')}
       </button>
       {show && (
@@ -1279,7 +1279,7 @@ function ViewPaymentsModal({ booking, token, t }: { booking: Booking; token: str
 
   return (
     <>
-      <button onClick={() => setShow(true)} className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded text-sm touch-manipulation">
+      <button onClick={() => setShow(true)} className="min-w-[6.5rem] px-3 py-1.5 bg-slate-100 text-slate-700 rounded text-xs touch-manipulation text-center">
         {t('frontOffice.viewPayments')}
       </button>
       {show && (
@@ -1423,8 +1423,8 @@ function FolioList({
                     <td className="p-3 text-right whitespace-nowrap font-medium">{formatTzs(parseFloat(b.balance || '0'))}</td>
                     <td className="p-3">{badge(b)}</td>
                     <td className="p-3">
-                      <div className="flex flex-wrap gap-1">
-                        <button onClick={() => checkOut(b.id)} className="px-2 py-1 bg-teal-600 text-white rounded text-xs touch-manipulation">
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        <button onClick={() => checkOut(b.id)} className="min-w-[6.5rem] px-3 py-1.5 bg-teal-600 text-white rounded text-xs touch-manipulation text-center">
                           {t('frontOffice.checkOutBtn')}
                         </button>
                         <ExtendStayModal booking={b} token={token} onDone={onAction} t={t} />
@@ -1434,7 +1434,7 @@ function FolioList({
                           <select
                             value=""
                             onChange={(e) => { const v = e.target.value; if (v) changeRoom(b.id, v); e.target.value = ''; }}
-                            className="px-2 py-1 border rounded text-xs touch-manipulation"
+                            className="min-w-[6.5rem] px-3 py-1.5 border rounded text-xs touch-manipulation"
                           >
                             <option value="">{t('frontOffice.changeRoom')}</option>
                             {vacantRooms.filter((r) => r.id !== b.room.id).map((r) => (

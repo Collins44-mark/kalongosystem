@@ -428,7 +428,7 @@ export class HotelService {
       // New booking with no payment records = customer pays at booking (Paid)
       const summary =
         paymentsList.length === 0
-          ? { paidAmount: total, balance: 0, paymentStatus: 'FULLY_PAID' as const }
+          ? { paidAmount: 0, balance: total, paymentStatus: 'UNPAID' as const }
           : this.computePaymentSummary(b.totalAmount, paymentsList);
       return {
         ...b,
@@ -492,7 +492,7 @@ export class HotelService {
   async extendStay(bookingId: string, businessId: string, newCheckOut: Date) {
     const b = await this.prisma.booking.findFirst({
       where: { id: bookingId, businessId },
-      include: { room: { include: { category: true } } },
+      include: { room: { include: { category: true } }, payments: true },
     });
     if (!b) throw new NotFoundException('Booking not found');
     if (b.status !== 'CHECKED_IN') {
@@ -508,7 +508,26 @@ export class HotelService {
       where: { id: bookingId },
       data: { checkOut: newCheckOut, nights, totalAmount: new Decimal(totalAmount) },
     });
-    return { message: 'Stay extended' };
+    const updated = await this.prisma.booking.findFirst({
+      where: { id: bookingId, businessId },
+      include: { room: { include: { category: true } }, payments: true },
+    });
+    if (!updated) return { message: 'Stay extended' };
+    const summary = updated.payments?.length
+      ? this.computePaymentSummary(updated.totalAmount, updated.payments)
+      : { paidAmount: 0, balance: Number(updated.totalAmount), paymentStatus: 'UNPAID' as const };
+    return {
+      message: 'Stay extended',
+      booking: {
+        id: updated.id,
+        checkOut: updated.checkOut,
+        nights: updated.nights,
+        totalAmount: Number(updated.totalAmount).toFixed(2),
+        paidAmount: summary.paidAmount.toFixed(2),
+        balance: summary.balance.toFixed(2),
+        paymentStatus: summary.paymentStatus,
+      },
+    };
   }
 
   async checkIn(bookingId: string, businessId: string, userId?: string) {
