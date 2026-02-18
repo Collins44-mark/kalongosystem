@@ -35,6 +35,17 @@ export class SuperAdminController {
     return this.sa.login(dto.businessId, dto.email, dto.password);
   }
 
+  @Post('businesses')
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  async registerBusiness(@Body() body: { name: string; businessType?: string; location?: string; phone?: string }) {
+    return this.sa.registerBusiness({
+      name: body.name,
+      businessType: body.businessType || 'HOTEL',
+      location: body.location,
+      phone: body.phone,
+    });
+  }
+
   @Get('businesses')
   @UseGuards(JwtAuthGuard, SuperAdminGuard)
   async businesses() {

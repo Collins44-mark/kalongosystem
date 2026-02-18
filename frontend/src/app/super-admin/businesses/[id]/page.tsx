@@ -37,33 +37,30 @@ function UnlockSubscriptionSection({
     }
   }
 
+  const [selectedMonths, setSelectedMonths] = useState(1);
+
   return (
     <div className="mt-3 pt-3 border-t border-slate-100">
       <div className="text-xs font-medium text-slate-500 mb-2">Unlock service</div>
-      <div className="flex flex-wrap gap-2">
+      <p className="text-xs text-slate-600 mb-2">Service runs from the moment you unlock. When suspended, all roles are blocked until you unlock again.</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="text-xs text-slate-600">Duration:</label>
+        <select
+          value={selectedMonths}
+          onChange={(e) => setSelectedMonths(Number(e.target.value))}
+          className="border rounded px-2 py-1.5 text-sm"
+        >
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => (
+            <option key={m} value={m}>{m} month{m !== 1 ? 's' : ''}</option>
+          ))}
+        </select>
         <button
           type="button"
           disabled={saving}
-          onClick={() => unlock(30)}
+          onClick={() => unlock(selectedMonths * 30)}
           className="px-3 py-1.5 rounded bg-teal-600 text-white text-xs hover:bg-teal-700 disabled:opacity-50"
         >
-          1 month
-        </button>
-        <button
-          type="button"
-          disabled={saving}
-          onClick={() => unlock(60)}
-          className="px-3 py-1.5 rounded bg-teal-600 text-white text-xs hover:bg-teal-700 disabled:opacity-50"
-        >
-          2 months
-        </button>
-        <button
-          type="button"
-          disabled={saving}
-          onClick={() => unlock(90)}
-          className="px-3 py-1.5 rounded bg-teal-600 text-white text-xs hover:bg-teal-700 disabled:opacity-50"
-        >
-          3 months
+          {saving ? 'Unlocking...' : 'Unlock'}
         </button>
       </div>
       {message && <p className="text-xs text-slate-600 mt-1">{message}</p>}

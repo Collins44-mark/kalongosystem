@@ -4,6 +4,11 @@ import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { randomBytes } from 'crypto';
 
+function generateBusinessId(): string {
+  const num = Math.floor(10000 + Math.random() * 90000);
+  return `HMS-${num}`;
+}
+
 @Injectable()
 export class SuperAdminService {
   constructor(
@@ -106,6 +111,53 @@ export class SuperAdminService {
     };
   }
 
+  /** Register a new business (no user yet – they sign up with the returned businessId). 14-day trial. */
+  async registerBusiness(data: { name: string; businessType: string; location?: string; phone?: string }) {
+    const name = (data.name || '').trim();
+    const businessType = (data.businessType || 'HOTEL').trim() || 'HOTEL';
+    if (!name) throw new BadRequestException('Business name is required');
+
+    let businessId = generateBusinessId();
+    while (await this.prisma.business.findUnique({ where: { businessId } })) {
+      businessId = generateBusinessId();
+    }
+
+    const trialEndsAt = new Date();
+    trialEndsAt.setDate(trialEndsAt.getDate() + 14);
+
+    const business = await this.prisma.business.create({
+      data: {
+        businessId,
+        businessType,
+        name,
+        location: data.location?.trim() || null,
+        phone: data.phone?.trim() || null,
+        createdBy: null,
+      },
+    });
+
+    await this.prisma.subscription.create({
+      data: {
+        businessId: business.id,
+        plan: 'FRONT_AND_BACK',
+        status: 'TRIAL',
+        trialEndsAt,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Business registered. 14-day trial started. Share the Business ID with the client to sign up.',
+      business: {
+        id: business.id,
+        businessId: business.businessId,
+        name: business.name,
+        businessType: business.businessType,
+        trialEndsAt: trialEndsAt.toISOString(),
+      },
+    };
+  }
+
   /** List all registered businesses (no filter - super-admin sees everything). */
   async listBusinesses() {
     const rows = await this.prisma.business.findMany({
@@ -193,7 +245,7 @@ export class SuperAdminService {
     if (!b) throw new NotFoundException('Business not found');
     if (!b.subscription) throw new BadRequestException('Business has no subscription record');
 
-    const days = Math.max(1, Math.min(365, Math.floor(durationDays)));
+    const days = Math.max(1, Math.min(366, Math.floor(durationDays))); // up to 12 months
     const currentPeriodEnd = new Date();
     currentPeriodEnd.setDate(currentPeriodEnd.getDate() + days);
 
