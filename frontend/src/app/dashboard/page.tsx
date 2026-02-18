@@ -257,32 +257,6 @@ export default function OverviewPage() {
           <RoomCard title={t('overview.underMaintenance')} value={roomSummary.underMaintenance} variant="maintenance" />
         </div>
 
-      {/* Room list - visible when we have rooms */}
-      {rooms.length > 0 && (
-        <div className="bg-white rounded-xl shadow-md border border-slate-100 overflow-hidden">
-          <div className="p-4 border-b border-slate-100">
-            <h2 className="font-semibold text-slate-800">{t('overview.rooms')}</h2>
-          </div>
-          <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-            {rooms.map((r) => (
-              <div
-                key={r.id}
-                className={`rounded-lg border-2 p-3 text-sm ${
-                  r.status === 'OCCUPIED' ? 'border-green-400 bg-green-50' :
-                  r.status === 'VACANT' ? 'border-slate-300 bg-slate-50' :
-                  r.status === 'RESERVED' ? 'border-amber-400 bg-amber-50' :
-                  'border-red-400 bg-red-50'
-                }`}
-              >
-                <div className="font-medium text-slate-800">{r.roomNumber}</div>
-                <div className="text-slate-600 capitalize">{r.roomName || r.category?.name || '-'}</div>
-                <div className="text-xs mt-0.5 capitalize text-slate-500">{r.status.replace('_', ' ')}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Sales Container */}
       <div className="bg-white rounded-xl shadow-md border border-slate-100 overflow-hidden">
         <div className="p-4 border-b border-slate-100">
