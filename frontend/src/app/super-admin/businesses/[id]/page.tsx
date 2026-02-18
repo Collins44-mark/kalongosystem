@@ -8,6 +8,7 @@ import { useSuperAdminAuth } from '@/store/superAdminAuth';
 
 function UnlockSubscriptionSection({
   businessId,
+  subscription,
   onUnlocked,
   token,
 }: {
@@ -38,11 +39,17 @@ function UnlockSubscriptionSection({
   }
 
   const [selectedMonths, setSelectedMonths] = useState(1);
+  const now = new Date();
+  const hasActivePeriod = subscription?.status === 'ACTIVE' && subscription?.currentPeriodEnd && new Date(subscription.currentPeriodEnd) > now;
 
   return (
     <div className="mt-3 pt-3 border-t border-slate-100">
-      <div className="text-xs font-medium text-slate-500 mb-2">Unlock service</div>
-      <p className="text-xs text-slate-600 mb-2">Service runs from the moment you unlock. When suspended, all roles are blocked until you unlock again.</p>
+      <div className="text-xs font-medium text-slate-500 mb-2">Add time / Unlock service</div>
+      <p className="text-xs text-slate-600 mb-2">
+        {hasActivePeriod
+          ? 'Add the selected months to the current subscription period. Service stays active until the new end date.'
+          : 'Set service period from today, or add time if expired. When suspended, all roles are blocked until you unlock again.'}
+      </p>
       <div className="flex flex-wrap items-center gap-2">
         <label className="text-xs text-slate-600">Duration:</label>
         <select

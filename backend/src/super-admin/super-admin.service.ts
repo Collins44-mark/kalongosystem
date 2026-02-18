@@ -236,7 +236,7 @@ export class SuperAdminService {
     return { success: true, status: suspended ? 'SUSPENDED' : 'ACTIVE' };
   }
 
-  /** Unlock subscription for a business: set ACTIVE and currentPeriodEnd = now + durationDays (e.g. 30 = 1 month). */
+  /** Unlock / add time: if subscription is ACTIVE and current period end is in the future, extend from that date; otherwise set period from today. */
   async unlockSubscription(businessDbId: string, durationDays: number) {
     const b = await this.prisma.business.findUnique({
       where: { id: businessDbId },
@@ -246,20 +246,30 @@ export class SuperAdminService {
     if (!b.subscription) throw new BadRequestException('Business has no subscription record');
 
     const days = Math.max(1, Math.min(366, Math.floor(durationDays))); // up to 12 months
-    const currentPeriodEnd = new Date();
-    currentPeriodEnd.setDate(currentPeriodEnd.getDate() + days);
+    const now = new Date();
+    const sub = b.subscription;
+
+    // If currently ACTIVE and period end is in the future, add time from that end; otherwise start from today.
+    let currentPeriodEnd: Date;
+    if (sub.status === 'ACTIVE' && sub.currentPeriodEnd && new Date(sub.currentPeriodEnd) > now) {
+      currentPeriodEnd = new Date(sub.currentPeriodEnd);
+      currentPeriodEnd.setDate(currentPeriodEnd.getDate() + days);
+    } else {
+      currentPeriodEnd = new Date(now);
+      currentPeriodEnd.setDate(currentPeriodEnd.getDate() + days);
+    }
 
     await this.prisma.subscription.update({
       where: { businessId: b.id },
       data: {
         status: 'ACTIVE',
-        plan: b.subscription.plan || 'FRONT_AND_BACK',
+        plan: sub.plan || 'FRONT_AND_BACK',
         currentPeriodEnd,
       },
     });
     return {
       success: true,
-      message: `Subscription unlocked for ${days} days. Service active until ${currentPeriodEnd.toISOString().slice(0, 10)}.`,
+      message: `Subscription updated. Service active until ${currentPeriodEnd.toISOString().slice(0, 10)}.`,
       currentPeriodEnd: currentPeriodEnd.toISOString(),
     };
   }
