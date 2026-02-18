@@ -77,12 +77,25 @@ export default function BarPage() {
   const [ordersTo, setOrdersTo] = useState('');
   const [autoTick, setAutoTick] = useState(0);
 
-  // Lock body scroll when restock, restock-detail, or add-item modal is open so background does not move
+  // Lock body scroll when restock, restock-detail, or add-item modal is open so background does not move (works on iOS/touch)
   useEffect(() => {
     if (showRestock || selectedRestock || showAddItem) {
-      const prev = document.body.style.overflow;
+      const scrollY = window.scrollY;
+      const prevOverflow = document.body.style.overflow;
+      const prevPosition = document.body.style.position;
+      const prevTop = document.body.style.top;
+      const prevWidth = document.body.style.width;
       document.body.style.overflow = 'hidden';
-      return () => { document.body.style.overflow = prev; };
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+        document.body.style.position = prevPosition;
+        document.body.style.top = prevTop;
+        document.body.style.width = prevWidth;
+        window.scrollTo(0, scrollY);
+      };
     }
   }, [showRestock, selectedRestock, showAddItem]);
 
@@ -767,8 +780,8 @@ export default function BarPage() {
       )}
 
       {showRestock && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto overscroll-contain">
-          <div className="bg-white rounded max-w-2xl w-full max-h-[85vh] overflow-y-auto overscroll-contain p-4 my-4 shrink-0">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto overscroll-contain touch-none" style={{ overscrollBehavior: 'contain' }}>
+          <div className="bg-white rounded max-w-2xl w-full max-h-[85vh] overflow-y-auto overscroll-contain p-4 my-4 shrink-0 touch-auto" style={{ overscrollBehavior: 'contain' }}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-medium">{t('bar.createRestock')}</h3>
               <button onClick={() => setShowRestock(false)} className="text-slate-500">✕</button>
@@ -807,8 +820,8 @@ export default function BarPage() {
       )}
 
       {selectedRestock && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto overscroll-contain">
-          <div className="bg-white rounded max-w-2xl w-full max-h-[85vh] overflow-y-auto overscroll-contain p-4 my-4 shrink-0">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto overscroll-contain touch-none" style={{ overscrollBehavior: 'contain' }}>
+          <div className="bg-white rounded max-w-2xl w-full max-h-[85vh] overflow-y-auto overscroll-contain p-4 my-4 shrink-0 touch-auto" style={{ overscrollBehavior: 'contain' }}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-medium">{t('bar.restockDetails')}</h3>
               <button onClick={() => setSelectedRestock(null)} className="text-slate-500">✕</button>
@@ -854,8 +867,8 @@ export default function BarPage() {
       )}
 
       {showAddItem && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto overscroll-contain">
-          <div className="bg-white rounded max-w-sm w-full p-4 my-4 shrink-0">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto overscroll-contain touch-none" style={{ overscrollBehavior: 'contain' }}>
+          <div className="bg-white rounded max-w-sm w-full p-4 my-4 shrink-0 touch-auto">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-medium">{t('bar.addItem')}</h3>
               <button onClick={() => setShowAddItem(false)} className="text-slate-500">✕</button>
