@@ -220,6 +220,39 @@ export default function FinancePage() {
     return t('finance.allSectors');
   }
 
+  function parseTzsInput(raw: string): number {
+    // Accept common user-entered formats like "1000", "1,000", "1 000", "TSh 1,000", "1.000,50"
+    let s = String(raw || '').trim();
+    if (!s) return NaN;
+    s = s.replace(/tsh|tzs/gi, '').trim();
+    s = s.replace(/\s+/g, '');
+
+    const hasComma = s.includes(',');
+    const hasDot = s.includes('.');
+    if (hasComma && hasDot) {
+      // Decide decimal separator by the last occurring symbol
+      if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+        // "1.000,50" -> "1000.50"
+        s = s.replace(/\./g, '').replace(',', '.');
+      } else {
+        // "1,000.50" -> "1000.50"
+        s = s.replace(/,/g, '');
+      }
+    } else if (hasComma && !hasDot) {
+      // If single comma looks like decimal, treat it as decimal separator; otherwise thousands separator
+      const parts = s.split(',');
+      if (parts.length === 2 && parts[1].length > 0 && parts[1].length <= 2) {
+        s = `${parts[0]}.${parts[1]}`;
+      } else {
+        s = s.replace(/,/g, '');
+      }
+    }
+
+    s = s.replace(/[^0-9.-]/g, '');
+    const n = Number(s);
+    return n;
+  }
+
   async function download(format: 'csv' | 'xlsx' | 'pdf') {
     if (!token) return;
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
@@ -266,7 +299,7 @@ export default function FinancePage() {
   async function recordExpense() {
     if (!token) return;
     if (!isManager) return;
-    const amount = Number(expenseAmount);
+    const amount = parseTzsInput(expenseAmount);
     if (!Number.isFinite(amount) || amount <= 0 || !expenseDate) {
       notifyError(t('common.fillAllFields'));
       return;
