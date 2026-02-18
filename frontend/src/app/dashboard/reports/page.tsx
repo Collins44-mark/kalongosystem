@@ -5,6 +5,7 @@ import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
 import { isManagerLevel } from '@/lib/roles';
+import { notifyError } from '@/store/notifications';
 
 type ReportType = 'sales' | 'expenses' | 'pnl';
 type Sector = 'all' | 'rooms' | 'bar' | 'restaurant';
@@ -98,7 +99,15 @@ export default function ReportsPage() {
       headers: { Authorization: `Bearer ${token}` },
       credentials: 'include',
     });
-    if (!res.ok) return;
+    if (!res.ok) {
+      let msg = `Export failed (${res.status})`;
+      try {
+        const text = await res.text();
+        if (text) msg = text.slice(0, 200);
+      } catch {}
+      notifyError(msg);
+      return;
+    }
 
     const blob = await res.blob();
     const cd = res.headers.get('content-disposition') || '';
@@ -109,7 +118,11 @@ export default function ReportsPage() {
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
+    // iOS/Safari reliability: append to DOM before clicking
+    a.style.display = 'none';
+    document.body.appendChild(a);
     a.click();
+    a.remove();
     URL.revokeObjectURL(url);
   }
 

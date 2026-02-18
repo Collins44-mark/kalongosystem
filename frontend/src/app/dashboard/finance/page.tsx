@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
 import { isManagerLevel } from '@/lib/roles';
 import { useSearch } from '@/store/search';
-import { notifyError } from '@/store/notifications';
+import { notifyError, notifySuccess } from '@/store/notifications';
 
 function toLocalDateString(d: Date): string {
   const y = d.getFullYear();
@@ -69,6 +69,13 @@ export default function FinancePage() {
 
   const q = (searchQuery || '').trim().toLowerCase();
 
+  const canRecordExpense = isManager || isFinance;
+  const [expenseCategory, setExpenseCategory] = useState<'HOUSEKEEPING' | 'MAINTENANCE' | 'UTILITIES' | 'OTHERS'>('HOUSEKEEPING');
+  const [expenseOtherCategory, setExpenseOtherCategory] = useState('');
+  const [expenseAmount, setExpenseAmount] = useState('');
+  const [expenseDate, setExpenseDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [expenseNotes, setExpenseNotes] = useState('');
+  const [savingExpense, setSavingExpense] = useState(false);
   const [selectedExpenseCategory, setSelectedExpenseCategory] = useState<string | null>(null);
 
   // Business expectation: "Net revenue" = revenue after expenses (not VAT-only net).
@@ -245,6 +252,66 @@ export default function FinancePage() {
     s = s.replace(/[^0-9.-]/g, '');
     const n = Number(s);
     return n;
+  }
+
+  async function recordExpense() {
+    if (!token) return;
+    if (!canRecordExpense) return;
+    const amount = parseTzsInput(expenseAmount);
+    if (!Number.isFinite(amount) || amount <= 0 || !expenseDate) {
+      notifyError(t('common.fillAllFields'));
+      return;
+    }
+    if (expenseCategory === 'OTHERS' && !expenseOtherCategory.trim()) {
+      notifyError(t('common.fillAllFields'));
+      return;
+    }
+    setSavingExpense(true);
+    try {
+      const descParts: string[] = [];
+      if (expenseCategory === 'OTHERS') descParts.push(`Other: ${expenseOtherCategory.trim()}`);
+      if (expenseNotes.trim()) descParts.push(expenseNotes.trim());
+      const description = descParts.length ? descParts.join(' — ') : undefined;
+
+      await api(`/finance/expenses`, {
+        token,
+        method: 'POST',
+        body: JSON.stringify({
+          category: expenseCategory,
+          amount,
+          description,
+          expenseDate,
+        }),
+      });
+      notifySuccess(t('finance.expenseRecorded'));
+      setExpenseCategory('HOUSEKEEPING');
+      setExpenseOtherCategory('');
+      setExpenseAmount('');
+      setExpenseNotes('');
+
+      // Refresh overview + expenses aggregation
+      const params = new URLSearchParams();
+      params.set('period', period);
+      if (period === 'bydate' && dateFrom && dateTo) {
+        params.set('from', dateFrom);
+        params.set('to', dateTo);
+      }
+      const expParams = new URLSearchParams();
+      if (dateRange.from) expParams.set('from', dateRange.from);
+      if (dateRange.to) expParams.set('to', dateRange.to);
+      const [ov, tot, exp] = await Promise.all([
+        api<Overview>(`/finance/overview?${params}`, { token }),
+        api<{ expenses: unknown[]; total: number }>(`/finance/expenses?${expParams}`, { token }).then((r) => r?.total ?? 0),
+        api<{ byCategory: Record<string, number>; expenses: { id: string; category: string; amount: number; date: string; notes: string | null }[] }>(`/finance/expenses/by-category?${expParams}`, { token }),
+      ]);
+      setOverview(ov);
+      setTotalExpenses(typeof tot === 'number' ? tot : 0);
+      setExpensesData(exp || null);
+    } catch (e: any) {
+      notifyError(e?.message || 'Request failed');
+    } finally {
+      setSavingExpense(false);
+    }
   }
 
   const breadcrumb = (() => {
@@ -456,6 +523,76 @@ export default function FinancePage() {
                   </button>
                 );
               })}
+            </div>
+          )}
+
+          {canRecordExpense && level === 'overview' && (
+            <div className="bg-white border rounded-lg p-4 max-w-2xl">
+              <h2 className="font-medium mb-3">{t('finance.recordExpense')}</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm text-slate-600 mb-1">{t('finance.category')}</label>
+                  <select
+                    value={expenseCategory}
+                    onChange={(e) => setExpenseCategory(e.target.value as any)}
+                    className="w-full px-3 py-2 border rounded text-sm bg-white"
+                  >
+                    <option value="HOUSEKEEPING">{t('finance.housekeeping')}</option>
+                    <option value="MAINTENANCE">{t('finance.maintenance')}</option>
+                    <option value="UTILITIES">{t('finance.utilities')}</option>
+                    <option value="OTHERS">{t('finance.others')}</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-600 mb-1">{t('finance.amount')}</label>
+                  <input
+                    value={expenseAmount}
+                    onChange={(e) => setExpenseAmount(e.target.value)}
+                    className="w-full px-3 py-2 border rounded text-sm"
+                    inputMode="decimal"
+                    placeholder="0"
+                  />
+                </div>
+                {expenseCategory === 'OTHERS' && (
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm text-slate-600 mb-1">{t('finance.category')} ({t('finance.others')})</label>
+                    <input
+                      value={expenseOtherCategory}
+                      onChange={(e) => setExpenseOtherCategory(e.target.value)}
+                      className="w-full px-3 py-2 border rounded text-sm"
+                      placeholder="e.g. Marketing"
+                    />
+                  </div>
+                )}
+                <div>
+                  <label className="block text-sm text-slate-600 mb-1">{t('finance.date')}</label>
+                  <input
+                    type="date"
+                    value={expenseDate}
+                    onChange={(e) => setExpenseDate(e.target.value)}
+                    className="w-full px-3 py-2 border rounded text-sm bg-white"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-sm text-slate-600 mb-1">{t('finance.notesOptional')}</label>
+                  <input
+                    value={expenseNotes}
+                    onChange={(e) => setExpenseNotes(e.target.value)}
+                    className="w-full px-3 py-2 border rounded text-sm"
+                    placeholder={t('finance.notesOptional')}
+                  />
+                </div>
+              </div>
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={recordExpense}
+                  disabled={savingExpense}
+                  className="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700 disabled:opacity-50 text-sm"
+                >
+                  {savingExpense ? t('common.loading') : t('finance.record')}
+                </button>
+              </div>
             </div>
           )}
 
