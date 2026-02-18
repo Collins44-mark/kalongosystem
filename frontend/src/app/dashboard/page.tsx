@@ -16,6 +16,7 @@ type DashboardData = {
   inventoryAlerts: {
     lowStock: { id: string; name: string; quantity: number; minQuantity: number; severity: string }[];
     barLowStockCount?: number;
+    barLowStock?: { id: string; name: string; quantity: number; minQuantity: number }[];
     totalValueAtRisk: number;
   };
   period: string;
@@ -30,7 +31,7 @@ type FinanceData = {
 
 const EMPTY_DASHBOARD: Omit<DashboardData, 'period'> = {
   roomSummary: { total: 0, occupied: 0, vacant: 0, reserved: 0, underMaintenance: 0 },
-  inventoryAlerts: { lowStock: [], barLowStockCount: 0, totalValueAtRisk: 0 },
+  inventoryAlerts: { lowStock: [], barLowStockCount: 0, barLowStock: [], totalValueAtRisk: 0 },
 };
 
 const EMPTY_FINANCE: FinanceData = {
@@ -280,14 +281,14 @@ export default function OverviewPage() {
         </div>
         </div>
 
-      {/* Inventory & Business Health - red circle shows bar sector items below minimum (linked to Bar) */}
+      {/* Bar alerts - reflects bar sector items below minimum stock */}
       <div className="bg-white rounded-xl shadow-md border border-slate-100 p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-full bg-red-500 text-white flex items-center justify-center font-bold text-lg shadow-sm">
             {displayData.inventoryAlerts.barLowStockCount ?? 0}
           </div>
           <div>
-            <h3 className="font-semibold text-slate-800">{t('overview.inventoryAlerts')}</h3>
+            <h3 className="font-semibold text-slate-800">{t('overview.barAlerts')}</h3>
             <p className="text-sm text-slate-500">{t('overview.barItemsBelowMin')}</p>
           </div>
         </div>
@@ -306,23 +307,20 @@ export default function OverviewPage() {
         </div>
         </div>
 
-      {/* Inventory Alerts Detail */}
-      {lowStockCount > 0 && (
+      {/* Bar alerts detail - bar items below minimum */}
+      {(displayData.inventoryAlerts.barLowStockCount ?? 0) > 0 && (
         <div className="bg-white rounded-xl shadow-md border border-slate-100 p-5">
-            <h3 className="font-semibold text-slate-800 mb-3">{t('overview.lowStockItems')}</h3>
+            <h3 className="font-semibold text-slate-800 mb-3">{t('overview.barAlerts')}</h3>
             <div className="space-y-2">
-              {displayData.inventoryAlerts.lowStock.map((item) => (
+              {(displayData.inventoryAlerts.barLowStock ?? []).map((item) => (
                 <div
                   key={item.id}
-                  className={`text-sm py-2 ${item.severity === 'RED' ? 'text-red-600' : 'text-amber-600'}`}
+                  className={`text-sm py-2 ${item.quantity === 0 ? 'text-red-600' : 'text-amber-600'}`}
                 >
                   {item.name}: {item.quantity} ({t('common.min')}: {item.minQuantity})
                 </div>
               ))}
             </div>
-            <p className="mt-3 text-sm text-slate-600">
-              {t('overview.valueAtRisk')}: {formatTzs(displayData.inventoryAlerts.totalValueAtRisk)}
-            </p>
           </div>
       )}
 

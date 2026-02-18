@@ -77,6 +77,7 @@
   "overview.totalExpenses": "Total Expenses",
   "overview.netProfit": "Net Profit",
   "overview.inventoryAlerts": "Inventory Alerts",
+  "overview.barAlerts": "Bar alerts",
   "overview.itemsBelowMin": "Items below minimum stock",
   "overview.barItemsBelowMin": "Bar items below minimum",
   "overview.businessHealth": "Business Health",

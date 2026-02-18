@@ -55,8 +55,17 @@ export class OverviewService {
       })),
     ];
     
-    // Count bar items (from bar.getLowStock + BAR inventory fallback)
-    const totalBarLowCount = barLowList.length + invBarFallback.length;
+    // Bar-only low-stock list (for overview Bar alerts)
+    const barLowStockList = [
+      ...barLowList.map((b: any) => ({ id: b.id, name: b.name, quantity: b.quantity, minQuantity: b.minQuantity })),
+      ...invBarFallback.map((i: any) => ({
+        id: i.id,
+        name: String(i.name || '').replace(/^BAR:/, '').trim() || i.name,
+        quantity: i.quantity,
+        minQuantity: i.minQuantity,
+      })),
+    ];
+    const totalBarLowCount = barLowStockList.length;
 
     return {
       roomSummary,
@@ -70,6 +79,7 @@ export class OverviewService {
           severity: i.quantity === 0 ? 'RED' : 'YELLOW',
         })),
         barLowStockCount: totalBarLowCount,
+        barLowStock: barLowStockList,
         totalValueAtRisk: typeof valueAtRisk === 'number' ? valueAtRisk : 0,
       },
       period,

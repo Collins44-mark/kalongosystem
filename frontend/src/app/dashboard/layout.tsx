@@ -69,7 +69,6 @@ const SIDEBAR_LINKS: { href: string; labelKey: string; roles: string[]; module: 
   { href: '/dashboard/housekeeping', labelKey: 'nav.housekeeping', roles: ['MANAGER', 'HOUSEKEEPING'], module: 'housekeeping' },
   { href: '/dashboard/finance', labelKey: 'nav.finance', roles: ['MANAGER', 'FINANCE'], module: 'finance' },
   { href: '/dashboard/workers', labelKey: 'nav.workers', roles: ['MANAGER', 'ADMIN', 'OWNER'], module: 'workers' },
-  { href: '/dashboard/inventory', labelKey: 'nav.inventory', roles: ['MANAGER', 'ADMIN', 'OWNER'], module: 'inventory' },
   { href: '/dashboard/reports', labelKey: 'nav.reports', roles: ['MANAGER', 'ADMIN', 'OWNER'], module: 'reports' },
   { href: '/dashboard/settings', labelKey: 'nav.settings', roles: ['MANAGER', 'ADMIN', 'OWNER'], module: 'settings' },
   { href: '/dashboard/messages', labelKey: 'nav.messages', roles: ['MANAGER', 'ADMIN', 'OWNER', 'FRONT_OFFICE', 'BAR', 'RESTAURANT', 'KITCHEN', 'HOUSEKEEPING', 'FINANCE'], module: 'messages' },
