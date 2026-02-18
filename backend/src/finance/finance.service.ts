@@ -628,18 +628,13 @@ export class FinanceService {
       _sum: { amount: true },
     });
     const totalExpenses = Number(expAgg._sum.amount || 0);
-    const netProfit = totalNet - totalExpenses;
+    const netProfit = totalGross - totalExpenses;
 
-    const breakdown = { cash: 0, bank: 0, mobileMoney: 0, other: 0 };
-    for (const t of txns) {
-      const mode = String(t.paymentMode || '');
-      const m = mode.toLowerCase();
-      const amt = Number(t.grossAmount || 0);
-      if (m.includes('bank')) breakdown.bank += amt;
-      else if (m.includes('mpesa') || m.includes('m-pesa') || m.includes('tigopesa') || m.includes('airtel') || m.includes('mobile')) breakdown.mobileMoney += amt;
-      else if (m.includes('cash') || mode) breakdown.cash += amt;
-      else breakdown.other += amt;
-    }
+    const expenses = await this.prisma.expense.findMany({
+      where: { businessId, expenseDate: { gte: from, lte: to } },
+      orderBy: { expenseDate: 'desc' },
+      select: { expenseDate: true, category: true, description: true, amount: true },
+    });
 
     const pdf = await renderFinanceTransactionsPdf({
       businessName: business?.name || 'Business',
@@ -656,12 +651,6 @@ export class FinanceService {
         totalGrossSales: round2(totalGross),
         totalExpenses: round2(totalExpenses),
         netProfit: round2(netProfit),
-        paymentBreakdown: {
-          cash: round2(breakdown.cash),
-          bank: round2(breakdown.bank),
-          mobileMoney: round2(breakdown.mobileMoney),
-          other: round2(breakdown.other),
-        },
       },
       rows: txns.map((t) => ({
         date: t.date,
@@ -671,6 +660,13 @@ export class FinanceService {
         vat: round2(t.vatAmount),
         gross: round2(t.grossAmount),
         paymentMode: t.paymentMode,
+      })),
+      expenseRows: expenses.map((e) => ({
+        date: e.expenseDate,
+        category: String(e.category || ''),
+        description: e.description ? String(e.description) : '',
+        amount: round2(Number(e.amount || 0)),
+        paymentMode: '-', // not tracked in schema
       })),
     });
     return { filename: `${baseName}.pdf`, contentType: 'application/pdf', body: pdf };
@@ -782,9 +778,9 @@ async function renderFinanceTransactionsPdf(input: {
     totalGrossSales: number;
     totalExpenses: number;
     netProfit: number;
-    paymentBreakdown: { cash: number; bank: number; mobileMoney: number; other: number };
   };
   rows: Array<{ date: Date; reference: string; sector: string; net: number; vat: number; gross: number; paymentMode: string }>;
+  expenseRows: Array<{ date: Date; category: string; description: string; amount: number; paymentMode: string }>;
 }): Promise<Buffer> {
   return await new Promise((resolve, reject) => {
     try {
@@ -834,47 +830,28 @@ async function renderFinanceTransactionsPdf(input: {
       doc.strokeColor('#000');
       y += 16;
 
-      // Summary box
-      const boxPadding = 10;
-      const boxX = x;
-      const boxW = pageWidth;
-      const boxTop = y;
-      const boxH = 165;
-      doc.save();
-      doc.roundedRect(boxX, boxTop, boxW, boxH, 8).lineWidth(1).strokeColor('#d0d7de').fillColor('#fafafa').fillAndStroke();
-      doc.restore();
-
-      let sy = boxTop + boxPadding;
-      const labelX = boxX + boxPadding;
-      const lineGap = 14;
-
-      doc.font('Helvetica-Bold').fontSize(11).fillColor('#000').text('SUMMARY', labelX, sy);
-      sy += 16;
-
-      const kv = (label: string, value: string) => {
-        doc.font('Helvetica').fontSize(10).fillColor('#000').text(label, labelX, sy);
-        doc.font('Helvetica-Bold').fontSize(10).fillColor('#000').text(value, labelX, sy, { width: boxW - boxPadding * 2, align: 'right' });
-        sy += lineGap;
+      const bottomLimit = () => doc.page.height - doc.page.margins.bottom - 30;
+      const ensureSpace = (h: number) => {
+        if (y + h > bottomLimit()) {
+          doc.addPage();
+          y = doc.page.margins.top;
+        }
       };
 
-      // Currency label must not repeat outside totals section; keep numbers only here.
-      kv('Total Revenue (Net)', formatNumberTz(input.summary.totalNetSales));
-      kv('Total VAT', formatNumberTz(input.summary.totalVat));
-      kv('Total Gross', formatNumberTz(input.summary.totalGrossSales));
-      if (input.summary.totalExpenses > 0) kv('Total Expenses', formatNumberTz(input.summary.totalExpenses));
-      if (input.summary.totalExpenses > 0) kv('Net Profit', formatNumberTz(input.summary.netProfit));
+      const drawSectionTitle = (title: string) => {
+        ensureSpace(26);
+        doc.font('Helvetica-Bold').fontSize(12).fillColor('#111827').text(title, x, y);
+        y += 14;
+        doc.moveTo(x, y).lineTo(x + pageWidth, y).lineWidth(1).strokeColor('#e5e7eb').stroke();
+        doc.strokeColor('#000');
+        y += 12;
+      };
 
-      sy += 6;
-      doc.font('Helvetica-Bold').fontSize(10).text('Payment Mode Breakdown', labelX, sy);
-      sy += 12;
-      kv('Cash Total', formatNumberTz(input.summary.paymentBreakdown.cash));
-      kv('Bank Total', formatNumberTz(input.summary.paymentBreakdown.bank));
-      kv('Mobile Money Total', formatNumberTz(input.summary.paymentBreakdown.mobileMoney));
-      kv('Other Total', formatNumberTz(input.summary.paymentBreakdown.other));
+      // =========================
+      // SALES TRANSACTIONS TABLE
+      // =========================
+      drawSectionTitle('Sales Transactions');
 
-      y = boxTop + boxH + 18;
-
-      // Transactions table
       // Use the full printable width for balanced margins + even distribution.
       // Make Sector slightly narrower to reduce the Sector→Net visual gap.
       const fixed = { date: 70, mode: 120 };
@@ -893,7 +870,6 @@ async function renderFinanceTransactionsPdf(input: {
       const padX = 6;
       const headerH = 28;
       const rowH = 24;
-      const bottomLimit = doc.page.height - doc.page.margins.bottom - 30;
 
       const drawColumnDividers = (topY: number, h: number, color: string) => {
         doc.save();
@@ -965,7 +941,7 @@ async function renderFinanceTransactionsPdf(input: {
 
       let rowIdx = 0;
       for (const r of input.rows) {
-        if (y + rowH > bottomLimit) {
+        if (y + rowH > bottomLimit()) {
           doc.addPage();
           y = doc.page.margins.top;
           drawHeaderRow();
@@ -974,9 +950,9 @@ async function renderFinanceTransactionsPdf(input: {
         drawRow(r, rowIdx++);
       }
 
-      // Totals row (accounting touch)
+      // Sales totals row
       const totalsRowH = 36;
-      if (y + totalsRowH > bottomLimit) {
+      if (y + totalsRowH > bottomLimit()) {
         doc.addPage();
         y = doc.page.margins.top;
         drawHeaderRow();
@@ -990,9 +966,9 @@ async function renderFinanceTransactionsPdf(input: {
       doc.rect(tableX, y, tableW, totalsRowH).strokeColor('#d0d7de').lineWidth(1).stroke();
       drawColumnDividers(y, totalsRowH, '#d0d7de');
 
-      // Totals section: one "TOTAL" label on the left, then numeric totals aligned under columns.
+      // Totals: one label on the left, then numeric totals aligned under columns.
       doc.font('Helvetica-Bold').fontSize(11).fillColor('#000');
-      doc.text('TOTAL', tableX + padX, y + 11, { width: colW.date + colW.sector - padX * 2, align: 'left' });
+      doc.text('SALES TOTAL', tableX + padX, y + 11, { width: colW.date + colW.sector - padX * 2, align: 'left' });
       let cx = tableX + colW.date + colW.sector;
       doc.text(formatNumberTz(input.summary.totalNetSales), cx + padX, y + 11, { width: colW.net - padX * 2, align: 'right' });
       cx += colW.net;
@@ -1000,6 +976,147 @@ async function renderFinanceTransactionsPdf(input: {
       cx += colW.vat;
       doc.text(formatNumberTz(input.summary.totalGrossSales), cx + padX, y + 11, { width: colW.gross - padX * 2, align: 'right' });
       y += totalsRowH;
+
+      y += 16;
+
+      // =========================
+      // EXPENSE TRANSACTIONS TABLE
+      // =========================
+      drawSectionTitle('Expense Transactions');
+
+      const expFixed = { date: 70, category: 95, amount: 90, mode: 95 };
+      const expDescW = pageWidth - expFixed.date - expFixed.category - expFixed.amount - expFixed.mode;
+      const expColW = {
+        date: expFixed.date,
+        category: expFixed.category,
+        description: Math.max(150, expDescW),
+        amount: expFixed.amount,
+        mode: expFixed.mode,
+      };
+      const expTableW = expColW.date + expColW.category + expColW.description + expColW.amount + expColW.mode;
+      const expTableX = x + (pageWidth - expTableW) / 2;
+      const expHeaderH = 28;
+      const expRowH = 24;
+      const expPadX = 6;
+
+      const drawExpDividers = (topY: number, h: number, color: string) => {
+        doc.save();
+        doc.strokeColor(color).lineWidth(1);
+        let vx = expTableX + expColW.date;
+        doc.moveTo(vx, topY).lineTo(vx, topY + h).stroke();
+        vx += expColW.category;
+        doc.moveTo(vx, topY).lineTo(vx, topY + h).stroke();
+        vx += expColW.description;
+        doc.moveTo(vx, topY).lineTo(vx, topY + h).stroke();
+        vx += expColW.amount;
+        doc.moveTo(vx, topY).lineTo(vx, topY + h).stroke();
+        doc.restore();
+      };
+
+      const drawExpHeader = () => {
+        doc.save();
+        doc.rect(expTableX, y, expTableW, expHeaderH).fillColor('#f1f5f9').fill();
+        doc.restore();
+        doc.rect(expTableX, y, expTableW, expHeaderH).strokeColor('#d0d7de').lineWidth(1).stroke();
+        drawExpDividers(y, expHeaderH, '#d0d7de');
+        doc.font('Helvetica-Bold').fontSize(10).fillColor('#000');
+        let cx2 = expTableX;
+        doc.text('Date', cx2 + expPadX, y + 9, { width: expColW.date - expPadX * 2, align: 'left' });
+        cx2 += expColW.date;
+        doc.text('Category', cx2 + expPadX, y + 9, { width: expColW.category - expPadX * 2, align: 'left' });
+        cx2 += expColW.category;
+        doc.text('Description', cx2 + expPadX, y + 9, { width: expColW.description - expPadX * 2, align: 'left' });
+        cx2 += expColW.description;
+        doc.text('Amount (TSh)', cx2 + expPadX, y + 9, { width: expColW.amount - expPadX * 2, align: 'right' });
+        cx2 += expColW.amount;
+        doc.text('Payment Mode', cx2 + expPadX, y + 9, { width: expColW.mode - expPadX * 2, align: 'center' });
+        y += expHeaderH;
+      };
+
+      drawExpHeader();
+      doc.font('Helvetica').fontSize(10).fillColor('#000');
+
+      const drawExpRow = (r: any, idx: number) => {
+        if (idx % 2 === 1) {
+          doc.save();
+          doc.rect(expTableX, y, expTableW, expRowH).fillColor('#f8fafc').fill();
+          doc.restore();
+        }
+        doc.rect(expTableX, y, expTableW, expRowH).strokeColor('#e5e7eb').lineWidth(1).stroke();
+        drawExpDividers(y, expRowH, '#e5e7eb');
+        let cx2 = expTableX;
+        drawCellText(doc, formatDdMmYyyy(r.date), cx2 + expPadX, y + 7, expColW.date - expPadX * 2, { align: 'left', baseSize: 10, minSize: 9, font: 'Helvetica' });
+        cx2 += expColW.date;
+        drawCellText(doc, String(r.category || ''), cx2 + expPadX, y + 7, expColW.category - expPadX * 2, { align: 'left', baseSize: 10, minSize: 8, font: 'Helvetica' });
+        cx2 += expColW.category;
+        drawCellText(doc, String(r.description || ''), cx2 + expPadX, y + 7, expColW.description - expPadX * 2, { align: 'left', baseSize: 10, minSize: 7, font: 'Helvetica' });
+        cx2 += expColW.description;
+        drawCellText(doc, formatNumberTz(r.amount), cx2 + expPadX, y + 7, expColW.amount - expPadX * 2, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
+        cx2 += expColW.amount;
+        drawCellText(doc, String(r.paymentMode || '-'), cx2 + expPadX, y + 7, expColW.mode - expPadX * 2, { align: 'center', baseSize: 10, minSize: 8, font: 'Helvetica' });
+        y += expRowH;
+      };
+
+      let expIdx = 0;
+      for (const r of input.expenseRows) {
+        if (y + expRowH > bottomLimit()) {
+          doc.addPage();
+          y = doc.page.margins.top;
+          drawExpHeader();
+          doc.font('Helvetica').fontSize(9).fillColor('#000');
+        }
+        drawExpRow(r, expIdx++);
+      }
+
+      // Expense total row
+      const expTotalH = 36;
+      if (y + expTotalH > bottomLimit()) {
+        doc.addPage();
+        y = doc.page.margins.top;
+        drawExpHeader();
+      }
+      doc.moveTo(expTableX, y).lineTo(expTableX + expTableW, y).lineWidth(3).strokeColor('#111827').stroke();
+      doc.strokeColor('#000');
+      doc.save();
+      doc.rect(expTableX, y, expTableW, expTotalH).fillColor('#e5e7eb').fill();
+      doc.restore();
+      doc.rect(expTableX, y, expTableW, expTotalH).strokeColor('#d0d7de').lineWidth(1).stroke();
+      drawExpDividers(y, expTotalH, '#d0d7de');
+      doc.font('Helvetica-Bold').fontSize(11).fillColor('#000');
+      doc.text('EXPENSE TOTAL', expTableX + expPadX, y + 11, { width: expColW.date + expColW.category + expColW.description - expPadX * 2, align: 'left' });
+      doc.text(formatNumberTz(input.summary.totalExpenses), expTableX + expColW.date + expColW.category + expColW.description + expPadX, y + 11, { width: expColW.amount - expPadX * 2, align: 'right' });
+      y += expTotalH;
+
+      // =========
+      // SUMMARY
+      // =========
+      y += 18;
+      drawSectionTitle('Summary');
+
+      const boxPadding = 12;
+      const boxX = x;
+      const boxW = pageWidth;
+      const boxTop = y;
+      const boxH = 120;
+      ensureSpace(boxH + 10);
+      doc.save();
+      doc.roundedRect(boxX, boxTop, boxW, boxH, 8).lineWidth(1).strokeColor('#d0d7de').fillColor('#fafafa').fillAndStroke();
+      doc.restore();
+
+      let sy = boxTop + boxPadding;
+      const labelX = boxX + boxPadding;
+      const lineGap = 16;
+      const kv = (label: string, value: string, bold = false) => {
+        doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(bold ? 11 : 10).fillColor('#111827').text(label, labelX, sy);
+        doc.font(bold ? 'Helvetica-Bold' : 'Helvetica-Bold').fontSize(bold ? 12 : 10).fillColor('#111827').text(value, labelX, sy, { width: boxW - boxPadding * 2, align: 'right' });
+        sy += lineGap;
+      };
+
+      kv('Total Net Revenue (TSh)', formatNumberTz(input.summary.totalNetSales));
+      kv('Total VAT (TSh)', formatNumberTz(input.summary.totalVat));
+      kv('Total Gross Revenue (TSh)', formatNumberTz(input.summary.totalGrossSales));
+      kv('Total Expenses (TSh)', formatNumberTz(input.summary.totalExpenses));
+      kv('Net Profit (TSh)', formatNumberTz(input.summary.netProfit), true);
 
       doc.end();
     } catch (e) {
