@@ -9,6 +9,7 @@ import { isManagerLevel } from '@/lib/roles';
 import { defaultDashboardRoute } from '@/lib/homeRoute';
 
 type Room = { id: string; roomNumber: string; roomName?: string; status: string; category: { id: string; name: string; pricePerNight: string } };
+type BarItem = { id: string; name: string; price: string; stock: number | null; minQuantity: number | null };
 
 type DashboardData = {
   roomSummary: { total: number; occupied: number; vacant: number; reserved: number; underMaintenance: number };
@@ -102,7 +103,7 @@ export default function OverviewPage() {
     if (!token) return;
     setLoading(true);
     const emptyData: DashboardData = { ...EMPTY_DASHBOARD, period };
-    // Fetch overview and hotel rooms in parallel so admin sees same room totals as Front Office
+    // Fetch overview, hotel rooms, and bar items (same API as Bar page) so Bar alerts match Bar page
     const overviewPromise = api<DashboardData>(`/overview?period=${period}`, { token })
       .then((res) => ({ ...res, period }))
       .catch((err) => {
@@ -121,15 +122,44 @@ export default function OverviewPage() {
         return { rooms, roomSummary: summary };
       })
       .catch(() => null);
+    const barItemsPromise = api<BarItem[]>('/bar/items', { token })
+      .then((items): { barLowStockCount: number; barLowStock: { id: string; name: string; quantity: number; minQuantity: number }[] } | null => {
+        // Same logic as Bar page: low = min set and (stock <= min or out of stock)
+        const low = items.filter((i) => {
+          const stock = i.stock ?? 0;
+          const min = i.minQuantity ?? null;
+          return min != null && (stock <= min || stock === 0);
+        });
+        return {
+          barLowStockCount: low.length,
+          barLowStock: low.map((i) => ({
+            id: i.id,
+            name: i.name,
+            quantity: i.stock ?? 0,
+            minQuantity: i.minQuantity ?? 0,
+          })),
+        };
+      })
+      .catch(() => null);
 
-    Promise.all([overviewPromise, roomsPromise])
-      .then(([overviewRes, roomsRes]) => {
+    Promise.all([overviewPromise, roomsPromise, barItemsPromise])
+      .then(([overviewRes, roomsRes, barRes]) => {
         const base = overviewRes ?? emptyData;
+        let next = base;
         if (roomsRes && (roomsRes.rooms.length > 0 || roomsRes.roomSummary.total > 0)) {
-          setData({ ...base, rooms: roomsRes.rooms, roomSummary: roomsRes.roomSummary });
-        } else {
-          setData(base);
+          next = { ...next, rooms: roomsRes.rooms, roomSummary: roomsRes.roomSummary };
         }
+        if (barRes) {
+          next = {
+            ...next,
+            inventoryAlerts: {
+              ...next.inventoryAlerts,
+              barLowStockCount: barRes.barLowStockCount,
+              barLowStock: barRes.barLowStock,
+            },
+          };
+        }
+        setData(next);
       })
       .catch(() => setData(emptyData))
       .finally(() => setLoading(false));
