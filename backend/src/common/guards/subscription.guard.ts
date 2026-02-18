@@ -8,8 +8,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 const SUBSCRIPTION_BLOCKED_MESSAGE =
   'Subscribe to continue using the service. Contact the sales team to renew.';
+const SUSPENDED_MESSAGE =
+  'This business has been suspended. Contact the sales team to restore access.';
 
-/** Ensures business subscription is active: TRIAL within trial period, or ACTIVE within paid period. Blocks when expired. */
+/** Ensures business is not suspended and subscription is active. Blocks when suspended or expired. */
 @Injectable()
 export class SubscriptionGuard implements CanActivate {
   constructor(private prisma: PrismaService) {}
@@ -19,6 +21,14 @@ export class SubscriptionGuard implements CanActivate {
     const user = request.user;
     if (!user?.businessId) {
       throw new ForbiddenException('No business context. Please log in with a business.');
+    }
+
+    const business = await this.prisma.business.findUnique({
+      where: { id: user.businessId },
+      select: { isSuspended: true },
+    });
+    if (business?.isSuspended === true) {
+      throw new ForbiddenException(SUSPENDED_MESSAGE);
     }
 
     const sub = await this.prisma.subscription.findUnique({

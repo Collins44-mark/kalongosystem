@@ -1,11 +1,12 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { SubscriptionGuard } from '../common/guards/subscription.guard';
 import { AllowManagerGuard } from '../common/guards/allow-manager.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { StaffWorkersService } from './staff-workers.service';
 
 @Controller('api/staff-workers')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 export class StaffWorkersController {
   constructor(private staffWorkers: StaffWorkersService) {}
 

@@ -99,7 +99,7 @@ export default function DashboardLayout({
       setMe(res);
     } catch (e: unknown) {
       const err = e as Error & { status?: number };
-      if (err?.status === 401) {
+      if (err?.status === 401 || err?.status === 403) {
         logout();
         router.replace('/login');
       }

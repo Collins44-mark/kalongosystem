@@ -1,11 +1,12 @@
 import { BadRequestException, Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { SubscriptionGuard } from '../common/guards/subscription.guard';
 import { AllowManagerGuard } from '../common/guards/allow-manager.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ApiService } from './api.service';
 
 @Controller('api')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 export class ApiController {
   constructor(private api: ApiService) {}
 
