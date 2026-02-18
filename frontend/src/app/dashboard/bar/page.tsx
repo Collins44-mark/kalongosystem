@@ -820,8 +820,8 @@ export default function BarPage() {
       )}
 
       {selectedRestock && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto overscroll-contain touch-none" style={{ overscrollBehavior: 'contain', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
-          <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto overscroll-contain p-6 my-auto shrink-0 touch-auto shadow-xl" style={{ overscrollBehavior: 'contain' }}>
+        <div className="fixed inset-0 bg-black/30 flex items-start justify-center z-50 p-4 pt-8 overflow-y-auto overscroll-contain touch-none" style={{ overscrollBehavior: 'contain', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
+          <div className="bg-white rounded-lg max-w-lg w-full max-h-[70vh] overflow-y-auto overscroll-contain p-4 my-auto shrink-0 touch-auto shadow-lg border border-slate-200" style={{ overscrollBehavior: 'contain' }}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-medium">{t('bar.restockDetails')}</h3>
               <button onClick={() => setSelectedRestock(null)} className="text-slate-500">✕</button>
