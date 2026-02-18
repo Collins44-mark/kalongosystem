@@ -244,8 +244,10 @@ export class FinanceController {
     const range = this.getRangeFromQuery(p, from, to);
 
     const out = await this.finance.exportTransactions(user.businessId, range.from, range.to, s, fmt);
+    const body = Buffer.isBuffer(out.body) ? out.body : Buffer.from(out.body);
     res.setHeader('Content-Type', out.contentType);
     res.setHeader('Content-Disposition', `attachment; filename="${out.filename}"`);
-    return res.send(out.body);
+    res.setHeader('Content-Length', String(body.length));
+    return res.send(body);
   }
 }

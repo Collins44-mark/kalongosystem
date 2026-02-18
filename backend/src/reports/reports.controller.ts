@@ -13,9 +13,18 @@ import { RolesGuard } from '../common/guards/roles.guard';
 @UseGuards(JwtAuthGuard, SubscriptionGuard, BusinessModuleGuard)
 @UseGuards(RolesGuard)
 @RequireModule('reports')
-@Roles('MANAGER', 'FINANCE')
+@Roles('MANAGER', 'ADMIN', 'OWNER', 'FINANCE')
 export class ReportsController {
   constructor(private reports: ReportsService) {}
+
+  private toDateRange(from?: string, to?: string): { from: Date; to: Date } | undefined {
+    if (!from || !to) return undefined;
+    const start = new Date(from);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(to);
+    end.setHours(23, 59, 59, 999);
+    return { from: start, to: end };
+  }
 
   @Get('sales')
   async sales(
@@ -23,11 +32,12 @@ export class ReportsController {
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
+    const range = this.toDateRange(from, to);
     return this.reports.getSalesReport(
       user.businessId,
       user.branchId,
-      from ? new Date(from) : undefined,
-      to ? new Date(to) : undefined,
+      range?.from,
+      range?.to,
     );
   }
 
@@ -37,11 +47,12 @@ export class ReportsController {
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
+    const range = this.toDateRange(from, to);
     return this.reports.getFinanceReport(
       user.businessId,
       user.branchId,
-      from ? new Date(from) : undefined,
-      to ? new Date(to) : undefined,
+      range?.from,
+      range?.to,
     );
   }
 
@@ -64,11 +75,12 @@ export class ReportsController {
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
+    const range = this.toDateRange(from, to);
     return this.reports.getBookingsReport(
       user.businessId,
       user.branchId,
-      from ? new Date(from) : undefined,
-      to ? new Date(to) : undefined,
+      range?.from,
+      range?.to,
     );
   }
 
@@ -83,8 +95,13 @@ export class ReportsController {
     @Query('to') to?: string,
   ) {
     const rt = (reportType ?? 'revenue').toLowerCase();
-    const fmt = (format ?? 'csv').toLowerCase();
+    const fmt = (format === 'xlsx' || format === 'pdf' ? format : 'csv').toLowerCase();
     const sec = (sector ?? 'all').toLowerCase();
+    let range = this.toDateRange(from, to);
+    if (!range && (!from || !to)) {
+      const today = new Date().toISOString().slice(0, 10);
+      range = this.toDateRange(today, today);
+    }
 
     const payload = await this.reports.exportReport(
       user.businessId,
@@ -92,8 +109,8 @@ export class ReportsController {
       rt,
       fmt,
       sec,
-      from ? new Date(from) : undefined,
-      to ? new Date(to) : undefined,
+      range?.from,
+      range?.to,
     );
 
     res.setHeader('Content-Type', payload.contentType);
