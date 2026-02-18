@@ -132,20 +132,14 @@ export default function DashboardLayout({
       .finally(() => setSubscriptionLoading(false));
   }, [token]);
 
-  // Auto-refresh session state (role/worker status, workers list) without manual refresh.
+  // Refresh session state only when user returns to the tab (no constant polling).
   useEffect(() => {
     if (!token) return;
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') fetchMe({ silent: true });
-    }, 15000);
     const onVisible = () => {
       if (document.visibilityState === 'visible') fetchMe({ silent: true });
     };
     document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
+    return () => document.removeEventListener('visibilitychange', onVisible);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 

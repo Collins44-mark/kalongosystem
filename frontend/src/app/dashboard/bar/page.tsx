@@ -77,13 +77,21 @@ export default function BarPage() {
   const [ordersTo, setOrdersTo] = useState('');
   const [autoTick, setAutoTick] = useState(0);
 
-  // Auto-refresh (every 15s) while tab is visible
+  // Refresh data when user returns to tab or when another tab/action signals an update (e.g. order created).
   useEffect(() => {
     if (!token) return;
-    const interval = setInterval(() => {
+    const onVisible = () => {
       if (document.visibilityState === 'visible') setAutoTick((t) => t + 1);
-    }, 15000);
-    return () => clearInterval(interval);
+    };
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'hms-data-updated') setAutoTick((t) => t + 1);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('storage', onStorage);
+    };
   }, [token]);
 
   useEffect(() => {

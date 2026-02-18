@@ -162,26 +162,6 @@ export default function OverviewPage() {
     return () => window.removeEventListener('storage', onStorage);
   }, [token, period]);
 
-  // Auto-refresh every 30s when visible so room counts/amounts stay current
-  useEffect(() => {
-    if (!token) return;
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        const emptyData: DashboardData = { ...EMPTY_DASHBOARD, period };
-        api<DashboardData>(`/overview?period=${period}`, { token })
-          .then(setData)
-          .catch(() => setData(emptyData));
-        const params = new URLSearchParams();
-        if (financeFrom) params.set('from', financeFrom);
-        if (financeTo) params.set('to', financeTo);
-        api<FinanceData>(`/finance/dashboard?${params}`, { token })
-          .then(setFinance)
-          .catch(() => setFinance(EMPTY_FINANCE));
-      }
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [token, period, financeFrom, financeTo]);
-
   useEffect(() => {
     if (!token) return;
     const params = new URLSearchParams();

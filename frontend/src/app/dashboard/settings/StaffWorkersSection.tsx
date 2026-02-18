@@ -56,20 +56,14 @@ export function StaffWorkersSection({ token, t }: { token: string; t: (k: string
         return txt.includes(qText);
       });
 
-  // Auto-refresh list so status/role changes from other devices appear.
+  // Refresh list when user returns to tab (no constant polling).
   useEffect(() => {
     if (!token) return;
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') load();
-    }, 15000);
     const onVisible = () => {
       if (document.visibilityState === 'visible') load();
     };
     document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
+    return () => document.removeEventListener('visibilitychange', onVisible);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, roleFilter]);
 

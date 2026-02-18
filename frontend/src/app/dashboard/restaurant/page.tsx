@@ -40,13 +40,21 @@ export default function RestaurantPage() {
   const [workers, setWorkers] = useState<StaffWorker[]>([]);
   const q = (searchQuery || '').trim().toLowerCase();
 
-  // Auto-refresh (every 15s) while tab is visible
+  // Refresh when user returns to tab or when data is updated (e.g. order created).
   useEffect(() => {
     if (!token) return;
-    const interval = setInterval(() => {
+    const onVisible = () => {
       if (document.visibilityState === 'visible') setAutoTick((x) => x + 1);
-    }, 15000);
-    return () => clearInterval(interval);
+    };
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'hms-data-updated') setAutoTick((x) => x + 1);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('storage', onStorage);
+    };
   }, [token]);
 
   useEffect(() => {
