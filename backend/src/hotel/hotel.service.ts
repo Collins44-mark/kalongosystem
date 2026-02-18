@@ -382,15 +382,15 @@ export class HotelService {
     today.setHours(0, 0, 0, 0);
     const orConditions: Record<string, unknown>[] = [];
     if (dateRange?.from && dateRange?.to) {
-      const from = new Date(dateRange.from);
-      from.setHours(0, 0, 0, 0);
-      const to = new Date(dateRange.to);
-      to.setHours(23, 59, 59, 999);
+      // Use UTC day boundaries so "today" filter does not include yesterday
+      const from = new Date(dateRange.from + 'T00:00:00.000Z');
+      const to = new Date(dateRange.to + 'T23:59:59.999Z');
       orConditions.push(
         { checkIn: { gte: from, lte: to } },
         { checkOut: { gte: from, lte: to } },
         { checkIn: { lte: from }, checkOut: { gte: to } },
       );
+      // When filtering by date range, do not add extra CHECKED_IN so history shows only range
     } else if (opts?.scope === 'today') {
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
@@ -399,9 +399,11 @@ export class HotelService {
         { checkOut: { gte: today, lt: tomorrow } },
         { status: 'CHECKED_IN', checkIn: { lte: today }, checkOut: { gte: today } },
       );
+      orConditions.push({ status: 'CHECKED_IN', checkOut: { gte: today } });
+    } else {
+      // No date range: include currently in-house (CHECKED_IN) guests
+      orConditions.push({ status: 'CHECKED_IN', checkOut: { gte: today } });
     }
-    // Always include currently in-house (CHECKED_IN) guests in results
-    orConditions.push({ status: 'CHECKED_IN', checkOut: { gte: today } });
     if (orConditions.length > 0) {
       where.OR = orConditions;
     }
