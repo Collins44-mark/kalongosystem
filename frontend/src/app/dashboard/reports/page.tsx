@@ -6,8 +6,8 @@ import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
 import { isManagerLevel } from '@/lib/roles';
 
-type ReportType = 'revenue' | 'expenses' | 'pnl';
-type Sector = 'all' | 'bar' | 'restaurant' | 'hotel';
+type ReportType = 'sales' | 'expenses' | 'pnl';
+type Sector = 'all' | 'rooms' | 'bar' | 'restaurant';
 type PeriodPreset = 'day' | 'week' | 'month' | 'bydate';
 
 function toLocalDate(d: Date) {
@@ -21,7 +21,7 @@ export default function ReportsPage() {
   const [from, setFrom] = useState(() => toLocalDate(new Date()));
   const [to, setTo] = useState(() => toLocalDate(new Date()));
   const [sector, setSector] = useState<Sector>('all');
-  const [reportType, setReportType] = useState<ReportType>('revenue');
+  const [reportType, setReportType] = useState<ReportType>('sales');
   const [data, setData] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -50,28 +50,27 @@ export default function ReportsPage() {
       const params = new URLSearchParams();
       params.set('from', dateRange.from);
       params.set('to', dateRange.to);
-      if (reportType === 'revenue') {
-        const res = await api<{ bar?: { total?: number }; restaurant?: { total?: number }; hotel?: number; total?: number }>(`/reports/sales?${params}`, { token });
-        if (sector !== 'all') {
-          const bar = (res.bar as { total?: number })?.total ?? 0;
-          const restaurant = (res.restaurant as { total?: number })?.total ?? 0;
-          const hotel = (res.hotel as number) ?? 0;
-          const filtered =
-            sector === 'bar'
-              ? { bar: res.bar, restaurant: { total: 0 }, hotel: 0, total: bar }
-              : sector === 'restaurant'
-                ? { bar: { total: 0 }, restaurant: res.restaurant, hotel: 0, total: restaurant }
-                : { bar: { total: 0 }, restaurant: { total: 0 }, hotel, total: hotel };
-          setData(filtered as unknown as Record<string, unknown>);
-        } else {
-          setData(res as unknown as Record<string, unknown>);
-        }
+      if (reportType === 'sales') {
+        const txParams = new URLSearchParams();
+        txParams.set('period', 'bydate');
+        txParams.set('from', dateRange.from);
+        txParams.set('to', dateRange.to);
+        txParams.set('sector', sector);
+        txParams.set('page', '1');
+        txParams.set('pageSize', '50');
+        const res = await api<{ total: number; rows: unknown[] }>(`/finance/transactions?${txParams}`, { token });
+        setData(res as unknown as Record<string, unknown>);
       } else if (reportType === 'expenses') {
         const res = await api<{ expenses: unknown[]; total?: number }>(`/finance/expenses?${params}`, { token });
         setData(res as unknown as Record<string, unknown>);
       } else {
-        const res = await api<{ totalRevenue?: number; totalExpenses?: number; netProfit?: number }>(`/finance/dashboard?${params}`, { token });
-        setData(res as unknown as Record<string, unknown>);
+        const dash = await api<{ totalRevenue?: number; totalExpenses?: number; netProfit?: number }>(`/finance/dashboard?${params}`, { token });
+        const ovParams = new URLSearchParams();
+        ovParams.set('period', 'bydate');
+        ovParams.set('from', dateRange.from);
+        ovParams.set('to', dateRange.to);
+        const ov = await api<any>(`/finance/overview?${ovParams}`, { token }).catch(() => null);
+        setData({ ...(dash as any), overview: ov } as unknown as Record<string, unknown>);
       }
     } catch {
       setData(null);
@@ -93,7 +92,7 @@ export default function ReportsPage() {
     params.set('format', format);
     params.set('from', dateRange.from);
     params.set('to', dateRange.to);
-    if (reportType === 'revenue') params.set('sector', sector);
+    params.set('sector', sector);
 
     const res = await fetch(`${baseUrl}/reports/export?${params.toString()}`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -174,21 +173,19 @@ export default function ReportsPage() {
           </div>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {reportType === 'revenue' && (
-            <div>
-              <label className="block text-sm text-slate-600 mb-1">{t('reports.sector')}</label>
-              <select value={sector} onChange={(e) => setSector(e.target.value as Sector)} className="w-full px-3 py-2 border rounded-lg text-sm bg-white">
-                <option value="all">All</option>
-                <option value="bar">{t('bar.title')}</option>
-                <option value="restaurant">{t('restaurant.title')}</option>
-                <option value="hotel">{t('overview.hotelRooms')}</option>
-              </select>
-            </div>
-          )}
+          <div>
+            <label className="block text-sm text-slate-600 mb-1">{t('reports.sector')}</label>
+            <select value={sector} onChange={(e) => setSector(e.target.value as Sector)} className="w-full px-3 py-2 border rounded-lg text-sm bg-white">
+              <option value="all">All</option>
+              <option value="rooms">{t('overview.rooms')}</option>
+              <option value="bar">{t('bar.title')}</option>
+              <option value="restaurant">{t('restaurant.title')}</option>
+            </select>
+          </div>
           <div>
             <label className="block text-sm text-slate-600 mb-1">{t('reports.reportType')}</label>
             <select value={reportType} onChange={(e) => setReportType(e.target.value as ReportType)} className="w-full px-3 py-2 border rounded-lg text-sm bg-white">
-              <option value="revenue">{t('reports.revenue')}</option>
+              <option value="sales">{t('reports.revenue')}</option>
               <option value="expenses">{t('reports.expenses')}</option>
               <option value="pnl">{t('reports.pnl')}</option>
             </select>
@@ -213,15 +210,10 @@ export default function ReportsPage() {
 
       {data && (
         <div className="space-y-4">
-          {reportType === 'revenue' && (
+          {reportType === 'sales' && (
             <div className="bg-white border rounded-xl p-5 shadow-sm min-w-0">
               <h2 className="font-semibold text-slate-800 mb-4">{t('reports.revenue')} {t('reports.title')}</h2>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-                <div className="p-3 bg-slate-50 rounded-lg"><span className="text-slate-600">Bar</span><div className="font-semibold mt-0.5">{formatTzs((data.bar as { total?: number })?.total ?? 0)}</div></div>
-                <div className="p-3 bg-slate-50 rounded-lg"><span className="text-slate-600">Restaurant</span><div className="font-semibold mt-0.5">{formatTzs((data.restaurant as { total?: number })?.total ?? 0)}</div></div>
-                <div className="p-3 bg-slate-50 rounded-lg"><span className="text-slate-600">Hotel</span><div className="font-semibold mt-0.5">{formatTzs((data.hotel as number) ?? 0)}</div></div>
-                <div className="p-3 bg-teal-50 rounded-lg"><span className="text-slate-600">Total</span><div className="font-semibold text-teal-800 mt-0.5">{formatTzs((data.total as number) ?? 0)}</div></div>
-              </div>
+              <p className="text-sm text-slate-600">{(data.rows as unknown[])?.length ?? 0} transaction(s) • Total rows: {(data.total as number) ?? 0}</p>
             </div>
           )}
           {reportType === 'expenses' && (

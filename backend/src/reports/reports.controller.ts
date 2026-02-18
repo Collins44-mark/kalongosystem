@@ -95,7 +95,7 @@ export class ReportsController {
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
-    const rt = (reportType ?? 'revenue').toLowerCase();
+    const rt = (reportType ?? 'sales').toLowerCase();
     const fmt = (format === 'xlsx' || format === 'pdf' ? format : 'csv').toLowerCase();
     const sec = (sector ?? 'all').toLowerCase();
     let range = this.toDateRange(from, to);

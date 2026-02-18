@@ -399,7 +399,7 @@ export class FinanceService {
     return { page, pageSize, total, rows };
   }
 
-  private async collectTransactions(
+  async collectTransactions(
     businessId: string,
     from: Date,
     to: Date,
