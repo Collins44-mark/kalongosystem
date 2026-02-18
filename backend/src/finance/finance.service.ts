@@ -742,21 +742,24 @@ function formatPaymentModeLabel(mode: string) {
   return `${base.replace(/_/g, ' ')}${suffix}`;
 }
 
-function truncateToWidth(doc: any, text: string, maxWidth: number) {
+function fitFontSize(doc: any, text: string, maxWidth: number, baseSize: number, minSize: number) {
   const t = String(text ?? '');
-  if (maxWidth <= 0) return '';
-  if (doc.widthOfString(t) <= maxWidth) return t;
-  const ellipsis = '…';
-  const target = Math.max(0, maxWidth - doc.widthOfString(ellipsis));
-  let lo = 0;
-  let hi = t.length;
-  while (lo < hi) {
-    const mid = Math.ceil((lo + hi) / 2);
-    const slice = t.slice(0, mid);
-    if (doc.widthOfString(slice) <= target) lo = mid;
-    else hi = mid - 1;
+  let size = baseSize;
+  doc.fontSize(size);
+  while (size > minSize && doc.widthOfString(t) > maxWidth) {
+    size -= 0.5;
+    doc.fontSize(size);
   }
-  return t.slice(0, Math.max(0, lo)) + ellipsis;
+  return size;
+}
+
+function drawCellText(doc: any, text: string, x: number, y: number, width: number, opts: { align: 'left' | 'right' | 'center'; baseSize: number; minSize: number; font?: string }) {
+  const t = String(text ?? '');
+  if (opts.font) doc.font(opts.font);
+  const size = fitFontSize(doc, t, Math.max(1, width), opts.baseSize, opts.minSize);
+  // Vertically center text in a 24px row-ish baseline (caller controls y)
+  doc.fontSize(size);
+  doc.text(t, x, y, { width, align: opts.align, lineBreak: false });
 }
 
 async function renderFinanceTransactionsPdf(input: {
@@ -844,8 +847,8 @@ async function renderFinanceTransactionsPdf(input: {
       sy += 16;
 
       const kv = (label: string, value: string) => {
-        doc.font('Helvetica-Bold').fontSize(10).fillColor('#000').text(label, labelX, sy);
-        doc.font('Helvetica').fontSize(10).fillColor('#000').text(value, labelX, sy, { width: boxW - boxPadding * 2, align: 'right' });
+        doc.font('Helvetica').fontSize(10).fillColor('#000').text(label, labelX, sy);
+        doc.font('Helvetica-Bold').fontSize(10).fillColor('#000').text(value, labelX, sy, { width: boxW - boxPadding * 2, align: 'right' });
         sy += lineGap;
       };
 
@@ -868,17 +871,20 @@ async function renderFinanceTransactionsPdf(input: {
       // Transactions table
       // Column widths tuned to avoid wrapping on tablet/print
       const fixed = {
-        date: 55, // small fixed
-        sector: 55, // small fixed
-        net: 70, // medium
-        vat: 70, // medium
-        gross: 75, // medium
-        mode: 95, // medium fixed (must not wrap)
+        date: 70, // fixed small width (DD/MM/YYYY)
+        sector: 85, // medium (Rooms/Restaurant)
+        net: 80, // medium
+        vat: 75, // medium
+        gross: 85, // medium
+        mode: 120, // medium fixed (must not wrap)
       };
-      const reference = Math.max(90, pageWidth - (fixed.date + fixed.sector + fixed.net + fixed.vat + fixed.gross + fixed.mode));
+      const reference = Math.max(
+        120,
+        pageWidth - (fixed.date + fixed.sector + fixed.net + fixed.vat + fixed.gross + fixed.mode),
+      );
       const colW = { ...fixed, reference };
-      const padX = 6;
-      const rowH = 22;
+      const padX = 8;
+      const rowH = 24;
       const bottomLimit = doc.page.height - doc.page.margins.bottom - 30;
 
       const drawHeaderRow = () => {
@@ -886,7 +892,7 @@ async function renderFinanceTransactionsPdf(input: {
         doc.rect(x, y, pageWidth, rowH).fillColor('#f1f5f9').fill();
         doc.restore();
         doc.rect(x, y, pageWidth, rowH).strokeColor('#d0d7de').lineWidth(1).stroke();
-        doc.font('Helvetica-Bold').fontSize(9).fillColor('#000');
+        doc.font('Helvetica-Bold').fontSize(10).fillColor('#000');
         let cx = x;
         doc.text('Date', cx + padX, y + 7, { width: colW.date - padX * 2, align: 'left' });
         cx += colW.date;
@@ -905,7 +911,7 @@ async function renderFinanceTransactionsPdf(input: {
       };
 
       drawHeaderRow();
-      doc.font('Helvetica').fontSize(9).fillColor('#000');
+      doc.font('Helvetica').fontSize(10).fillColor('#000');
 
       const drawRow = (r: any, idx: number) => {
         // Alternating background
@@ -918,20 +924,20 @@ async function renderFinanceTransactionsPdf(input: {
         doc.rect(x, y, pageWidth, rowH).strokeColor('#e5e7eb').lineWidth(1).stroke();
         let cx = x;
         const dateTxt = formatDdMmYyyy(r.date);
-        doc.text(truncateToWidth(doc, dateTxt, colW.date - padX * 2), cx + padX, y + 7, { width: colW.date - padX * 2, align: 'left' });
+        drawCellText(doc, dateTxt, cx + padX, y + 7, colW.date - padX * 2, { align: 'left', baseSize: 10, minSize: 9, font: 'Helvetica' });
         cx += colW.date;
-        doc.text(truncateToWidth(doc, String(r.reference || ''), colW.reference - padX * 2), cx + padX, y + 7, { width: colW.reference - padX * 2, align: 'left' });
+        drawCellText(doc, String(r.reference || ''), cx + padX, y + 7, colW.reference - padX * 2, { align: 'left', baseSize: 10, minSize: 8, font: 'Helvetica' });
         cx += colW.reference;
-        doc.text(truncateToWidth(doc, formatSectorLabel(r.sector), colW.sector - padX * 2), cx + padX, y + 7, { width: colW.sector - padX * 2, align: 'left' });
+        drawCellText(doc, formatSectorLabel(r.sector), cx + padX, y + 7, colW.sector - padX * 2, { align: 'left', baseSize: 10, minSize: 9, font: 'Helvetica' });
         cx += colW.sector;
-        doc.text(truncateToWidth(doc, formatTsh(r.net), colW.net - padX * 2), cx + padX, y + 7, { width: colW.net - padX * 2, align: 'right' });
+        drawCellText(doc, formatTsh(r.net), cx + padX, y + 7, colW.net - padX * 2, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
         cx += colW.net;
-        doc.text(truncateToWidth(doc, formatTsh(r.vat), colW.vat - padX * 2), cx + padX, y + 7, { width: colW.vat - padX * 2, align: 'right' });
+        drawCellText(doc, formatTsh(r.vat), cx + padX, y + 7, colW.vat - padX * 2, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
         cx += colW.vat;
-        doc.text(truncateToWidth(doc, formatTsh(r.gross), colW.gross - padX * 2), cx + padX, y + 7, { width: colW.gross - padX * 2, align: 'right' });
+        drawCellText(doc, formatTsh(r.gross), cx + padX, y + 7, colW.gross - padX * 2, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
         cx += colW.gross;
         const modeLabel = formatPaymentModeLabel(String(r.paymentMode || ''));
-        doc.text(truncateToWidth(doc, modeLabel, colW.mode - padX * 2), cx + padX, y + 7, { width: colW.mode - padX * 2, align: 'center' });
+        drawCellText(doc, modeLabel, cx + padX, y + 7, colW.mode - padX * 2, { align: 'center', baseSize: 10, minSize: 8, font: 'Helvetica' });
         y += rowH;
       };
 
@@ -947,29 +953,29 @@ async function renderFinanceTransactionsPdf(input: {
       }
 
       // Totals row (accounting touch)
-      const totalsRowH = 24;
+      const totalsRowH = 28;
       if (y + totalsRowH > bottomLimit) {
         doc.addPage();
         y = doc.page.margins.top;
         drawHeaderRow();
       }
       // Top border above totals row
-      doc.moveTo(x, y).lineTo(x + pageWidth, y).lineWidth(1).strokeColor('#111827').stroke();
+      doc.moveTo(x, y).lineTo(x + pageWidth, y).lineWidth(2).strokeColor('#111827').stroke();
       doc.strokeColor('#000');
       doc.save();
-      doc.rect(x, y, pageWidth, totalsRowH).fillColor('#f1f5f9').fill();
+      doc.rect(x, y, pageWidth, totalsRowH).fillColor('#e5e7eb').fill();
       doc.restore();
       doc.rect(x, y, pageWidth, totalsRowH).strokeColor('#d0d7de').lineWidth(1).stroke();
 
-      doc.font('Helvetica-Bold').fontSize(10).fillColor('#000');
+      doc.font('Helvetica-Bold').fontSize(11).fillColor('#000');
       // Label spans first 3 columns
-      doc.text('TOTALS', x + padX, y + 7, { width: colW.date + colW.reference + colW.sector - padX * 2, align: 'left' });
+      doc.text('TOTALS', x + padX, y + 8, { width: colW.date + colW.reference + colW.sector - padX * 2, align: 'left' });
       let cx = x + colW.date + colW.reference + colW.sector;
-      doc.text(formatTsh(input.summary.totalNetSales), cx + padX, y + 7, { width: colW.net - padX * 2, align: 'right' });
+      doc.text(formatTsh(input.summary.totalNetSales), cx + padX, y + 8, { width: colW.net - padX * 2, align: 'right' });
       cx += colW.net;
-      doc.text(formatTsh(input.summary.totalVat), cx + padX, y + 7, { width: colW.vat - padX * 2, align: 'right' });
+      doc.text(formatTsh(input.summary.totalVat), cx + padX, y + 8, { width: colW.vat - padX * 2, align: 'right' });
       cx += colW.vat;
-      doc.text(formatTsh(input.summary.totalGrossSales), cx + padX, y + 7, { width: colW.gross - padX * 2, align: 'right' });
+      doc.text(formatTsh(input.summary.totalGrossSales), cx + padX, y + 8, { width: colW.gross - padX * 2, align: 'right' });
       // payment mode column left blank on totals
       y += totalsRowH;
 
