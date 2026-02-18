@@ -204,32 +204,6 @@ export default function OverviewPage() {
           <button onClick={() => fetchOverview()} className="px-3 py-1.5 text-sm text-teal-600 hover:underline">
             {t('common.refresh')}
           </button>
-          <button
-            onClick={() => {
-              const rows = [
-                ['Overview', ''],
-                [t('overview.totalRooms'), String(roomSummary.total)],
-                [t('overview.occupied'), String(roomSummary.occupied)],
-                [t('overview.vacant'), String(roomSummary.vacant)],
-                [t('overview.totalRevenue'), formatTzs(financeData.totalRevenue)],
-                [t('overview.totalExpenses'), formatTzs(financeData.totalExpenses)],
-                [t('overview.netProfit'), formatTzs(financeData.netProfit)],
-                [t('overview.itemsBelowMin'), String(lowStockCount)],
-                [t('overview.barItemsBelowMin'), String(displayData.inventoryAlerts.barLowStockCount ?? 0)],
-              ];
-              const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `overview-${toLocalDateString(new Date())}.csv`;
-              a.click();
-              URL.revokeObjectURL(url);
-            }}
-            className="px-3 py-1.5 text-sm text-teal-600 hover:underline"
-          >
-            {t('reports.download')}
-          </button>
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value as FilterOption)}
@@ -321,18 +295,15 @@ export default function OverviewPage() {
         </div>
         </div>
 
-      {/* Inventory & Business Health */}
+      {/* Inventory & Business Health - red circle shows bar sector items below minimum (linked to Bar) */}
       <div className="bg-white rounded-xl shadow-md border border-slate-100 p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-full bg-red-500 text-white flex items-center justify-center font-bold text-lg shadow-sm">
-            {lowStockCount}
+            {displayData.inventoryAlerts.barLowStockCount ?? 0}
           </div>
           <div>
             <h3 className="font-semibold text-slate-800">{t('overview.inventoryAlerts')}</h3>
-            <p className="text-sm text-slate-500">{t('overview.itemsBelowMin')}</p>
-            <p className="text-sm text-slate-600 mt-0.5">
-              {t('overview.barItemsBelowMin')}: {displayData.inventoryAlerts.barLowStockCount ?? 0}
-            </p>
+            <p className="text-sm text-slate-500">{t('overview.barItemsBelowMin')}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
