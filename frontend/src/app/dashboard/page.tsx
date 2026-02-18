@@ -337,23 +337,6 @@ export default function OverviewPage() {
         </div>
         </div>
 
-      {/* Bar alerts detail - bar items below minimum */}
-      {(displayData.inventoryAlerts.barLowStockCount ?? 0) > 0 && (
-        <div className="bg-white rounded-xl shadow-md border border-slate-100 p-5">
-            <h3 className="font-semibold text-slate-800 mb-3">{t('overview.barAlerts')}</h3>
-            <div className="space-y-2">
-              {(displayData.inventoryAlerts.barLowStock ?? []).map((item) => (
-                <div
-                  key={item.id}
-                  className={`text-sm py-2 ${item.quantity === 0 ? 'text-red-600' : 'text-amber-600'}`}
-                >
-                  {item.name}: {item.quantity} ({t('common.min')}: {item.minQuantity})
-                </div>
-              ))}
-            </div>
-          </div>
-      )}
-
       {/* Performance Graph */}
       <div className="bg-white rounded-xl shadow-md border border-slate-100 p-5">
         <h3 className="font-semibold text-slate-800 mb-4">{t('overview.performanceBySector')}</h3>
