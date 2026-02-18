@@ -77,6 +77,13 @@ export default function FinancePage() {
   const [savingExpense, setSavingExpense] = useState(false);
   const [selectedExpenseCategory, setSelectedExpenseCategory] = useState<string | null>(null);
 
+  // Business expectation: "Net revenue" = revenue after expenses (not VAT-only net).
+  const netRevenueAfterExpenses = useMemo(() => {
+    const gross = overview?.totals?.grossSales ?? 0;
+    const exp = totalExpenses ?? 0;
+    return gross - exp;
+  }, [overview?.totals?.grossSales, totalExpenses]);
+
   if (!canAccess) {
     return (
       <div>
@@ -440,7 +447,7 @@ export default function FinancePage() {
                 className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
               >
                 <div className="text-sm text-slate-500">{t('finance.netRevenue')}</div>
-                <div className="text-xl font-semibold">{formatTzs(overview.totals.netRevenue)}</div>
+                <div className="text-xl font-semibold">{formatTzs(netRevenueAfterExpenses)}</div>
                 <div className="text-xs text-slate-500 mt-1">{vatEnabled ? t('finance.beforeVat') : t('finance.vatDisabled')}</div>
               </button>
             </div>

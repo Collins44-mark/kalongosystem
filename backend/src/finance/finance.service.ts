@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
-import ExcelJS from 'exceljs';
-import PDFDocument from 'pdfkit';
+import ExcelJS = require('exceljs');
+import PDFDocument = require('pdfkit');
 
 @Injectable()
 export class FinanceService {
