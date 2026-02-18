@@ -221,6 +221,8 @@
   "bar.added": "Added",
   "bar.after": "After",
   "bar.total": "Total",
+  "bar.subtotal": "Subtotal",
+  "bar.actions": "Actions",
   "bar.myOrders": "My order history",
   "bar.orderNo": "Order No.",
   "bar.orderHistory": "Order History",

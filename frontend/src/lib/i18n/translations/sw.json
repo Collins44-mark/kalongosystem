@@ -221,6 +221,8 @@
   "bar.added": "Imeongezwa",
   "bar.after": "Baada",
   "bar.total": "Jumla",
+  "bar.subtotal": "Jumla ndogo",
+  "bar.actions": "Vitendo",
   "bar.myOrders": "Historia ya ordera zangu",
   "bar.orderNo": "Namba ya Ordera",
   "bar.orderHistory": "Historia ya Ordera",

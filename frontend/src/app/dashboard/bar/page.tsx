@@ -77,6 +77,15 @@ export default function BarPage() {
   const [ordersTo, setOrdersTo] = useState('');
   const [autoTick, setAutoTick] = useState(0);
 
+  // Lock body scroll when restock or restock-detail modal is open so background does not move
+  useEffect(() => {
+    if (showRestock || selectedRestock) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = prev; };
+    }
+  }, [showRestock, selectedRestock]);
+
   // Refresh data when user returns to tab or when another tab/action signals an update (e.g. order created).
   useEffect(() => {
     if (!token) return;
@@ -557,37 +566,58 @@ export default function BarPage() {
         </div>
         <div>
           <h2 className="font-medium mb-2">{t('bar.order')}</h2>
-          <div className="bg-white border rounded p-4 space-y-2">
-            {cart.map((c) => (
-              <div key={c.itemId} className="flex justify-between items-center gap-2">
-                <span className="min-w-0 truncate">{c.name}</span>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); updateCartQty(c.itemId, -1); }}
-                    className="w-8 h-8 rounded border border-slate-300 bg-white text-slate-700 font-medium hover:bg-slate-50"
-                    aria-label={t('common.remove')}
-                  >
-                    −
-                  </button>
-                  <span className="w-8 text-center text-sm font-medium">{c.qty}</span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const item = items.find((i) => i.id === c.itemId);
-                      if (item) addToCart(item);
-                    }}
-                    className="w-8 h-8 rounded border border-slate-300 bg-white text-slate-700 font-medium hover:bg-slate-50"
-                    aria-label={t('bar.addItem')}
-                  >
-                    +
-                  </button>
-                </div>
-                <button type="button" onClick={() => removeFromCart(c.itemId)} className="text-red-600 text-sm whitespace-nowrap">{t('common.remove')}</button>
-              </div>
-            ))}
-            {cart.length === 0 && <p className="text-slate-500 text-sm">{t('common.noItems')}</p>}
+          <div className="bg-white border rounded overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b">
+                <tr>
+                  <th className="text-left p-3 font-medium">{t('bar.itemName')}</th>
+                  <th className="text-right p-3 font-medium">{t('bar.itemPrice')}</th>
+                  <th className="text-center p-3 font-medium">{t('bar.itemQuantity')}</th>
+                  <th className="text-right p-3 font-medium">{t('bar.subtotal')}</th>
+                  <th className="p-3 font-medium w-32">{t('bar.actions')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cart.length === 0 && (
+                  <tr><td colSpan={5} className="p-4 text-slate-500 text-center">{t('common.noItems')}</td></tr>
+                )}
+                {cart.map((c) => (
+                  <tr key={c.itemId} className="border-t">
+                    <td className="p-3 font-medium">{c.name}</td>
+                    <td className="p-3 text-right">{c.price.toLocaleString()}</td>
+                    <td className="p-3">
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); updateCartQty(c.itemId, -1); }}
+                          className="w-8 h-8 rounded border border-slate-300 bg-white text-slate-700 font-medium hover:bg-slate-50"
+                          aria-label={t('common.remove')}
+                        >
+                          −
+                        </button>
+                        <span className="w-8 text-center font-medium">{c.qty}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const item = items.find((i) => i.id === c.itemId);
+                            if (item) addToCart(item);
+                          }}
+                          className="w-8 h-8 rounded border border-slate-300 bg-white text-slate-700 font-medium hover:bg-slate-50"
+                          aria-label={t('bar.addItem')}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </td>
+                    <td className="p-3 text-right font-medium">{(c.price * c.qty).toLocaleString()}</td>
+                    <td className="p-3">
+                      <button type="button" onClick={() => removeFromCart(c.itemId)} className="text-red-600 text-sm whitespace-nowrap">{t('common.remove')}</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
           {cart.length > 0 && (
             <>
@@ -737,8 +767,8 @@ export default function BarPage() {
       )}
 
       {showRestock && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded max-w-2xl w-full max-h-[80vh] overflow-auto p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto overscroll-contain">
+          <div className="bg-white rounded max-w-2xl w-full max-h-[85vh] overflow-y-auto overscroll-contain p-4 my-4 shrink-0">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-medium">{t('bar.createRestock')}</h3>
               <button onClick={() => setShowRestock(false)} className="text-slate-500">✕</button>
@@ -777,8 +807,8 @@ export default function BarPage() {
       )}
 
       {selectedRestock && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded max-w-2xl w-full max-h-[80vh] overflow-auto p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto overscroll-contain">
+          <div className="bg-white rounded max-w-2xl w-full max-h-[85vh] overflow-y-auto overscroll-contain p-4 my-4 shrink-0">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-medium">{t('bar.restockDetails')}</h3>
               <button onClick={() => setSelectedRestock(null)} className="text-slate-500">✕</button>
