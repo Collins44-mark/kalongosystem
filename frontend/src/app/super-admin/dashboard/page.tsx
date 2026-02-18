@@ -10,10 +10,19 @@ type BusinessRow = {
   id: string;
   name: string;
   businessId: string;
+  businessType: string;
   createdAt: string;
   status: 'ACTIVE' | 'SUSPENDED';
   totalUsers: number;
 };
+
+function businessTypeLabel(t: string): string {
+  if (t === 'HOTEL') return 'Hotel';
+  if (t === 'LODGE') return 'Lodge';
+  if (t === 'BAR') return 'Bar';
+  if (t === 'RESTAURANT') return 'Restaurant';
+  return t.charAt(0) + (t.slice(1) || '').toLowerCase();
+}
 
 export default function SuperAdminDashboardPage() {
   const router = useRouter();
@@ -193,6 +202,7 @@ export default function SuperAdminDashboardPage() {
                 <thead className="bg-slate-50 border-b">
                   <tr className="text-left text-slate-600">
                     <th className="p-3 font-medium">Business Name</th>
+                    <th className="p-3 font-medium">Type</th>
                     <th className="p-3 font-medium">Business ID</th>
                     <th className="p-3 font-medium">Created</th>
                     <th className="p-3 font-medium">Status</th>
@@ -204,6 +214,7 @@ export default function SuperAdminDashboardPage() {
                   {rows.map((b) => (
                     <tr key={b.id} className="hover:bg-slate-50">
                       <td className="p-3">{b.name}</td>
+                      <td className="p-3">{businessTypeLabel(b.businessType || '')}</td>
                       <td className="p-3 font-mono text-xs">{b.businessId}</td>
                       <td className="p-3 whitespace-nowrap">{new Date(b.createdAt).toLocaleString()}</td>
                       <td className="p-3">
@@ -220,7 +231,7 @@ export default function SuperAdminDashboardPage() {
                     </tr>
                   ))}
                   {rows.length === 0 && (
-                    <tr><td className="p-3 text-slate-500" colSpan={6}>No businesses</td></tr>
+                    <tr><td className="p-3 text-slate-500" colSpan={7}>No businesses</td></tr>
                   )}
                 </tbody>
               </table>
