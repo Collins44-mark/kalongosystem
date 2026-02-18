@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
@@ -43,7 +43,7 @@ export default function ReportsPage() {
     return { from, to };
   }, [periodPreset, from, to]);
 
-  async function loadReport() {
+  const loadReport = useCallback(async () => {
     if (!token || !canView) return;
     setLoading(true);
     try {
@@ -78,7 +78,12 @@ export default function ReportsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [token, canView, reportType, sector, dateRange.from, dateRange.to]);
+
+  // Auto-load report on mount and when filters change so sector/all and data are loaded
+  useEffect(() => {
+    if (token && canView) loadReport();
+  }, [token, canView, loadReport]);
 
   async function download(format: 'csv' | 'xlsx' | 'pdf') {
     if (!token) return;
@@ -192,23 +197,22 @@ export default function ReportsPage() {
         <button onClick={loadReport} disabled={loading} className="px-5 py-2.5 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-50">
           {loading ? t('common.loading') : t('reports.load')}
         </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm text-slate-600">{t('reports.download')}:</span>
+          <button onClick={() => download('csv')} className="px-4 py-2 text-sm bg-slate-100 rounded-lg hover:bg-slate-200 font-medium">
+            {t('reports.exportCsv')}
+          </button>
+          <button onClick={() => download('xlsx')} className="px-4 py-2 text-sm bg-slate-100 rounded-lg hover:bg-slate-200 font-medium">
+            {t('reports.exportExcel')}
+          </button>
+          <button onClick={() => download('pdf')} className="px-4 py-2 text-sm bg-slate-100 rounded-lg hover:bg-slate-200 font-medium">
+            {t('reports.exportPdf')}
+          </button>
+        </div>
       </div>
 
       {data && (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-3 bg-white border rounded-xl p-4 shadow-sm">
-            <span className="text-sm text-slate-600">{t('reports.download')}:</span>
-            <button onClick={() => download('csv')} className="px-4 py-2 text-sm bg-slate-100 rounded-lg hover:bg-slate-200 font-medium">
-              {t('reports.exportCsv')}
-            </button>
-            <button onClick={() => download('xlsx')} className="px-4 py-2 text-sm bg-slate-100 rounded-lg hover:bg-slate-200 font-medium">
-              {t('reports.exportExcel')}
-            </button>
-            <button onClick={() => download('pdf')} className="px-4 py-2 text-sm bg-slate-100 rounded-lg hover:bg-slate-200 font-medium">
-              {t('reports.exportPdf')}
-            </button>
-          </div>
-
           {reportType === 'revenue' && (
             <div className="bg-white border rounded-xl p-5 shadow-sm min-w-0">
               <h2 className="font-semibold text-slate-800 mb-4">{t('reports.revenue')} {t('reports.title')}</h2>

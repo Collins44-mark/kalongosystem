@@ -20,7 +20,7 @@ export class OverviewService {
       this.hotel.getRoomSummary(businessId, bid),
       this.hotel.getRooms(businessId),
       this.inventory.getLowStock(businessId, bid),
-      this.bar.getLowStock(businessId, 'main'), // bar items are typically on main; ensures overview matches bar page
+      this.bar.getLowStock(businessId, bid),
       this.inventory.getTotalValueAtRisk(businessId, bid),
     ]);
 

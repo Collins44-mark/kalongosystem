@@ -21,9 +21,10 @@ export class OverviewController {
     @CurrentUser() user: any,
     @Query('period') period: 'today' | 'week' | 'month' = 'today',
   ) {
+    const branchId = user.branchId || 'main';
     return this.overview.getDashboard(
       user.businessId,
-      user.branchId,
+      branchId,
       period,
     );
   }

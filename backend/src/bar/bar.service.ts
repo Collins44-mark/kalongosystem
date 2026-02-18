@@ -42,12 +42,12 @@ export class BarService {
     // Reuse getItems() to ensure consistency with bar page display
     const allItems = await this.getItems(businessId, bid);
     
-    // Filter using same logic as frontend: stock > 0 && min != null && stock <= min
+    // Low stock: minQuantity set and (quantity <= minQuantity or out of stock)
     const low = allItems
       .filter((item) => {
         const stock = item.stock ?? 0;
         const min = item.minQuantity ?? null;
-        return stock > 0 && min != null && stock <= min;
+        return min != null && (stock <= min || stock === 0);
       })
       .map((item) => ({
         id: item.id,

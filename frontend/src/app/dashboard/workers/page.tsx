@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
@@ -17,7 +18,8 @@ function formatTzs(n: number) {
 }
 
 export default function WorkersPage() {
-  const { token, user } = useAuth();
+  const router = useRouter();
+  const { token, user, logout } = useAuth();
   const { t } = useTranslation();
   const searchQuery = useSearch((s) => s.query);
   const [workers, setWorkers] = useState<Worker[]>([]);
@@ -56,7 +58,10 @@ export default function WorkersPage() {
 
   async function handleAddWorker(e: React.FormEvent) {
     e.preventDefault();
-    if (!token || !addName.trim()) return;
+    if (!token || !addName.trim()) {
+      if (!token) notifyError('Session expired. Please log in again.');
+      return;
+    }
     const salary = Number(addSalary);
     if (!Number.isFinite(salary) || salary < 0) {
       notifyError(t('common.fillAllFields'));
@@ -81,7 +86,13 @@ export default function WorkersPage() {
       setShowAdd(false);
       load();
     } catch (err) {
-      notifyError((err as Error)?.message ?? 'Failed to add worker');
+      const status = (err as Error & { status?: number })?.status;
+      const message = (err as Error)?.message ?? 'Failed to add worker';
+      notifyError(message);
+      if (status === 401) {
+        logout();
+        router.replace('/login');
+      }
     } finally {
       setSaving(false);
     }

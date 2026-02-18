@@ -8,6 +8,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { IsIn, IsNumber, IsString, Min } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 class CreateWorkerDto {
   @IsString()
@@ -17,6 +18,7 @@ class CreateWorkerDto {
   sector: string;
   @IsString()
   role: string;
+  @Transform(({ value }) => (typeof value === 'string' ? Number(value) : value))
   @IsNumber()
   @Min(0)
   monthlySalary: number;
@@ -44,14 +46,16 @@ export class WorkersController {
     @CurrentUser() user: any,
     @Query('sector') sector?: string,
   ) {
-    return this.workers.getWorkers(user.businessId, user.branchId, sector);
+    const branchId = user.branchId || 'main';
+    return this.workers.getWorkers(user.businessId, branchId, sector);
   }
 
   @Post()
   async createWorker(@CurrentUser() user: any, @Body() dto: CreateWorkerDto) {
+    const branchId = user.branchId || 'main';
     return this.workers.createWorker(
       user.businessId,
-      user.branchId,
+      branchId,
       dto,
       user.sub,
     );

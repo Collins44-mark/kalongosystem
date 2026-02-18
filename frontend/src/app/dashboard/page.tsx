@@ -204,6 +204,32 @@ export default function OverviewPage() {
           <button onClick={() => fetchOverview()} className="px-3 py-1.5 text-sm text-teal-600 hover:underline">
             {t('common.refresh')}
           </button>
+          <button
+            onClick={() => {
+              const rows = [
+                ['Overview', ''],
+                [t('overview.totalRooms'), String(roomSummary.total)],
+                [t('overview.occupied'), String(roomSummary.occupied)],
+                [t('overview.vacant'), String(roomSummary.vacant)],
+                [t('overview.totalRevenue'), formatTzs(financeData.totalRevenue)],
+                [t('overview.totalExpenses'), formatTzs(financeData.totalExpenses)],
+                [t('overview.netProfit'), formatTzs(financeData.netProfit)],
+                [t('overview.itemsBelowMin'), String(lowStockCount)],
+                [t('overview.barItemsBelowMin'), String(displayData.inventoryAlerts.barLowStockCount ?? 0)],
+              ];
+              const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `overview-${toLocalDateString(new Date())}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="px-3 py-1.5 text-sm text-teal-600 hover:underline"
+          >
+            {t('reports.download')}
+          </button>
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value as FilterOption)}
@@ -246,6 +272,32 @@ export default function OverviewPage() {
           <RoomCard title={t('overview.underMaintenance')} value={roomSummary.underMaintenance} variant="maintenance" />
         </div>
 
+      {/* Room list - visible when we have rooms */}
+      {rooms.length > 0 && (
+        <div className="bg-white rounded-xl shadow-md border border-slate-100 overflow-hidden">
+          <div className="p-4 border-b border-slate-100">
+            <h2 className="font-semibold text-slate-800">{t('overview.rooms')}</h2>
+          </div>
+          <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+            {rooms.map((r) => (
+              <div
+                key={r.id}
+                className={`rounded-lg border-2 p-3 text-sm ${
+                  r.status === 'OCCUPIED' ? 'border-green-400 bg-green-50' :
+                  r.status === 'VACANT' ? 'border-slate-300 bg-slate-50' :
+                  r.status === 'RESERVED' ? 'border-amber-400 bg-amber-50' :
+                  'border-red-400 bg-red-50'
+                }`}
+              >
+                <div className="font-medium text-slate-800">{r.roomNumber}</div>
+                <div className="text-slate-600 capitalize">{r.roomName || r.category?.name || '-'}</div>
+                <div className="text-xs mt-0.5 capitalize text-slate-500">{r.status.replace('_', ' ')}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Sales Container */}
       <div className="bg-white rounded-xl shadow-md border border-slate-100 overflow-hidden">
         <div className="p-4 border-b border-slate-100">
@@ -278,11 +330,9 @@ export default function OverviewPage() {
           <div>
             <h3 className="font-semibold text-slate-800">{t('overview.inventoryAlerts')}</h3>
             <p className="text-sm text-slate-500">{t('overview.itemsBelowMin')}</p>
-            {(displayData.inventoryAlerts.barLowStockCount ?? 0) > 0 && (
-              <p className="text-sm text-amber-700 font-medium mt-0.5">
-                {t('overview.barItemsBelowMin')}: {displayData.inventoryAlerts.barLowStockCount}
-              </p>
-            )}
+            <p className="text-sm text-slate-600 mt-0.5">
+              {t('overview.barItemsBelowMin')}: {displayData.inventoryAlerts.barLowStockCount ?? 0}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-3">

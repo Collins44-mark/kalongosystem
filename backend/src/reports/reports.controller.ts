@@ -33,9 +33,10 @@ export class ReportsController {
     @Query('to') to?: string,
   ) {
     const range = this.toDateRange(from, to);
+    const branchId = user.branchId || 'main';
     return this.reports.getSalesReport(
       user.businessId,
-      user.branchId,
+      branchId,
       range?.from,
       range?.to,
     );
@@ -103,9 +104,10 @@ export class ReportsController {
       range = this.toDateRange(today, today);
     }
 
+    const branchId = user.branchId || 'main';
     const payload = await this.reports.exportReport(
       user.businessId,
-      user.branchId,
+      branchId,
       rt,
       fmt,
       sec,
