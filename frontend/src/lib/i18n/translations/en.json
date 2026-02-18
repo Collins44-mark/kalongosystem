@@ -340,9 +340,9 @@
 
   "reports.title": "Reports",
   "reports.onlyManagers": "Only managers can access reports.",
-  "reports.revenue": "Revenue",
-  "reports.expenses": "Expenses",
-  "reports.pnl": "P&L",
+  "reports.revenue": "Sales Report",
+  "reports.expenses": "Expense Report",
+  "reports.pnl": "Profit & Loss",
   "reports.load": "Load Report",
   "reports.exportCsv": "Export CSV",
   "reports.exportExcel": "Export Excel",

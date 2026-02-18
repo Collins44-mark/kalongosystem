@@ -212,20 +212,20 @@ export default function ReportsPage() {
         <div className="space-y-4">
           {reportType === 'sales' && (
             <div className="bg-white border rounded-xl p-5 shadow-sm min-w-0">
-              <h2 className="font-semibold text-slate-800 mb-4">{t('reports.revenue')} {t('reports.title')}</h2>
+              <h2 className="font-semibold text-slate-800 mb-4">{t('reports.revenue')}</h2>
               <p className="text-sm text-slate-600">{(data.rows as unknown[])?.length ?? 0} transaction(s) • Total rows: {(data.total as number) ?? 0}</p>
             </div>
           )}
           {reportType === 'expenses' && (
             <div className="bg-white border rounded-xl p-5 shadow-sm min-w-0">
-              <h2 className="font-semibold text-slate-800 mb-4">{t('reports.expenses')} {t('reports.title')}</h2>
+              <h2 className="font-semibold text-slate-800 mb-4">{t('reports.expenses')}</h2>
               <p className="text-lg font-semibold">{formatTzs((data.total as number) ?? 0)}</p>
               <p className="text-sm text-slate-600 mt-1">{(data.expenses as unknown[])?.length ?? 0} expense(s)</p>
             </div>
           )}
           {reportType === 'pnl' && (
             <div className="bg-white border rounded-xl p-5 shadow-sm min-w-0">
-              <h2 className="font-semibold text-slate-800 mb-4">P&L {t('reports.title')}</h2>
+              <h2 className="font-semibold text-slate-800 mb-4">{t('reports.pnl')}</h2>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                 <div className="p-3 bg-slate-50 rounded-lg"><span className="text-slate-600">Revenue</span><div className="font-semibold mt-0.5">{formatTzs((data.totalRevenue as number) ?? 0)}</div></div>
                 <div className="p-3 bg-slate-50 rounded-lg"><span className="text-slate-600">Expenses</span><div className="font-semibold mt-0.5">{formatTzs((data.totalExpenses as number) ?? 0)}</div></div>

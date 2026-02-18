@@ -340,9 +340,9 @@
 
   "reports.title": "Ripoti",
   "reports.onlyManagers": "Wasimamizi tu wanaweza kufikia ripoti.",
-  "reports.revenue": "Mapato",
-  "reports.expenses": "Matumizi",
-  "reports.pnl": "P&L",
+  "reports.revenue": "Ripoti ya Mauzo",
+  "reports.expenses": "Ripoti ya Matumizi",
+  "reports.pnl": "Ripoti ya Faida na Hasara",
   "reports.load": "Pakia Ripoti",
   "reports.exportCsv": "Safirisha CSV",
   "reports.exportExcel": "Safirisha Excel",
