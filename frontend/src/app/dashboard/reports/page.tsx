@@ -7,7 +7,7 @@ import { useTranslation } from '@/lib/i18n/context';
 import { isManagerLevel } from '@/lib/roles';
 import { notifyError } from '@/store/notifications';
 
-type ReportType = 'sales' | 'expenses' | 'pnl';
+type ReportType = 'sales' | 'tax' | 'expenses' | 'pnl';
 type Sector = 'all' | 'rooms' | 'bar' | 'restaurant';
 type PeriodPreset = 'day' | 'week' | 'month' | 'bydate';
 
@@ -61,6 +61,16 @@ export default function ReportsPage() {
         txParams.set('pageSize', '50');
         const res = await api<{ total: number; rows: unknown[] }>(`/finance/transactions?${txParams}`, { token });
         setData(res as unknown as Record<string, unknown>);
+      } else if (reportType === 'tax') {
+        const txParams = new URLSearchParams();
+        txParams.set('period', 'bydate');
+        txParams.set('from', dateRange.from);
+        txParams.set('to', dateRange.to);
+        txParams.set('sector', sector);
+        txParams.set('page', '1');
+        txParams.set('pageSize', '50');
+        const res = await api<{ total: number; rows: unknown[] }>(`/finance/transactions?${txParams}`, { token });
+        setData(res as unknown as Record<string, unknown>);
       } else if (reportType === 'expenses') {
         const res = await api<{ expenses: unknown[]; total?: number }>(`/finance/expenses?${params}`, { token });
         setData(res as unknown as Record<string, unknown>);
@@ -85,8 +95,26 @@ export default function ReportsPage() {
     if (token && canView) loadReport();
   }, [token, canView, loadReport]);
 
+  function getEffectiveToken(): string | null {
+    if (token && typeof token === 'string') return token;
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = localStorage.getItem('hms-auth');
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      const tkn = parsed?.state?.token;
+      return typeof tkn === 'string' ? tkn : null;
+    } catch {
+      return null;
+    }
+  }
+
   async function download(format: 'csv' | 'xlsx' | 'pdf') {
-    if (!token) return;
+    const effectiveToken = getEffectiveToken();
+    if (!effectiveToken) {
+      notifyError(t('auth.sessionExpired'));
+      return;
+    }
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
     const params = new URLSearchParams();
     params.set('reportType', reportType);
@@ -96,7 +124,7 @@ export default function ReportsPage() {
     params.set('sector', sector);
 
     const res = await fetch(`${baseUrl}/reports/export?${params.toString()}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${effectiveToken}` },
       credentials: 'include',
     });
     if (!res.ok) {
@@ -199,6 +227,7 @@ export default function ReportsPage() {
             <label className="block text-sm text-slate-600 mb-1">{t('reports.reportType')}</label>
             <select value={reportType} onChange={(e) => setReportType(e.target.value as ReportType)} className="w-full px-3 py-2 border rounded-lg text-sm bg-white">
               <option value="sales">{t('reports.revenue')}</option>
+              <option value="tax">{t('reports.tax')}</option>
               <option value="expenses">{t('reports.expenses')}</option>
               <option value="pnl">{t('reports.pnl')}</option>
             </select>
@@ -226,6 +255,12 @@ export default function ReportsPage() {
           {reportType === 'sales' && (
             <div className="bg-white border rounded-xl p-5 shadow-sm min-w-0">
               <h2 className="font-semibold text-slate-800 mb-4">{t('reports.revenue')}</h2>
+              <p className="text-sm text-slate-600">{(data.rows as unknown[])?.length ?? 0} transaction(s) • Total rows: {(data.total as number) ?? 0}</p>
+            </div>
+          )}
+          {reportType === 'tax' && (
+            <div className="bg-white border rounded-xl p-5 shadow-sm min-w-0">
+              <h2 className="font-semibold text-slate-800 mb-4">{t('reports.tax')}</h2>
               <p className="text-sm text-slate-600">{(data.rows as unknown[])?.length ?? 0} transaction(s) • Total rows: {(data.total as number) ?? 0}</p>
             </div>
           )}

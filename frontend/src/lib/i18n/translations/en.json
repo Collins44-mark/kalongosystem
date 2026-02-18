@@ -341,6 +341,7 @@
   "reports.title": "Reports",
   "reports.onlyManagers": "Only managers can access reports.",
   "reports.revenue": "Sales Report",
+  "reports.tax": "Tax Report",
   "reports.expenses": "Expense Report",
   "reports.pnl": "Profit & Loss",
   "reports.load": "Load Report",

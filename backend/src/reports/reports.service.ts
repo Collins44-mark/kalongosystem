@@ -91,7 +91,14 @@ export class ReportsService {
     to?: Date,
   ): Promise<{ filename: string; contentType: string; body: Buffer }> {
     const rtRaw = String(reportType || '').toLowerCase();
-    const rt = rtRaw === 'sales' || rtRaw === 'revenue' ? 'sales' : rtRaw === 'expenses' ? 'expenses' : 'pnl';
+    const rt =
+      rtRaw === 'sales' || rtRaw === 'revenue'
+        ? 'sales'
+        : rtRaw === 'tax'
+          ? 'tax'
+          : rtRaw === 'expenses'
+            ? 'expenses'
+            : 'pnl';
     const fmt = format === 'xlsx' || format === 'pdf' ? format : 'csv';
     const sec = sector === 'rooms' || sector === 'bar' || sector === 'restaurant' ? sector : 'all';
 
@@ -170,6 +177,72 @@ export class ReportsService {
           paymentMode: t.paymentMode,
         })),
         totals: { net: totalNet, vat: totalVat, gross: totalGross },
+      });
+      return { filename: `${baseName}.pdf`, contentType: 'application/pdf', body: pdf };
+    }
+
+    if (rt === 'tax') {
+      const txns = await this.finance.collectTransactions(
+        businessId,
+        from ?? new Date(0),
+        to ?? new Date(),
+        sec === 'all' ? 'all' : (sec as any),
+      );
+      const totalVat = txns.reduce((s: number, t: any) => s + Number(t.vatAmount || 0), 0);
+
+      if (fmt === 'csv') {
+        const header = 'Date,Sector,VAT (TSh),Payment Mode';
+        const lines = txns.map((t: any) => [
+          formatDdMmYyyy(t.date),
+          t.sector,
+          String(round0(t.vatAmount)),
+          String(t.paymentMode || ''),
+        ].map(csvEscape).join(','));
+        const totalLine = ['', 'TAX TOTAL', String(round0(totalVat)), ''].map(csvEscape).join(',');
+        const csv = [header, ...lines, totalLine].join('\n') + '\n';
+        return { filename: `${baseName}.csv`, contentType: 'text/csv; charset=utf-8', body: Buffer.from(csv, 'utf8') };
+      }
+
+      if (fmt === 'xlsx') {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const ExcelJS = require('exceljs');
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet('Tax');
+        ws.columns = [
+          { header: 'Date', key: 'date', width: 14 },
+          { header: 'Sector', key: 'sector', width: 14 },
+          { header: 'VAT (TSh)', key: 'vat', width: 16 },
+          { header: 'Payment Mode', key: 'paymentMode', width: 22 },
+        ];
+        txns.forEach((t: any) => ws.addRow({
+          date: formatDdMmYyyy(t.date),
+          sector: t.sector,
+          vat: round0(t.vatAmount),
+          paymentMode: t.paymentMode,
+        }));
+        ws.addRow({ date: '', sector: 'TAX TOTAL', vat: round0(totalVat), paymentMode: '' });
+        const buf: any = await wb.xlsx.writeBuffer();
+        return {
+          filename: `${baseName}.xlsx`,
+          contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          body: Buffer.isBuffer(buf) ? buf : Buffer.from(buf),
+        };
+      }
+
+      const pdf = await renderTaxPdf({
+        businessId,
+        branchId,
+        dateRange: { from, to },
+        generatedAt: new Date(),
+        generatedBy: 'SYSTEM',
+        sector: sec,
+        rows: txns.map((t: any) => ({
+          date: t.date,
+          sector: t.sector,
+          vat: t.vatAmount,
+          paymentMode: t.paymentMode,
+        })),
+        totalVat,
       });
       return { filename: `${baseName}.pdf`, contentType: 'application/pdf', body: pdf };
     }
@@ -547,6 +620,136 @@ async function renderSalesPdf(input: {
       doc.text(formatNumberTz(input.totals.vat), cx + padX, y + 11, { width: colW.vat - padX * 2, align: 'right' });
       cx += colW.vat;
       doc.text(formatNumberTz(input.totals.gross), cx + padX, y + 11, { width: colW.gross - padX * 2, align: 'right' });
+
+      doc.end();
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+async function renderTaxPdf(input: {
+  businessId: string;
+  branchId: string;
+  dateRange: { from?: Date; to?: Date };
+  generatedAt: Date;
+  generatedBy: string;
+  sector: string;
+  rows: Array<{ date: Date; sector: string; vat: number; paymentMode: string }>;
+  totalVat: number;
+}): Promise<Buffer> {
+  return await new Promise((resolve, reject) => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const PDFDocument = require('pdfkit');
+      const doc = new PDFDocument({ margin: 40, size: 'A4', bufferPages: true });
+      const chunks: Buffer[] = [];
+      doc.on('data', (c: any) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', (e: any) => reject(e));
+
+      const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+      const x = doc.page.margins.left;
+      let y = doc.page.margins.top;
+      const bottomLimit = () => doc.page.height - doc.page.margins.bottom - 30;
+
+      doc.font('Helvetica-Bold').fontSize(16).text('Tax Report', x, y);
+      y += 18;
+      doc.font('Helvetica').fontSize(10).fillColor('#333');
+      doc.text(`Business ID: ${input.businessId}`, x, y); y += 12;
+      doc.text(`Branch ID: ${input.branchId}`, x, y); y += 12;
+      const f = input.dateRange.from ? input.dateRange.from.toISOString().slice(0, 10) : '';
+      const t = input.dateRange.to ? input.dateRange.to.toISOString().slice(0, 10) : '';
+      doc.text(`Date Range: ${f} to ${t}`, x, y); y += 12;
+      doc.text(`Sector: ${input.sector}`, x, y); y += 12;
+      doc.text(`Generated: ${input.generatedAt.toISOString()} • Generated By: ${input.generatedBy}`, x, y); y += 10;
+      doc.fillColor('#000');
+      y += 14;
+
+      const fixed = { date: 70, sector: 110, mode: 150 };
+      const vatW = pageWidth - fixed.date - fixed.sector - fixed.mode;
+      const colW = { date: fixed.date, sector: fixed.sector, vat: Math.max(80, vatW), mode: fixed.mode };
+      const tableW = colW.date + colW.sector + colW.vat + colW.mode;
+      const tableX = x + (pageWidth - tableW) / 2;
+      const padX = 6;
+      const headerH = 28;
+      const rowH = 24;
+
+      const drawDividers = (topY: number, h: number, color: string) => {
+        doc.save();
+        doc.strokeColor(color).lineWidth(1);
+        let vx = tableX + colW.date;
+        doc.moveTo(vx, topY).lineTo(vx, topY + h).stroke();
+        vx += colW.sector;
+        doc.moveTo(vx, topY).lineTo(vx, topY + h).stroke();
+        vx += colW.vat;
+        doc.moveTo(vx, topY).lineTo(vx, topY + h).stroke();
+        doc.restore();
+      };
+
+      const drawHeader = () => {
+        doc.save();
+        doc.rect(tableX, y, tableW, headerH).fillColor('#f1f5f9').fill();
+        doc.restore();
+        doc.rect(tableX, y, tableW, headerH).strokeColor('#d0d7de').lineWidth(1).stroke();
+        drawDividers(y, headerH, '#d0d7de');
+        doc.font('Helvetica-Bold').fontSize(10).fillColor('#000');
+        let cx = tableX;
+        doc.text('Date', cx + padX, y + 9, { width: colW.date - padX * 2, align: 'left' });
+        cx += colW.date;
+        doc.text('Sector', cx + padX, y + 9, { width: colW.sector - padX * 2, align: 'left' });
+        cx += colW.sector;
+        doc.text('VAT (TSh)', cx + padX, y + 9, { width: colW.vat - padX * 2, align: 'right' });
+        cx += colW.vat;
+        doc.text('Payment Mode', cx + padX, y + 9, { width: colW.mode - padX * 2, align: 'center' });
+        y += headerH;
+      };
+
+      drawHeader();
+      doc.font('Helvetica').fontSize(10).fillColor('#000');
+
+      let idx = 0;
+      for (const r of input.rows) {
+        if (y + rowH > bottomLimit()) {
+          doc.addPage();
+          y = doc.page.margins.top;
+          drawHeader();
+        }
+        if (idx % 2 === 1) {
+          doc.save();
+          doc.rect(tableX, y, tableW, rowH).fillColor('#f8fafc').fill();
+          doc.restore();
+        }
+        doc.rect(tableX, y, tableW, rowH).strokeColor('#e5e7eb').lineWidth(1).stroke();
+        drawDividers(y, rowH, '#e5e7eb');
+        let cx = tableX;
+        drawCellText(doc, formatDdMmYyyy(r.date), cx + padX, y + 7, colW.date - padX * 2, { align: 'left', baseSize: 10, minSize: 9, font: 'Helvetica' });
+        cx += colW.date;
+        drawCellText(doc, String(r.sector), cx + padX, y + 7, colW.sector - padX * 2, { align: 'left', baseSize: 10, minSize: 9, font: 'Helvetica' });
+        cx += colW.sector;
+        drawCellText(doc, formatNumberTz(r.vat), cx + padX, y + 7, colW.vat - padX * 2, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
+        cx += colW.vat;
+        drawCellText(doc, String(r.paymentMode || ''), cx + padX, y + 7, colW.mode - padX * 2, { align: 'center', baseSize: 10, minSize: 8, font: 'Helvetica' });
+        y += rowH;
+        idx += 1;
+      }
+
+      const totalsH = 36;
+      if (y + totalsH > bottomLimit()) {
+        doc.addPage();
+        y = doc.page.margins.top;
+        drawHeader();
+      }
+      doc.moveTo(tableX, y).lineTo(tableX + tableW, y).lineWidth(3).strokeColor('#111827').stroke();
+      doc.strokeColor('#000');
+      doc.save();
+      doc.rect(tableX, y, tableW, totalsH).fillColor('#e5e7eb').fill();
+      doc.restore();
+      doc.rect(tableX, y, tableW, totalsH).strokeColor('#d0d7de').lineWidth(1).stroke();
+      drawDividers(y, totalsH, '#d0d7de');
+      doc.font('Helvetica-Bold').fontSize(11).fillColor('#000');
+      doc.text('TAX TOTAL', tableX + padX, y + 11, { width: colW.date + colW.sector - padX * 2, align: 'left' });
+      doc.text(formatNumberTz(input.totalVat), tableX + colW.date + colW.sector + padX, y + 11, { width: colW.vat - padX * 2, align: 'right' });
 
       doc.end();
     } catch (e) {

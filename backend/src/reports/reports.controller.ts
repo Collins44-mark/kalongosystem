@@ -10,8 +10,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 
 @Controller('reports')
-@UseGuards(JwtAuthGuard, SubscriptionGuard, BusinessModuleGuard)
-@UseGuards(RolesGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard, BusinessModuleGuard, RolesGuard)
 @RequireModule('reports')
 @Roles('MANAGER', 'ADMIN', 'OWNER', 'FINANCE')
 export class ReportsController {
