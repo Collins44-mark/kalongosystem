@@ -1,6 +1,7 @@
 {
   "common.loading": "Loading...",
   "common.refresh": "Refresh",
+  "common.retry": "Retry",
   "common.to": "to",
   "common.back": "Back",
   "common.remove": "Remove",

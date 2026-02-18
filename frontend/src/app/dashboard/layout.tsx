@@ -87,6 +87,7 @@ export default function DashboardLayout({
   const [workerSelectSaving, setWorkerSelectSaving] = useState(false);
   const [subscription, setSubscription] = useState<SubscriptionResponse>(null);
   const [subscriptionLoading, setSubscriptionLoading] = useState(true);
+  const [accessBlocked, setAccessBlocked] = useState(false);
 
   async function fetchMe(opts?: { silent?: boolean }) {
     if (!token) {
@@ -97,16 +98,36 @@ export default function DashboardLayout({
     try {
       const res = await api<MeResponse>('/api/me', { token });
       setMe(res);
+      setAccessBlocked(false);
     } catch (e: unknown) {
       const err = e as Error & { status?: number };
-      if (err?.status === 401 || err?.status === 403) {
+      if (err?.status === 401) {
         logout();
         router.replace('/login');
+        return;
+      }
+      if (err?.status === 403) {
+        setAccessBlocked(true);
       }
       setMe(null);
     } finally {
       if (!opts?.silent) setMeLoading(false);
     }
+  }
+
+  function fetchSubscription() {
+    if (!token) return;
+    setSubscriptionLoading(true);
+    api<SubscriptionResponse>('/subscription', { token })
+      .then(setSubscription)
+      .catch(() => setSubscription(null))
+      .finally(() => setSubscriptionLoading(false));
+  }
+
+  function handleBlockRetry() {
+    setAccessBlocked(false);
+    fetchSubscription();
+    fetchMe();
   }
 
   useEffect(() => {
@@ -125,11 +146,8 @@ export default function DashboardLayout({
       setSubscriptionLoading(false);
       return;
     }
-    setSubscriptionLoading(true);
-    api<SubscriptionResponse>('/subscription', { token })
-      .then(setSubscription)
-      .catch(() => setSubscription(null))
-      .finally(() => setSubscriptionLoading(false));
+    fetchSubscription();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   // Refresh session state only when user returns to the tab (no constant polling).
@@ -207,8 +225,8 @@ export default function DashboardLayout({
 
   if (!_hasHydrated || !token || !user) return null;
 
-  if (!subscriptionLoading && isSubscriptionExpired(subscription)) {
-    return <SubscriptionBlocked />;
+  if (accessBlocked || (!subscriptionLoading && isSubscriptionExpired(subscription))) {
+    return <SubscriptionBlocked onRetry={handleBlockRetry} />;
   }
 
   // Prevent non-manager users from staying on Overview route (direct URL access).

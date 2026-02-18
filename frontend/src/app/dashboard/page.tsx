@@ -104,17 +104,8 @@ export default function OverviewPage() {
     api<DashboardData>(`/overview?period=${period}`, { token })
       .then((res) => setData({ ...res, period }))
       .catch((err) => {
-        // Log error for debugging
-        console.error('Failed to fetch overview:', err);
-        // Only set empty data if it's not an auth error (401/403)
-        // Auth errors should redirect to login
-        if (err?.status === 401 || err?.status === 403) {
-          // Token expired or invalid - redirect to login
-          if (typeof window !== 'undefined') {
-            window.location.href = '/login';
-          }
-          return;
-        }
+        // 401/403 are handled by layout (block screen or logout); just show empty here
+        if (err?.status === 401 || err?.status === 403) return;
         setData(emptyData);
       })
       .finally(() => setLoading(false));
