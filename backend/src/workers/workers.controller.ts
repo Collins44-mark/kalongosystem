@@ -2,6 +2,8 @@ import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { WorkersService } from './workers.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { SubscriptionGuard } from '../common/guards/subscription.guard';
+import { BusinessModuleGuard } from '../common/guards/business-module.guard';
+import { RequireModule } from '../common/decorators/require-module.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -30,15 +32,19 @@ class MarkPaidDto {
 }
 
 @Controller('workers')
-@UseGuards(JwtAuthGuard, SubscriptionGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard, BusinessModuleGuard)
 @UseGuards(RolesGuard)
-@Roles('MANAGER')
+@RequireModule('workers')
+@Roles('MANAGER', 'ADMIN', 'OWNER')
 export class WorkersController {
   constructor(private workers: WorkersService) {}
 
   @Get()
-  async getWorkers(@CurrentUser() user: any) {
-    return this.workers.getWorkers(user.businessId, user.branchId);
+  async getWorkers(
+    @CurrentUser() user: any,
+    @Query('sector') sector?: string,
+  ) {
+    return this.workers.getWorkers(user.businessId, user.branchId, sector);
   }
 
   @Post()

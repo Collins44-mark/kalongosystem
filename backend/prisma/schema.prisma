@@ -94,6 +94,7 @@ model Business {
   staffWorkers      StaffWorker[]
   payrollRecords    PayrollRecord[]
   settings          BusinessSetting[]
+  roleMessages      RoleMessage[]
 
   @@map("businesses")
 }
@@ -481,4 +482,20 @@ model PayrollRecord {
   worker   Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
 
   @@map("payroll_records")
+}
+
+model RoleMessage {
+  id           String   @id @default(cuid())
+  businessId   String
+  senderId     String   // User id who sent
+  senderRole   String   // Role of sender at time of send
+  recipientRole String  // Role to receive (e.g. BAR, FRONT_OFFICE)
+  body         String   @db.Text
+  createdAt    DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, createdAt])
+  @@index([businessId, recipientRole])
+  @@map("role_messages")
 }

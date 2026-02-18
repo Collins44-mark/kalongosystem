@@ -6,9 +6,11 @@ import { Decimal } from '@prisma/client/runtime/library';
 export class WorkersService {
   constructor(private prisma: PrismaService) {}
 
-  async getWorkers(businessId: string, branchId: string) {
+  async getWorkers(businessId: string, branchId: string, sector?: string) {
+    const where: { businessId: string; branchId: string; sector?: string } = { businessId, branchId };
+    if (sector && sector.trim()) where.sector = sector.trim();
     return this.prisma.worker.findMany({
-      where: { businessId, branchId },
+      where,
       orderBy: { name: 'asc' },
     });
   }

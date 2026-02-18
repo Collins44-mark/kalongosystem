@@ -208,6 +208,7 @@ export class SuperAdminService {
         id: business.id,
         name: business.name,
         businessId: business.businessId,
+        businessType: business.businessType,
         createdAt: business.createdAt,
         status: business.isSuspended ? 'SUSPENDED' : 'ACTIVE',
       },
@@ -236,6 +237,17 @@ export class SuperAdminService {
     if (!b) throw new NotFoundException('Business not found');
     await this.prisma.business.update({ where: { id: businessDbId }, data: { isSuspended: suspended } });
     return { success: true, status: suspended ? 'SUSPENDED' : 'ACTIVE' };
+  }
+
+  /** Update business type (dashboard module access changes immediately for that tenant). */
+  async updateBusinessType(businessDbId: string, businessType: string) {
+    const allowed = ['HOTEL', 'LODGE', 'BAR', 'RESTAURANT'];
+    const type = (businessType || '').trim().toUpperCase();
+    if (!allowed.includes(type)) throw new BadRequestException(`businessType must be one of: ${allowed.join(', ')}`);
+    const b = await this.prisma.business.findUnique({ where: { id: businessDbId } });
+    if (!b) throw new NotFoundException('Business not found');
+    await this.prisma.business.update({ where: { id: businessDbId }, data: { businessType: type } });
+    return { success: true, businessType: type };
   }
 
   /** Unlock / add time: if subscription is ACTIVE and current period end is in the future, extend from that date; otherwise set period from today. */

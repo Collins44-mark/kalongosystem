@@ -2,6 +2,8 @@ import { BadRequestException, Body, Controller, Get, Patch, UseGuards } from '@n
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { SubscriptionGuard } from '../common/guards/subscription.guard';
 import { AllowManagerGuard } from '../common/guards/allow-manager.guard';
+import { BusinessModuleGuard } from '../common/guards/business-module.guard';
+import { RequireModule } from '../common/decorators/require-module.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ApiService } from './api.service';
 
@@ -27,12 +29,15 @@ export class ApiController {
   }
 
   @Get('settings')
+  @UseGuards(BusinessModuleGuard)
+  @RequireModule('settings')
   async getSettings(@CurrentUser() user: { businessId: string }) {
     return this.api.getSettings(user.businessId);
   }
 
   @Patch('settings')
-  @UseGuards(AllowManagerGuard)
+  @UseGuards(AllowManagerGuard, BusinessModuleGuard)
+  @RequireModule('settings')
   async updateSettings(
     @CurrentUser() user: { businessId: string },
     @Body()

@@ -215,7 +215,6 @@ export default function FinancePage() {
 
   async function download(format: 'csv' | 'xlsx' | 'pdf') {
     if (!token) return;
-    if (level !== 'transactions') return;
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
     const params = new URLSearchParams();
     params.set('format', format);
@@ -306,7 +305,7 @@ export default function FinancePage() {
     }
   }
 
-  const canExport = level === 'transactions';
+  const canExport = true;
   const breadcrumb = (() => {
     const m = metric === 'net' ? t('finance.netRevenue') : metric === 'gross' ? t('finance.grossSales') : metric === 'vat' ? t('finance.vatCollected') : t('finance.expenses');
     if (level === 'overview') return t('finance.title');

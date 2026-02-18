@@ -75,8 +75,10 @@ function UnlockSubscriptionSection({
   );
 }
 
+const BUSINESS_TYPES = ['HOTEL', 'LODGE', 'BAR', 'RESTAURANT'] as const;
+
 type Detail = {
-  business: { id: string; name: string; businessId: string; createdAt: string; status: 'ACTIVE' | 'SUSPENDED' };
+  business: { id: string; name: string; businessId: string; businessType?: string; createdAt: string; status: 'ACTIVE' | 'SUSPENDED' };
   vat: { vat_enabled: boolean; vat_rate: number; vat_type: 'inclusive' | 'exclusive' };
   subscription: null | { plan: string; status: string; trialEndsAt: string; currentPeriodEnd?: string | null };
   users: { businessUserId: string; userId: string; email: string; role: string; status: string; forcePasswordChange: boolean }[];
@@ -131,6 +133,29 @@ export default function SuperAdminBusinessDetailPage() {
     load();
   }
 
+  const [businessTypeSaving, setBusinessTypeSaving] = useState(false);
+  const [selectedBusinessType, setSelectedBusinessType] = useState<string>('');
+  useEffect(() => {
+    if (data?.business?.businessType) setSelectedBusinessType(data.business.businessType);
+  }, [data?.business?.businessType]);
+
+  async function saveBusinessType() {
+    if (!token || !data || selectedBusinessType === (data.business.businessType ?? '')) return;
+    setBusinessTypeSaving(true);
+    try {
+      await api(`/super-admin/businesses/${data.business.id}`, {
+        token,
+        method: 'PATCH',
+        body: JSON.stringify({ businessType: selectedBusinessType }),
+      });
+      load();
+    } catch (e: unknown) {
+      window.alert((e as Error)?.message ?? 'Failed to update business type');
+    } finally {
+      setBusinessTypeSaving(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="max-w-6xl mx-auto p-6 space-y-4">
@@ -165,6 +190,29 @@ export default function SuperAdminBusinessDetailPage() {
                   <span className={`px-2 py-0.5 rounded text-xs ${data.business.status === 'SUSPENDED' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
                     {data.business.status}
                   </span>
+                </div>
+                <div className="mt-3 pt-3 border-t border-slate-100">
+                  <div className="text-xs font-medium text-slate-500 mb-2">Business type (module access)</div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={selectedBusinessType}
+                      onChange={(e) => setSelectedBusinessType(e.target.value)}
+                      className="border rounded px-2 py-1.5 text-sm"
+                    >
+                      {BUSINESS_TYPES.map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      disabled={businessTypeSaving || selectedBusinessType === (data.business.businessType ?? '')}
+                      onClick={saveBusinessType}
+                      className="px-3 py-1.5 rounded bg-teal-600 text-white text-xs hover:bg-teal-700 disabled:opacity-50"
+                    >
+                      {businessTypeSaving ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">Dashboard modules update for this tenant on next load.</p>
                 </div>
               </div>
               <div className="bg-white border rounded-lg p-4">

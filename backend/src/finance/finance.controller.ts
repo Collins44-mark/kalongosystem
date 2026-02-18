@@ -3,6 +3,8 @@ import type { Response } from 'express';
 import { FinanceService } from './finance.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { SubscriptionGuard } from '../common/guards/subscription.guard';
+import { BusinessModuleGuard } from '../common/guards/business-module.guard';
+import { RequireModule } from '../common/decorators/require-module.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -30,7 +32,8 @@ class CreateExpenseDto {
 }
 
 @Controller('finance')
-@UseGuards(JwtAuthGuard, SubscriptionGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard, BusinessModuleGuard)
+@RequireModule('finance')
 export class FinanceController {
   constructor(private finance: FinanceService) {}
 
@@ -225,7 +228,7 @@ export class FinanceController {
 
   @Get('export')
   @UseGuards(RolesGuard)
-  @Roles('MANAGER', 'FINANCE')
+  @Roles('MANAGER', 'ADMIN', 'OWNER', 'FINANCE')
   async export(
     @CurrentUser() user: any,
     @Res() res: Response,

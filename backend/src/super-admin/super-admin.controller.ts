@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { SuperAdminService } from './super-admin.service';
 import { SuperAdminGuard } from './super-admin.guard';
@@ -62,6 +62,13 @@ export class SuperAdminController {
   @UseGuards(JwtAuthGuard, SuperAdminGuard)
   async suspend(@Param('id') id: string, @Body('suspended') suspended: boolean) {
     return this.sa.setBusinessSuspended(id, !!suspended);
+  }
+
+  @Patch('businesses/:id')
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  async updateBusiness(@Param('id') id: string, @Body() body: { businessType?: string }) {
+    if (body.businessType != null) return this.sa.updateBusinessType(id, body.businessType);
+    return { success: true };
   }
 
   @Post('businesses/:id/unlock-subscription')

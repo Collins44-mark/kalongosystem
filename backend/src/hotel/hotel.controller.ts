@@ -12,6 +12,8 @@ import {
 import { HotelService } from './hotel.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { SubscriptionGuard } from '../common/guards/subscription.guard';
+import { BusinessModuleGuard } from '../common/guards/business-module.guard';
+import { RequireModule } from '../common/decorators/require-module.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles, SkipRolesGuard } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -88,8 +90,9 @@ class AddPaymentDto {
 }
 
 @Controller('hotel')
-@UseGuards(JwtAuthGuard, SubscriptionGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard, BusinessModuleGuard)
 @UseGuards(RolesGuard)
+@RequireModule('front-office')
 @Roles('MANAGER', 'ADMIN', 'OWNER', 'FRONT_OFFICE')
 export class HotelController {
   constructor(private hotel: HotelService) {}

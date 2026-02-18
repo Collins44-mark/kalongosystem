@@ -18,15 +18,19 @@ type StaffWorker = {
   createdAt: string;
 };
 
+type RegisteredWorker = { id: string; name: string; sector: string; role: string; monthlySalary: string };
+
 const ROLES = ['MANAGER', 'FRONT_OFFICE', 'FINANCE', 'HOUSEKEEPING', 'BAR', 'RESTAURANT', 'KITCHEN'];
 
 export function StaffWorkersSection({ token, t }: { token: string; t: (k: string) => string }) {
   const searchQuery = useSearch((s) => s.query);
   const [workers, setWorkers] = useState<StaffWorker[]>([]);
+  const [registeredWorkers, setRegisteredWorkers] = useState<RegisteredWorker[]>([]);
   const [loading, setLoading] = useState(true);
   const [roleFilter, setRoleFilter] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [newFullName, setNewFullName] = useState('');
+  const [selectedRegisteredId, setSelectedRegisteredId] = useState<string>('');
   const [newRole, setNewRole] = useState('FRONT_OFFICE');
   const [creating, setCreating] = useState(false);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
@@ -47,6 +51,14 @@ export function StaffWorkersSection({ token, t }: { token: string; t: (k: string
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, roleFilter]);
+
+  useEffect(() => {
+    if (showCreate && token) {
+      api<RegisteredWorker[]>('/workers', { token })
+        .then(setRegisteredWorkers)
+        .catch(() => setRegisteredWorkers([]));
+    }
+  }, [showCreate, token]);
 
   const qText = (searchQuery || '').trim().toLowerCase();
   const displayedWorkers = !qText
@@ -245,15 +257,33 @@ export function StaffWorkersSection({ token, t }: { token: string; t: (k: string
 
       {showCreate && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white p-4 rounded max-w-sm w-full">
+          <div className="bg-white p-4 rounded-lg max-w-md w-full">
             <h3 className="font-medium mb-3">{t('settings.addStaffWorker')}</h3>
             <form onSubmit={createWorker} className="space-y-3">
+              <div>
+                <label className="block text-sm mb-1">{t('settings.chooseFromRegistered')}</label>
+                <select
+                  value={selectedRegisteredId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setSelectedRegisteredId(id);
+                    const w = registeredWorkers.find((r) => r.id === id);
+                    if (w) setNewFullName(w.name);
+                  }}
+                  className="w-full px-3 py-2 border rounded text-sm bg-white"
+                >
+                  <option value="">— {t('settings.addManually')} —</option>
+                  {registeredWorkers.map((w) => (
+                    <option key={w.id} value={w.id}>{w.name} ({w.sector.replace(/_/g, ' ')})</option>
+                  ))}
+                </select>
+              </div>
               <div>
                 <label className="block text-sm mb-1">{t('settings.fullName')}</label>
                 <input
                   value={newFullName}
                   onChange={(e) => setNewFullName(e.target.value)}
-                  className="w-full px-3 py-2 border rounded"
+                  className="w-full px-3 py-2 border rounded text-sm"
                   placeholder="John Mtei"
                   required
                 />
@@ -263,7 +293,7 @@ export function StaffWorkersSection({ token, t }: { token: string; t: (k: string
                 <select
                   value={newRole}
                   onChange={(e) => setNewRole(e.target.value)}
-                  className="w-full px-3 py-2 border rounded"
+                  className="w-full px-3 py-2 border rounded text-sm"
                 >
                   {ROLES.map((r) => (
                     <option key={r} value={r}>{r.replace(/_/g, ' ')}</option>
@@ -271,10 +301,10 @@ export function StaffWorkersSection({ token, t }: { token: string; t: (k: string
                 </select>
               </div>
               <div className="flex gap-2">
-                <button type="submit" disabled={creating} className="px-4 py-2 bg-teal-600 text-white rounded">
+                <button type="submit" disabled={creating} className="px-4 py-2 bg-teal-600 text-white rounded text-sm">
                   {creating ? '...' : t('common.create')}
                 </button>
-                <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 bg-slate-200 rounded">
+                <button type="button" onClick={() => { setShowCreate(false); setSelectedRegisteredId(''); setNewFullName(''); }} className="px-4 py-2 bg-slate-200 rounded text-sm">
                   {t('common.cancel')}
                 </button>
               </div>

@@ -18,6 +18,7 @@ import { ReportsModule } from './reports/reports.module';
 import { OverviewModule } from './overview/overview.module';
 import { HealthModule } from './health/health.module';
 import { SuperAdminModule } from './super-admin/super-admin.module';
+import { MessagesModule } from './messages/messages.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { SuperAdminModule } from './super-admin/super-admin.module';
     OverviewModule,
     HealthModule,
     SuperAdminModule,
+    MessagesModule,
   ],
 })
 export class AppModule {}

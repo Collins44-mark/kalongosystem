@@ -9,6 +9,8 @@ import { useTranslation } from '@/lib/i18n/context';
 import { roleForPermission } from '@/lib/roles';
 import { defaultDashboardRoute, isOverviewAllowed } from '@/lib/homeRoute';
 import { isManagerLevel } from '@/lib/roles';
+import { getAllowedModules, isRouteAllowedForBusinessType } from '@/config/businessModules';
+import type { DashboardModule } from '@/config/businessModules';
 import { NotificationsPanel } from '@/components/NotificationsPanel';
 import { HeaderSearch } from '@/components/HeaderSearch';
 import { SubscriptionBlocked } from '@/components/SubscriptionBlocked';
@@ -35,7 +37,7 @@ type MeResponse = {
   email: string;
   role: string;
   language?: string;
-  business: { id: string; name: string; code: string };
+  business: { id: string; name: string; code: string; type?: string };
   activeWorkerId?: string | null;
   activeWorkerName?: string | null;
   needsWorkerSelection?: boolean;
@@ -59,16 +61,18 @@ function isSubscriptionExpired(sub: SubscriptionResponse): boolean {
   return false;
 }
 
-const SIDEBAR_LINKS: { href: string; labelKey: string; roles: string[] }[] = [
-  { href: '/dashboard', labelKey: 'nav.overview', roles: ['MANAGER', 'ADMIN', 'OWNER'] },
-  { href: '/dashboard/front-office', labelKey: 'nav.frontOffice', roles: ['MANAGER', 'ADMIN', 'OWNER', 'FRONT_OFFICE'] },
-  { href: '/dashboard/bar', labelKey: 'nav.bar', roles: ['MANAGER', 'BAR'] },
-  { href: '/dashboard/restaurant', labelKey: 'nav.restaurant', roles: ['MANAGER', 'RESTAURANT', 'KITCHEN'] },
-  { href: '/dashboard/housekeeping', labelKey: 'nav.housekeeping', roles: ['MANAGER', 'HOUSEKEEPING'] },
-  { href: '/dashboard/finance', labelKey: 'nav.finance', roles: ['MANAGER', 'FINANCE'] },
-  { href: '/dashboard/workers', labelKey: 'nav.workers', roles: ['MANAGER'] },
-  { href: '/dashboard/reports', labelKey: 'nav.reports', roles: ['MANAGER'] },
-  { href: '/dashboard/settings', labelKey: 'nav.settings', roles: ['MANAGER'] },
+const SIDEBAR_LINKS: { href: string; labelKey: string; roles: string[]; module: DashboardModule }[] = [
+  { href: '/dashboard', labelKey: 'nav.overview', roles: ['MANAGER', 'ADMIN', 'OWNER'], module: 'overview' },
+  { href: '/dashboard/front-office', labelKey: 'nav.frontOffice', roles: ['MANAGER', 'ADMIN', 'OWNER', 'FRONT_OFFICE'], module: 'front-office' },
+  { href: '/dashboard/bar', labelKey: 'nav.bar', roles: ['MANAGER', 'BAR'], module: 'bar' },
+  { href: '/dashboard/restaurant', labelKey: 'nav.restaurant', roles: ['MANAGER', 'RESTAURANT', 'KITCHEN'], module: 'restaurant' },
+  { href: '/dashboard/housekeeping', labelKey: 'nav.housekeeping', roles: ['MANAGER', 'HOUSEKEEPING'], module: 'housekeeping' },
+  { href: '/dashboard/finance', labelKey: 'nav.finance', roles: ['MANAGER', 'FINANCE'], module: 'finance' },
+  { href: '/dashboard/workers', labelKey: 'nav.workers', roles: ['MANAGER', 'ADMIN', 'OWNER'], module: 'workers' },
+  { href: '/dashboard/inventory', labelKey: 'nav.inventory', roles: ['MANAGER', 'ADMIN', 'OWNER'], module: 'inventory' },
+  { href: '/dashboard/reports', labelKey: 'nav.reports', roles: ['MANAGER', 'ADMIN', 'OWNER'], module: 'reports' },
+  { href: '/dashboard/settings', labelKey: 'nav.settings', roles: ['MANAGER', 'ADMIN', 'OWNER'], module: 'settings' },
+  { href: '/dashboard/messages', labelKey: 'nav.messages', roles: ['MANAGER', 'ADMIN', 'OWNER', 'FRONT_OFFICE', 'BAR', 'RESTAURANT', 'KITCHEN', 'HOUSEKEEPING', 'FINANCE'], module: 'messages' },
 ];
 
 export default function DashboardLayout({
@@ -213,10 +217,14 @@ export default function DashboardLayout({
   }
 
   const roleForNav = roleForPermission(user?.role) || user?.role || '';
-  const visibleLinks = SIDEBAR_LINKS.filter((l) => l.roles.includes(roleForNav));
+  const businessType = me?.business?.type;
+  const allowedModules = businessType ? getAllowedModules(businessType) : null;
+  const visibleLinks = SIDEBAR_LINKS.filter((l) => l.roles.includes(roleForNav)).filter(
+    (l) => allowedModules === null || allowedModules.includes(l.module),
+  );
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const isAdmin = isManagerLevel(user?.role);
-  const defaultRoute = defaultDashboardRoute(user?.role);
+  const defaultRoute = visibleLinks[0]?.href ?? defaultDashboardRoute(user?.role);
   const [backVisibleFromPage, setBackVisibleFromPage] = useState(false);
   useEffect(() => {
     setBackVisibleFromPage(false);
@@ -233,6 +241,12 @@ export default function DashboardLayout({
   if (!isOverviewAllowed(user?.role) && pathname === '/dashboard') {
     // Avoid rendering a flash of overview UI.
     router.replace(defaultDashboardRoute(user.role));
+    return null;
+  }
+
+  // Route protection by business type: redirect if current path is not allowed.
+  if (me?.business?.type && pathname.startsWith('/dashboard') && !isRouteAllowedForBusinessType(me.business.type, pathname)) {
+    router.replace(defaultRoute);
     return null;
   }
 
@@ -356,7 +370,7 @@ export default function DashboardLayout({
             {isAdmin && <NotificationsPanel />}
             <button
               type="button"
-              onClick={() => router.push(defaultDashboardRoute(user.role))}
+              onClick={() => router.push(defaultRoute)}
               className="text-xs sm:text-sm text-slate-600 truncate font-medium uppercase hover:underline text-left"
               title={t('nav.overview')}
             >
