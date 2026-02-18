@@ -1,8 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
-import ExcelJS = require('exceljs');
-import PDFDocument = require('pdfkit');
 
 @Injectable()
 export class FinanceService {
@@ -582,6 +580,9 @@ export class FinanceService {
     }
 
     if (format === 'xlsx') {
+      // Use runtime require to avoid CommonJS/ESM default-import issues in production builds
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const ExcelJS = require('exceljs');
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet('Transactions');
       ws.columns = [
@@ -657,6 +658,8 @@ function mapPaymentAccount(mode: string) {
 async function renderPdf(input: { title: string; subtitle: string; columns: string[]; rows: string[][] }): Promise<Buffer> {
   return await new Promise((resolve, reject) => {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const PDFDocument = require('pdfkit');
       const doc = new PDFDocument({ margin: 40, size: 'A4' });
       const chunks: Buffer[] = [];
       doc.on('data', (c: any) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
