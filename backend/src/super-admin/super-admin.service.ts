@@ -184,6 +184,34 @@ export class SuperAdminService {
     return { success: true, status: suspended ? 'SUSPENDED' : 'ACTIVE' };
   }
 
+  /** Unlock subscription for a business: set ACTIVE and currentPeriodEnd = now + durationDays (e.g. 30 = 1 month). */
+  async unlockSubscription(businessDbId: string, durationDays: number) {
+    const b = await this.prisma.business.findUnique({
+      where: { id: businessDbId },
+      include: { subscription: true },
+    });
+    if (!b) throw new NotFoundException('Business not found');
+    if (!b.subscription) throw new BadRequestException('Business has no subscription record');
+
+    const days = Math.max(1, Math.min(365, Math.floor(durationDays)));
+    const currentPeriodEnd = new Date();
+    currentPeriodEnd.setDate(currentPeriodEnd.getDate() + days);
+
+    await this.prisma.subscription.update({
+      where: { businessId: b.id },
+      data: {
+        status: 'ACTIVE',
+        plan: b.subscription.plan || 'FRONT_AND_BACK',
+        currentPeriodEnd,
+      },
+    });
+    return {
+      success: true,
+      message: `Subscription unlocked for ${days} days. Service active until ${currentPeriodEnd.toISOString().slice(0, 10)}.`,
+      currentPeriodEnd: currentPeriodEnd.toISOString(),
+    };
+  }
+
   async resetBusinessUserPassword(businessUserId: string) {
     const bu = await this.prisma.businessUser.findUnique({
       where: { id: businessUserId },

@@ -53,6 +53,15 @@ export class SuperAdminController {
     return this.sa.setBusinessSuspended(id, !!suspended);
   }
 
+  @Post('businesses/:id/unlock-subscription')
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  async unlockSubscription(
+    @Param('id') id: string,
+    @Body('durationDays') durationDays: number,
+  ) {
+    return this.sa.unlockSubscription(id, Number(durationDays) || 30);
+  }
+
   @Post('business-users/:id/reset-password')
   @UseGuards(JwtAuthGuard, SuperAdminGuard)
   async resetPassword(@Param('id') businessUserId: string) {

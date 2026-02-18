@@ -342,6 +342,11 @@
   "reports.sector": "Sekta",
   "reports.amount": "Kiasi (TZS)",
 
+  "subscription.blockedTitle": "Jiandikishe ili kuendelea",
+  "subscription.blockedMessage": "Muda wako wa majaribio au usajili umekwisha. Jiandikishe ili kuendelea kutumia huduma.",
+  "subscription.contactSalesTeam": "Wasiliana na timu ya mauzo",
+  "subscription.contactSalesTeamFallback": "Wasiliana na msimamizi wako kuhuisha usajili wako.",
+
   "settings.title": "Mipangilio",
   "settings.business": "Biashara",
   "settings.name": "Jina",

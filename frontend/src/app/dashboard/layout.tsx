@@ -11,6 +11,7 @@ import { defaultDashboardRoute, isOverviewAllowed } from '@/lib/homeRoute';
 import { isManagerLevel } from '@/lib/roles';
 import { NotificationsPanel } from '@/components/NotificationsPanel';
 import { HeaderSearch } from '@/components/HeaderSearch';
+import { SubscriptionBlocked } from '@/components/SubscriptionBlocked';
 
 export const DashboardBackContext = createContext<{ setBackVisible: (v: boolean) => void } | null>(null);
 export function useDashboardBack() {
@@ -41,6 +42,23 @@ type MeResponse = {
   workers?: { id: string; fullName: string }[];
 };
 
+type SubscriptionResponse = {
+  id?: string;
+  plan: string;
+  status: string;
+  trialEndsAt: string;
+  currentPeriodEnd?: string | null;
+} | null;
+
+function isSubscriptionExpired(sub: SubscriptionResponse): boolean {
+  if (!sub) return true;
+  if (sub.status === 'EXPIRED') return true;
+  const now = new Date();
+  if (sub.status === 'TRIAL' && new Date(sub.trialEndsAt) < now) return true;
+  if (sub.status === 'ACTIVE' && sub.currentPeriodEnd && new Date(sub.currentPeriodEnd) < now) return true;
+  return false;
+}
+
 const SIDEBAR_LINKS: { href: string; labelKey: string; roles: string[] }[] = [
   { href: '/dashboard', labelKey: 'nav.overview', roles: ['MANAGER', 'ADMIN', 'OWNER'] },
   { href: '/dashboard/front-office', labelKey: 'nav.frontOffice', roles: ['MANAGER', 'ADMIN', 'OWNER', 'FRONT_OFFICE'] },
@@ -67,6 +85,8 @@ export default function DashboardLayout({
   const [langOpen, setLangOpen] = useState(false);
   const [workerSelectId, setWorkerSelectId] = useState('');
   const [workerSelectSaving, setWorkerSelectSaving] = useState(false);
+  const [subscription, setSubscription] = useState<SubscriptionResponse>(null);
+  const [subscriptionLoading, setSubscriptionLoading] = useState(true);
 
   async function fetchMe(opts?: { silent?: boolean }) {
     if (!token) {
@@ -98,6 +118,18 @@ export default function DashboardLayout({
   useEffect(() => {
     fetchMe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) {
+      setSubscriptionLoading(false);
+      return;
+    }
+    setSubscriptionLoading(true);
+    api<SubscriptionResponse>('/subscription', { token })
+      .then(setSubscription)
+      .catch(() => setSubscription(null))
+      .finally(() => setSubscriptionLoading(false));
   }, [token]);
 
   // Auto-refresh session state (role/worker status, workers list) without manual refresh.
@@ -180,6 +212,10 @@ export default function DashboardLayout({
   const showBackButton = pathname !== defaultRoute || backVisibleFromPage;
 
   if (!_hasHydrated || !token || !user) return null;
+
+  if (!subscriptionLoading && isSubscriptionExpired(subscription)) {
+    return <SubscriptionBlocked />;
+  }
 
   // Prevent non-manager users from staying on Overview route (direct URL access).
   if (!isOverviewAllowed(user?.role) && pathname === '/dashboard') {

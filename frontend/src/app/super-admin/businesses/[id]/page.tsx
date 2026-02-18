@@ -6,6 +6,71 @@ import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useSuperAdminAuth } from '@/store/superAdminAuth';
 
+function UnlockSubscriptionSection({
+  businessId,
+  onUnlocked,
+  token,
+}: {
+  businessId: string;
+  subscription: null | { plan: string; status: string; trialEndsAt: string; currentPeriodEnd?: string | null };
+  onUnlocked: () => void;
+  token: string | null;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+
+  async function unlock(durationDays: number) {
+    if (!token) return;
+    setSaving(true);
+    setMessage('');
+    try {
+      const res = await api<{ success: boolean; message: string }>(
+        `/super-admin/businesses/${businessId}/unlock-subscription`,
+        { token, method: 'POST', body: JSON.stringify({ durationDays }) }
+      );
+      setMessage(res.message || 'Subscription unlocked.');
+      onUnlocked();
+    } catch (e: unknown) {
+      setMessage((e as Error)?.message || 'Failed to unlock');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-slate-100">
+      <div className="text-xs font-medium text-slate-500 mb-2">Unlock service</div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={saving}
+          onClick={() => unlock(30)}
+          className="px-3 py-1.5 rounded bg-teal-600 text-white text-xs hover:bg-teal-700 disabled:opacity-50"
+        >
+          1 month
+        </button>
+        <button
+          type="button"
+          disabled={saving}
+          onClick={() => unlock(60)}
+          className="px-3 py-1.5 rounded bg-teal-600 text-white text-xs hover:bg-teal-700 disabled:opacity-50"
+        >
+          2 months
+        </button>
+        <button
+          type="button"
+          disabled={saving}
+          onClick={() => unlock(90)}
+          className="px-3 py-1.5 rounded bg-teal-600 text-white text-xs hover:bg-teal-700 disabled:opacity-50"
+        >
+          3 months
+        </button>
+      </div>
+      {message && <p className="text-xs text-slate-600 mt-1">{message}</p>}
+    </div>
+  );
+}
+
 type Detail = {
   business: { id: string; name: string; businessId: string; createdAt: string; status: 'ACTIVE' | 'SUSPENDED' };
   vat: { vat_enabled: boolean; vat_rate: number; vat_type: 'inclusive' | 'exclusive' };
@@ -111,10 +176,19 @@ export default function SuperAdminBusinessDetailPage() {
                     <div>Plan: {data.subscription.plan}</div>
                     <div>Status: {data.subscription.status}</div>
                     <div>Trial ends: {new Date(data.subscription.trialEndsAt).toLocaleDateString()}</div>
+                    {data.subscription.currentPeriodEnd && (
+                      <div>Period end: {new Date(data.subscription.currentPeriodEnd).toLocaleDateString()}</div>
+                    )}
                   </div>
                 ) : (
                   <div className="text-sm mt-1 text-slate-500">No subscription</div>
                 )}
+                <UnlockSubscriptionSection
+                  businessId={data.business.id}
+                  subscription={data.subscription ?? null}
+                  onUnlocked={load}
+                  token={token}
+                />
               </div>
             </div>
 

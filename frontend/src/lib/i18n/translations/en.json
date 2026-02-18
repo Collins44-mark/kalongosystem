@@ -342,6 +342,11 @@
   "reports.sector": "Sector",
   "reports.amount": "Amount (TZS)",
 
+  "subscription.blockedTitle": "Subscribe to continue",
+  "subscription.blockedMessage": "Your trial or subscription has ended. Subscribe to continue using the service.",
+  "subscription.contactSalesTeam": "Contact sales team",
+  "subscription.contactSalesTeamFallback": "Contact your administrator to renew your subscription.",
+
   "settings.title": "Settings",
   "settings.business": "Business",
   "settings.name": "Name",

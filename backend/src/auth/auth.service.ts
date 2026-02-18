@@ -138,10 +138,18 @@ export class AuthService {
     if (!bu) throw new UnauthorizedException('No account for this Business ID and email. Use the exact Business ID from signup (e.g. HMS-12345) and the same email and password.');
 
     if (bu.business?.isSuspended === true) {
-      throw new ForbiddenException('Your subscription is inactive. Contact support.');
+      throw new ForbiddenException('Subscribe to continue using the service. Contact the sales team to renew.');
     }
-    if (bu.business?.subscription?.status === 'EXPIRED') {
-      throw new ForbiddenException('Subscription expired. System is read-only. Please renew.');
+    const sub = bu.business?.subscription;
+    if (sub?.status === 'EXPIRED') {
+      throw new ForbiddenException('Subscribe to continue using the service. Contact the sales team to renew.');
+    }
+    const now = new Date();
+    if (sub?.status === 'TRIAL' && sub.trialEndsAt && now > sub.trialEndsAt) {
+      throw new ForbiddenException('Subscribe to continue using the service. Contact the sales team to renew.');
+    }
+    if (sub?.status === 'ACTIVE' && sub.currentPeriodEnd && now > sub.currentPeriodEnd) {
+      throw new ForbiddenException('Subscribe to continue using the service. Contact the sales team to renew.');
     }
 
     const valid = await bcrypt.compare(cleanPassword, user.password);

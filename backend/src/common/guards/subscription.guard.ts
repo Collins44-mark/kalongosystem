@@ -6,7 +6,10 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
-/** Ensures business subscription is TRIAL or ACTIVE - blocks EXPIRED */
+const SUBSCRIPTION_BLOCKED_MESSAGE =
+  'Subscribe to continue using the service. Contact the sales team to renew.';
+
+/** Ensures business subscription is active: TRIAL within trial period, or ACTIVE within paid period. Blocks when expired. */
 @Injectable()
 export class SubscriptionGuard implements CanActivate {
   constructor(private prisma: PrismaService) {}
@@ -22,14 +25,41 @@ export class SubscriptionGuard implements CanActivate {
       where: { businessId: user.businessId },
     });
 
-    if (!sub) throw new ForbiddenException('No subscription found');
+    if (!sub) throw new ForbiddenException(SUBSCRIPTION_BLOCKED_MESSAGE);
+
+    const now = new Date();
+
+    // Already marked expired
     if (sub.status === 'EXPIRED') {
-      throw new ForbiddenException(
-        'Subscription expired. System is read-only. Please renew.',
-      );
+      throw new ForbiddenException(SUBSCRIPTION_BLOCKED_MESSAGE);
     }
 
-    request.subscription = sub;
-    return true;
+    // Trial: block if past trial end
+    if (sub.status === 'TRIAL') {
+      if (now > sub.trialEndsAt) {
+        await this.prisma.subscription.update({
+          where: { businessId: user.businessId },
+          data: { status: 'EXPIRED' },
+        });
+        throw new ForbiddenException(SUBSCRIPTION_BLOCKED_MESSAGE);
+      }
+      request.subscription = sub;
+      return true;
+    }
+
+    // ACTIVE: block if past current period end
+    if (sub.status === 'ACTIVE') {
+      if (sub.currentPeriodEnd && now > sub.currentPeriodEnd) {
+        await this.prisma.subscription.update({
+          where: { businessId: user.businessId },
+          data: { status: 'EXPIRED' },
+        });
+        throw new ForbiddenException(SUBSCRIPTION_BLOCKED_MESSAGE);
+      }
+      request.subscription = sub;
+      return true;
+    }
+
+    throw new ForbiddenException(SUBSCRIPTION_BLOCKED_MESSAGE);
   }
 }
