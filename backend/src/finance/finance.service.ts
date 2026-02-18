@@ -497,6 +497,7 @@ export class FinanceService {
     to: Date,
     sector: 'all' | 'rooms' | 'bar' | 'restaurant',
     format: 'csv' | 'xlsx' | 'pdf',
+    generatedByRole: string = 'USER',
   ): Promise<{ filename: string; contentType: string; body: Buffer }> {
     const txns = await this.collectTransactions(businessId, from, to, sector);
     const safe = (d: Date) => d.toISOString().slice(0, 10);
@@ -613,19 +614,64 @@ export class FinanceService {
       };
     }
 
-    const pdf = await renderPdf({
-      title: 'Finance Transactions',
-      subtitle: `Range: ${safe(from)} to ${safe(to)} | Sector: ${sector}`,
-      columns: ['Date', 'Reference', 'Sector', 'Net', 'VAT', 'Gross', 'Mode'],
-      rows: txns.map((t) => [
-        formatDdMmYyyy(t.date),
-        t.referenceId,
-        t.sector,
-        String(round2(t.netAmount)),
-        String(round2(t.vatAmount)),
-        String(round2(t.grossAmount)),
-        t.paymentMode,
-      ]),
+    const business = await this.prisma.business.findUnique({
+      where: { id: businessId },
+      select: { name: true, businessId: true, businessType: true },
+    });
+
+    const totalNet = txns.reduce((s, t) => s + Number(t.netAmount || 0), 0);
+    const totalVat = txns.reduce((s, t) => s + Number(t.vatAmount || 0), 0);
+    const totalGross = txns.reduce((s, t) => s + Number(t.grossAmount || 0), 0);
+
+    const expAgg = await this.prisma.expense.aggregate({
+      where: { businessId, expenseDate: { gte: from, lte: to } },
+      _sum: { amount: true },
+    });
+    const totalExpenses = Number(expAgg._sum.amount || 0);
+    const netProfit = totalNet - totalExpenses;
+
+    const breakdown = { cash: 0, bank: 0, mobileMoney: 0, other: 0 };
+    for (const t of txns) {
+      const mode = String(t.paymentMode || '');
+      const m = mode.toLowerCase();
+      const amt = Number(t.grossAmount || 0);
+      if (m.includes('bank')) breakdown.bank += amt;
+      else if (m.includes('mpesa') || m.includes('m-pesa') || m.includes('tigopesa') || m.includes('airtel') || m.includes('mobile')) breakdown.mobileMoney += amt;
+      else if (m.includes('cash') || mode) breakdown.cash += amt;
+      else breakdown.other += amt;
+    }
+
+    const pdf = await renderFinanceTransactionsPdf({
+      businessName: business?.name || 'Business',
+      businessId: business?.businessId || businessId,
+      businessType: business?.businessType || '-',
+      reportTitle: 'Finance Transactions Report',
+      sector,
+      dateRange: { from: safe(from), to: safe(to) },
+      generatedAt: new Date(),
+      generatedByRole: String(generatedByRole || 'USER'),
+      summary: {
+        totalNetSales: round2(totalNet),
+        totalVat: round2(totalVat),
+        totalGrossSales: round2(totalGross),
+        totalExpenses: round2(totalExpenses),
+        netProfit: round2(netProfit),
+        paymentBreakdown: {
+          cash: round2(breakdown.cash),
+          bank: round2(breakdown.bank),
+          mobileMoney: round2(breakdown.mobileMoney),
+          other: round2(breakdown.other),
+        },
+      },
+      rows: txns.map((t) => ({
+        date: t.date,
+        reference: t.referenceId,
+        sector: t.sector,
+        net: round2(t.netAmount),
+        vat: round2(t.vatAmount),
+        gross: round2(t.grossAmount),
+        paymentMode: t.paymentMode,
+      })),
     });
     return { filename: `${baseName}.pdf`, contentType: 'application/pdf', body: pdf };
   }
@@ -655,29 +701,191 @@ function mapPaymentAccount(mode: string) {
   return 'Cash';
 }
 
-async function renderPdf(input: { title: string; subtitle: string; columns: string[]; rows: string[][] }): Promise<Buffer> {
+function formatTsh(n: number) {
+  const v = Number(n || 0);
+  const formatted = new Intl.NumberFormat('en-TZ', { maximumFractionDigits: 0 }).format(Math.round(v));
+  return `TSh ${formatted}`;
+}
+
+function formatDateTime(d: Date) {
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  return `${dd}/${mm}/${yyyy} ${hh}:${mi}`;
+}
+
+async function renderFinanceTransactionsPdf(input: {
+  businessName: string;
+  businessId: string;
+  businessType: string;
+  reportTitle: string;
+  sector: 'all' | 'rooms' | 'bar' | 'restaurant';
+  dateRange: { from: string; to: string };
+  generatedAt: Date;
+  generatedByRole: string;
+  summary: {
+    totalNetSales: number;
+    totalVat: number;
+    totalGrossSales: number;
+    totalExpenses: number;
+    netProfit: number;
+    paymentBreakdown: { cash: number; bank: number; mobileMoney: number; other: number };
+  };
+  rows: Array<{ date: Date; reference: string; sector: string; net: number; vat: number; gross: number; paymentMode: string }>;
+}): Promise<Buffer> {
   return await new Promise((resolve, reject) => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const PDFDocument = require('pdfkit');
-      const doc = new PDFDocument({ margin: 40, size: 'A4' });
+      const doc = new PDFDocument({ margin: 40, size: 'A4', bufferPages: true });
       const chunks: Buffer[] = [];
       doc.on('data', (c: any) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('end', () => {
+        const range = doc.bufferedPageRange();
+        for (let i = range.start; i < range.start + range.count; i++) {
+          doc.switchToPage(i);
+          const footerY = doc.page.height - doc.page.margins.bottom + 10;
+          doc.font('Helvetica').fontSize(8).fillColor('#555');
+          doc.text(
+            `System Generated Report • Business ID: ${input.businessId} • Page ${i + 1} of ${range.count}`,
+            doc.page.margins.left,
+            footerY,
+            { width: doc.page.width - doc.page.margins.left - doc.page.margins.right, align: 'center' },
+          );
+          doc.fillColor('#000');
+        }
+        resolve(Buffer.concat(chunks));
+      });
       doc.on('error', (e: any) => reject(e));
 
-      doc.fontSize(16).text(input.title);
-      doc.moveDown(0.3);
-      doc.fontSize(10).fillColor('#444').text(input.subtitle);
-      doc.moveDown(0.8);
+      const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+      const x = doc.page.margins.left;
+      let y = doc.page.margins.top;
+
+      // Header block
+      doc.font('Helvetica-Bold').fontSize(18).text(input.businessName, x, y);
+      y += 22;
+      doc.font('Helvetica-Bold').fontSize(14).text(input.reportTitle, x, y);
+      y += 18;
+
+      doc.font('Helvetica').fontSize(10).fillColor('#333');
+      doc.text(`Business ID: ${input.businessId}`, x, y); y += 14;
+      doc.text(`Business Type: ${input.businessType}`, x, y); y += 14;
+      if (input.sector !== 'all') { doc.text(`Sector: ${input.sector}`, x, y); y += 14; }
+      doc.text(`Date Range: ${input.dateRange.from} to ${input.dateRange.to}`, x, y); y += 14;
+      doc.text(`Generated: ${formatDateTime(input.generatedAt)} • Generated By: ${input.generatedByRole}`, x, y); y += 10;
       doc.fillColor('#000');
 
-      doc.fontSize(11).text(input.columns.join(' | '));
-      doc.moveDown(0.2);
-      doc.fontSize(10).text('-'.repeat(90));
-      doc.moveDown(0.4);
+      y += 10;
+      doc.moveTo(x, y).lineTo(x + pageWidth, y).lineWidth(1).strokeColor('#ccc').stroke();
+      doc.strokeColor('#000');
+      y += 16;
 
-      input.rows.forEach((r) => doc.text(r.join(' | ')));
+      // Summary box
+      const boxPadding = 10;
+      const boxX = x;
+      const boxW = pageWidth;
+      const boxTop = y;
+      const boxH = 165;
+      doc.save();
+      doc.roundedRect(boxX, boxTop, boxW, boxH, 8).lineWidth(1).strokeColor('#d0d7de').fillColor('#fafafa').fillAndStroke();
+      doc.restore();
+
+      let sy = boxTop + boxPadding;
+      const labelX = boxX + boxPadding;
+      const lineGap = 14;
+
+      doc.font('Helvetica-Bold').fontSize(11).fillColor('#000').text('SUMMARY', labelX, sy);
+      sy += 16;
+
+      const kv = (label: string, value: string) => {
+        doc.font('Helvetica-Bold').fontSize(10).fillColor('#000').text(label, labelX, sy);
+        doc.font('Helvetica').fontSize(10).fillColor('#000').text(value, labelX, sy, { width: boxW - boxPadding * 2, align: 'right' });
+        sy += lineGap;
+      };
+
+      kv('Total Net Sales', formatTsh(input.summary.totalNetSales));
+      kv('Total VAT', formatTsh(input.summary.totalVat));
+      kv('Total Gross Sales', formatTsh(input.summary.totalGrossSales));
+      if (input.summary.totalExpenses > 0) kv('Total Expenses', formatTsh(input.summary.totalExpenses));
+      if (input.summary.totalExpenses > 0) kv('Net Profit', formatTsh(input.summary.netProfit));
+
+      sy += 6;
+      doc.font('Helvetica-Bold').fontSize(10).text('Payment Mode Breakdown', labelX, sy);
+      sy += 12;
+      kv('Cash Total', formatTsh(input.summary.paymentBreakdown.cash));
+      kv('Bank Total', formatTsh(input.summary.paymentBreakdown.bank));
+      kv('Mobile Money Total', formatTsh(input.summary.paymentBreakdown.mobileMoney));
+      kv('Other Total', formatTsh(input.summary.paymentBreakdown.other));
+
+      y = boxTop + boxH + 18;
+
+      // Transactions table
+      const colW = {
+        date: 60,
+        reference: 110,
+        sector: 60,
+        net: 70,
+        vat: 60,
+        gross: 75,
+        mode: pageWidth - (60 + 110 + 60 + 70 + 60 + 75),
+      };
+      const rowH = 18;
+      const bottomLimit = doc.page.height - doc.page.margins.bottom - 30;
+
+      const drawHeaderRow = () => {
+        doc.save();
+        doc.rect(x, y, pageWidth, rowH).fillColor('#f1f5f9').fill();
+        doc.restore();
+        doc.rect(x, y, pageWidth, rowH).strokeColor('#d0d7de').lineWidth(1).stroke();
+        doc.font('Helvetica-Bold').fontSize(9).fillColor('#000');
+        let cx = x;
+        doc.text('Date', cx + 4, y + 5, { width: colW.date - 8 });
+        cx += colW.date;
+        doc.text('Reference', cx + 4, y + 5, { width: colW.reference - 8 });
+        cx += colW.reference;
+        doc.text('Sector', cx + 4, y + 5, { width: colW.sector - 8 });
+        cx += colW.sector;
+        doc.text('Net (TSh)', cx + 4, y + 5, { width: colW.net - 8, align: 'right' });
+        cx += colW.net;
+        doc.text('VAT (TSh)', cx + 4, y + 5, { width: colW.vat - 8, align: 'right' });
+        cx += colW.vat;
+        doc.text('Gross (TSh)', cx + 4, y + 5, { width: colW.gross - 8, align: 'right' });
+        cx += colW.gross;
+        doc.text('Payment Mode', cx + 4, y + 5, { width: colW.mode - 8 });
+        y += rowH;
+      };
+
+      drawHeaderRow();
+      doc.font('Helvetica').fontSize(9).fillColor('#000');
+
+      for (const r of input.rows) {
+        if (y + rowH > bottomLimit) {
+          doc.addPage();
+          y = doc.page.margins.top;
+          drawHeaderRow();
+          doc.font('Helvetica').fontSize(9).fillColor('#000');
+        }
+        doc.rect(x, y, pageWidth, rowH).strokeColor('#e5e7eb').lineWidth(1).stroke();
+        let cx = x;
+        doc.text(formatDdMmYyyy(r.date), cx + 4, y + 5, { width: colW.date - 8 });
+        cx += colW.date;
+        doc.text(String(r.reference || ''), cx + 4, y + 5, { width: colW.reference - 8 });
+        cx += colW.reference;
+        doc.text(String(r.sector || ''), cx + 4, y + 5, { width: colW.sector - 8 });
+        cx += colW.sector;
+        doc.text(formatTsh(r.net), cx + 4, y + 5, { width: colW.net - 8, align: 'right' });
+        cx += colW.net;
+        doc.text(formatTsh(r.vat), cx + 4, y + 5, { width: colW.vat - 8, align: 'right' });
+        cx += colW.vat;
+        doc.text(formatTsh(r.gross), cx + 4, y + 5, { width: colW.gross - 8, align: 'right' });
+        cx += colW.gross;
+        doc.text(String(r.paymentMode || ''), cx + 4, y + 5, { width: colW.mode - 8 });
+        y += rowH;
+      }
+
       doc.end();
     } catch (e) {
       reject(e);
