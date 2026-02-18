@@ -820,18 +820,27 @@ export default function BarPage() {
       )}
 
       {selectedRestock && (
-        <div className="fixed inset-0 bg-black/30 flex items-start justify-center z-50 p-4 pt-8 overflow-y-auto overscroll-contain touch-none" style={{ overscrollBehavior: 'contain', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
-          <div className="bg-white rounded-lg max-w-lg w-full max-h-[70vh] overflow-y-auto overscroll-contain p-4 my-auto shrink-0 touch-auto shadow-lg border border-slate-200" style={{ overscrollBehavior: 'contain' }}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-medium">{t('bar.restockDetails')}</h3>
-              <button onClick={() => setSelectedRestock(null)} className="text-slate-500">✕</button>
+        <div
+          className="fixed inset-0 bg-black/40 flex items-start justify-center z-50 p-4 pt-8 overflow-y-auto overscroll-contain touch-none"
+          style={{ overscrollBehavior: 'contain' }}
+        >
+          <div
+            className="w-full max-w-lg max-h-[80vh] overflow-y-auto overscroll-contain my-auto shrink-0 touch-auto"
+            style={{ overscrollBehavior: 'contain' }}
+          >
+            <div className="bg-white rounded-t-lg p-4 shadow-lg border border-slate-200 border-b-0">
+              <div className="flex items-center justify-between">
+                <h3 className="font-medium">{t('bar.restockDetails')}</h3>
+                <button onClick={() => setSelectedRestock(null)} className="text-slate-500">✕</button>
+              </div>
+              <div className="text-sm text-slate-600 mt-2">
+                {new Date(selectedRestock.createdAt).toLocaleString()} · {t('bar.restockedBy')}: {selectedRestock.createdByWorkerName ?? selectedRestock.createdByRole ?? '-'}
+              </div>
             </div>
-            <div className="text-sm text-slate-600 mb-3">
-              {new Date(selectedRestock.createdAt).toLocaleString()} · {t('bar.restockedBy')}: {selectedRestock.createdByWorkerName ?? selectedRestock.createdByRole ?? '-'}
-            </div>
-            <div className="bg-white border rounded overflow-hidden">
+
+            <div className="bg-white rounded-b-lg shadow-lg border border-slate-200 border-t-0 overflow-hidden">
               <table className="w-full text-sm">
-                <thead className="bg-slate-50">
+                <thead className="bg-slate-50 border-b">
                   <tr>
                     <th className="text-left p-3">{t('bar.itemName')}</th>
                     <th className="text-right p-3">{t('bar.before')}</th>
@@ -858,10 +867,12 @@ export default function BarPage() {
                   </tr>
                 </tbody>
               </table>
+              <div className="p-4 border-t bg-white">
+                <button onClick={() => setSelectedRestock(null)} className="w-full px-4 py-2 bg-slate-200 rounded">
+                  {t('common.close')}
+                </button>
+              </div>
             </div>
-            <button onClick={() => setSelectedRestock(null)} className="mt-4 px-4 py-2 bg-slate-200 rounded">
-              {t('common.close')}
-            </button>
           </div>
         </div>
       )}
