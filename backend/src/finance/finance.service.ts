@@ -707,6 +707,11 @@ function formatTsh(n: number) {
   return `TSh ${formatted}`;
 }
 
+function formatNumberTz(n: number) {
+  const v = Number(n || 0);
+  return new Intl.NumberFormat('en-TZ', { maximumFractionDigits: 0 }).format(Math.round(v));
+}
+
 function formatDateTime(d: Date) {
   const dd = String(d.getDate()).padStart(2, '0');
   const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -852,19 +857,20 @@ async function renderFinanceTransactionsPdf(input: {
         sy += lineGap;
       };
 
-      kv('Total Net Sales', formatTsh(input.summary.totalNetSales));
-      kv('Total VAT', formatTsh(input.summary.totalVat));
-      kv('Total Gross Sales', formatTsh(input.summary.totalGrossSales));
-      if (input.summary.totalExpenses > 0) kv('Total Expenses', formatTsh(input.summary.totalExpenses));
-      if (input.summary.totalExpenses > 0) kv('Net Profit', formatTsh(input.summary.netProfit));
+      // Currency label must not repeat outside totals section; keep numbers only here.
+      kv('Total Revenue (Net)', formatNumberTz(input.summary.totalNetSales));
+      kv('Total VAT', formatNumberTz(input.summary.totalVat));
+      kv('Total Gross', formatNumberTz(input.summary.totalGrossSales));
+      if (input.summary.totalExpenses > 0) kv('Total Expenses', formatNumberTz(input.summary.totalExpenses));
+      if (input.summary.totalExpenses > 0) kv('Net Profit', formatNumberTz(input.summary.netProfit));
 
       sy += 6;
       doc.font('Helvetica-Bold').fontSize(10).text('Payment Mode Breakdown', labelX, sy);
       sy += 12;
-      kv('Cash Total', formatTsh(input.summary.paymentBreakdown.cash));
-      kv('Bank Total', formatTsh(input.summary.paymentBreakdown.bank));
-      kv('Mobile Money Total', formatTsh(input.summary.paymentBreakdown.mobileMoney));
-      kv('Other Total', formatTsh(input.summary.paymentBreakdown.other));
+      kv('Cash Total', formatNumberTz(input.summary.paymentBreakdown.cash));
+      kv('Bank Total', formatNumberTz(input.summary.paymentBreakdown.bank));
+      kv('Mobile Money Total', formatNumberTz(input.summary.paymentBreakdown.mobileMoney));
+      kv('Other Total', formatNumberTz(input.summary.paymentBreakdown.other));
 
       y = boxTop + boxH + 18;
 
@@ -882,29 +888,30 @@ async function renderFinanceTransactionsPdf(input: {
       const tableW = fixed.date + fixed.sector + fixed.net + fixed.vat + fixed.gross + fixed.mode;
       const tableX = x + Math.max(0, (pageWidth - tableW) / 2);
       const colW = { ...fixed };
-      const padX = 8;
+      const padX = 7;
+      const headerH = 28;
       const rowH = 24;
       const bottomLimit = doc.page.height - doc.page.margins.bottom - 30;
 
       const drawHeaderRow = () => {
         doc.save();
-        doc.rect(tableX, y, tableW, rowH).fillColor('#f1f5f9').fill();
+        doc.rect(tableX, y, tableW, headerH).fillColor('#f1f5f9').fill();
         doc.restore();
-        doc.rect(tableX, y, tableW, rowH).strokeColor('#d0d7de').lineWidth(1).stroke();
+        doc.rect(tableX, y, tableW, headerH).strokeColor('#d0d7de').lineWidth(1).stroke();
         doc.font('Helvetica-Bold').fontSize(10).fillColor('#000');
         let cx = tableX;
-        doc.text('Date', cx + padX, y + 7, { width: colW.date - padX * 2, align: 'left' });
+        doc.text('Date', cx + padX, y + 9, { width: colW.date - padX * 2, align: 'left' });
         cx += colW.date;
-        doc.text('Sector', cx + padX, y + 7, { width: colW.sector - padX * 2, align: 'left' });
+        doc.text('Sector', cx + padX, y + 9, { width: colW.sector - padX * 2, align: 'left' });
         cx += colW.sector;
-        doc.text('Net (TSh)', cx + padX, y + 7, { width: colW.net - padX * 2, align: 'right' });
+        doc.text('Net (TSh)', cx + padX, y + 9, { width: colW.net - padX * 2, align: 'right' });
         cx += colW.net;
-        doc.text('VAT (TSh)', cx + padX, y + 7, { width: colW.vat - padX * 2, align: 'right' });
+        doc.text('VAT (TSh)', cx + padX, y + 9, { width: colW.vat - padX * 2, align: 'right' });
         cx += colW.vat;
-        doc.text('Gross (TSh)', cx + padX, y + 7, { width: colW.gross - padX * 2, align: 'right' });
+        doc.text('Gross (TSh)', cx + padX, y + 9, { width: colW.gross - padX * 2, align: 'right' });
         cx += colW.gross;
-        doc.text('Payment Mode', cx + padX, y + 7, { width: colW.mode - padX * 2, align: 'center' });
-        y += rowH;
+        doc.text('Payment Mode', cx + padX, y + 9, { width: colW.mode - padX * 2, align: 'center' });
+        y += headerH;
       };
 
       drawHeaderRow();
@@ -925,11 +932,11 @@ async function renderFinanceTransactionsPdf(input: {
         cx += colW.date;
         drawCellText(doc, formatSectorLabel(r.sector), cx + padX, y + 7, colW.sector - padX * 2, { align: 'left', baseSize: 10, minSize: 9, font: 'Helvetica' });
         cx += colW.sector;
-        drawCellText(doc, formatTsh(r.net), cx + padX, y + 7, colW.net - padX * 2, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
+        drawCellText(doc, formatNumberTz(r.net), cx + padX, y + 7, colW.net - padX * 2, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
         cx += colW.net;
-        drawCellText(doc, formatTsh(r.vat), cx + padX, y + 7, colW.vat - padX * 2, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
+        drawCellText(doc, formatNumberTz(r.vat), cx + padX, y + 7, colW.vat - padX * 2, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
         cx += colW.vat;
-        drawCellText(doc, formatTsh(r.gross), cx + padX, y + 7, colW.gross - padX * 2, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
+        drawCellText(doc, formatNumberTz(r.gross), cx + padX, y + 7, colW.gross - padX * 2, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
         cx += colW.gross;
         const modeLabel = formatPaymentModeLabel(String(r.paymentMode || ''));
         drawCellText(doc, modeLabel, cx + padX, y + 7, colW.mode - padX * 2, { align: 'center', baseSize: 10, minSize: 8, font: 'Helvetica' });
@@ -948,7 +955,7 @@ async function renderFinanceTransactionsPdf(input: {
       }
 
       // Totals row (accounting touch)
-      const totalsRowH = 28;
+      const totalsRowH = 36;
       if (y + totalsRowH > bottomLimit) {
         doc.addPage();
         y = doc.page.margins.top;
@@ -962,16 +969,20 @@ async function renderFinanceTransactionsPdf(input: {
       doc.restore();
       doc.rect(tableX, y, tableW, totalsRowH).strokeColor('#d0d7de').lineWidth(1).stroke();
 
-      doc.font('Helvetica-Bold').fontSize(11).fillColor('#000');
-      // Label spans Date + Sector columns
-      doc.text('TOTALS', tableX + padX, y + 8, { width: colW.date + colW.sector - padX * 2, align: 'left' });
+      // Totals section: show labels + values under numeric columns (currency label only here)
+      const labelY = y + 7;
+      const valueY = y + 20;
+      doc.font('Helvetica-Bold').fontSize(10).fillColor('#000');
+      // Leave Date + Sector blank to keep layout minimal
       let cx = tableX + colW.date + colW.sector;
-      doc.text(formatTsh(input.summary.totalNetSales), cx + padX, y + 8, { width: colW.net - padX * 2, align: 'right' });
+      doc.text('TOTAL NET', cx + padX, labelY, { width: colW.net - padX * 2, align: 'right' });
+      doc.text(formatTsh(input.summary.totalNetSales), cx + padX, valueY, { width: colW.net - padX * 2, align: 'right' });
       cx += colW.net;
-      doc.text(formatTsh(input.summary.totalVat), cx + padX, y + 8, { width: colW.vat - padX * 2, align: 'right' });
+      doc.text('TOTAL VAT', cx + padX, labelY, { width: colW.vat - padX * 2, align: 'right' });
+      doc.text(formatTsh(input.summary.totalVat), cx + padX, valueY, { width: colW.vat - padX * 2, align: 'right' });
       cx += colW.vat;
-      doc.text(formatTsh(input.summary.totalGrossSales), cx + padX, y + 8, { width: colW.gross - padX * 2, align: 'right' });
-      // payment mode column left blank on totals
+      doc.text('TOTAL GROSS', cx + padX, labelY, { width: colW.gross - padX * 2, align: 'right' });
+      doc.text(formatTsh(input.summary.totalGrossSales), cx + padX, valueY, { width: colW.gross - padX * 2, align: 'right' });
       y += totalsRowH;
 
       doc.end();
