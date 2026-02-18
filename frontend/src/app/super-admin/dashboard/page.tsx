@@ -139,7 +139,6 @@ export default function SuperAdminDashboardPage() {
                   <option value="LODGE">Lodge</option>
                   <option value="BAR">Bar</option>
                   <option value="RESTAURANT">Restaurant</option>
-                  <option value="TRANSPORT">Transport</option>
                 </select>
               </div>
               <div>

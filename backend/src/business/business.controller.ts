@@ -7,7 +7,7 @@ import { IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 class RegisterBusinessDto {
   @IsString()
-  @IsIn(['HOTEL', 'LODGE', 'BAR', 'RESTAURANT', 'TRANSPORT'])
+  @IsIn(['HOTEL', 'LODGE', 'BAR', 'RESTAURANT'])
   businessType: string;
 
   @IsString()

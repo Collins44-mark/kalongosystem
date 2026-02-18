@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 
-const BUSINESS_TYPES = ['HOTEL', 'LODGE', 'BAR', 'RESTAURANT', 'TRANSPORT'];
+const BUSINESS_TYPES = ['HOTEL', 'LODGE', 'BAR', 'RESTAURANT'];
 
 export default function RegisterBusinessPage() {
   const router = useRouter();
