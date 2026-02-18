@@ -101,31 +101,42 @@ export default function OverviewPage() {
     if (!token) return;
     setLoading(true);
     const emptyData: DashboardData = { ...EMPTY_DASHBOARD, period };
-    api<DashboardData>(`/overview?period=${period}`, { token })
-      .then((res) => setData({ ...res, period }))
+    // Fetch overview and hotel rooms in parallel so admin sees same room totals as Front Office
+    const overviewPromise = api<DashboardData>(`/overview?period=${period}`, { token })
+      .then((res) => ({ ...res, period }))
       .catch((err) => {
-        // 401/403 are handled by layout (block screen or logout); just show empty here
-        if (err?.status === 401 || err?.status === 403) return;
-        setData(emptyData);
+        if (err?.status === 401 || err?.status === 403) return null;
+        return emptyData;
+      });
+    const roomsPromise = api<Room[]>('/hotel/rooms', { token })
+      .then((rooms): { rooms: Room[]; roomSummary: DashboardData['roomSummary'] } | null => {
+        const summary = {
+          total: rooms.length,
+          occupied: rooms.filter((r) => r.status === 'OCCUPIED').length,
+          vacant: rooms.filter((r) => r.status === 'VACANT').length,
+          reserved: rooms.filter((r) => r.status === 'RESERVED').length,
+          underMaintenance: rooms.filter((r) => r.status === 'UNDER_MAINTENANCE').length,
+        };
+        return { rooms, roomSummary: summary };
       })
+      .catch(() => null);
+
+    Promise.all([overviewPromise, roomsPromise])
+      .then(([overviewRes, roomsRes]) => {
+        const base = overviewRes ?? emptyData;
+        if (roomsRes && (roomsRes.rooms.length > 0 || roomsRes.roomSummary.total > 0)) {
+          setData({ ...base, rooms: roomsRes.rooms, roomSummary: roomsRes.roomSummary });
+        } else {
+          setData(base);
+        }
+      })
+      .catch(() => setData(emptyData))
       .finally(() => setLoading(false));
   }
 
   useEffect(() => {
     fetchOverview();
   }, [token, period]);
-
-  // Fallback: if overview has no rooms, fetch directly from same API as Front Office
-  useEffect(() => {
-    if (!token || loading || !data) return;
-    if ((data.rooms?.length ?? 0) > 0 || (data.roomSummary?.total ?? 0) > 0) return;
-    api<Room[]>('/hotel/rooms', { token })
-      .then((rooms) => {
-        const summary = { total: rooms.length, occupied: rooms.filter((r) => r.status === 'OCCUPIED').length, vacant: rooms.filter((r) => r.status === 'VACANT').length, reserved: rooms.filter((r) => r.status === 'RESERVED').length, underMaintenance: rooms.filter((r) => r.status === 'UNDER_MAINTENANCE').length };
-        setData((prev) => prev ? { ...prev, rooms, roomSummary: summary } : prev);
-      })
-      .catch(() => {});
-  }, [token, loading, data]);
 
   // Refresh when page becomes visible (e.g. user returns from Front Office after adding rooms)
   useEffect(() => {
