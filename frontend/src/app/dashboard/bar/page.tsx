@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
@@ -30,6 +31,11 @@ type AdminOrder = {
   createdByWorkerName?: string | null;
   items: { id: string; quantity: number; barItem: { name: string } }[];
 };
+
+function ModalPortal({ children }: { children: React.ReactNode }) {
+  if (typeof document === 'undefined') return null;
+  return createPortal(children, document.body);
+}
 
 export default function BarPage() {
   const { token, user } = useAuth();
@@ -820,61 +826,60 @@ export default function BarPage() {
       )}
 
       {selectedRestock && (
-        <div
-          className="fixed inset-0 bg-black/40 flex items-start justify-center z-50 p-4 pt-8 overflow-y-auto overscroll-contain touch-none"
-          style={{ overscrollBehavior: 'contain' }}
-        >
+        <ModalPortal>
           <div
-            className="w-full max-w-lg max-h-[80vh] overflow-y-auto overscroll-contain my-auto shrink-0 touch-auto"
-            style={{ overscrollBehavior: 'contain' }}
+            className="fixed top-0 left-0 w-full h-full flex items-center justify-center z-[1200] p-4"
+            style={{ background: 'rgba(0,0,0,0.4)' }}
           >
-            <div className="bg-white rounded-t-lg p-4 shadow-lg border border-slate-200 border-b-0">
-              <div className="flex items-center justify-between">
-                <h3 className="font-medium">{t('bar.restockDetails')}</h3>
-                <button onClick={() => setSelectedRestock(null)} className="text-slate-500">✕</button>
+            <div className="w-[95%] max-w-[700px] md:max-w-[600px] lg:max-w-[700px] max-h-[85vh] overflow-y-auto">
+              <div className="bg-white rounded-t-lg p-4 shadow-lg border border-slate-200 border-b-0">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-medium">{t('bar.restockDetails')}</h3>
+                  <button onClick={() => setSelectedRestock(null)} className="text-slate-500">✕</button>
+                </div>
+                <div className="text-sm text-slate-600 mt-2">
+                  {new Date(selectedRestock.createdAt).toLocaleString()} · {t('bar.restockedBy')}: {selectedRestock.createdByWorkerName ?? selectedRestock.createdByRole ?? '-'}
+                </div>
               </div>
-              <div className="text-sm text-slate-600 mt-2">
-                {new Date(selectedRestock.createdAt).toLocaleString()} · {t('bar.restockedBy')}: {selectedRestock.createdByWorkerName ?? selectedRestock.createdByRole ?? '-'}
-              </div>
-            </div>
 
-            <div className="bg-white rounded-b-lg shadow-lg border border-slate-200 border-t-0 overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 border-b">
-                  <tr>
-                    <th className="text-left p-3">{t('bar.itemName')}</th>
-                    <th className="text-right p-3">{t('bar.before')}</th>
-                    <th className="text-right p-3">{t('bar.added')}</th>
-                    <th className="text-right p-3">{t('bar.after')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedRestock.items.map((it) => (
-                    <tr key={it.id} className="border-t">
-                      <td className="p-3 font-medium">{it.barItem.name}</td>
-                      <td className="p-3 text-right text-slate-700">{it.stockBefore}</td>
-                      <td className="p-3 text-right text-teal-700">+{it.quantityAdded}</td>
-                      <td className="p-3 text-right text-slate-900">{it.stockAfter}</td>
+              <div className="bg-white rounded-b-lg shadow-lg border border-slate-200 border-t-0 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 border-b">
+                    <tr>
+                      <th className="text-left p-3">{t('bar.itemName')}</th>
+                      <th className="text-right p-3">{t('bar.before')}</th>
+                      <th className="text-right p-3">{t('bar.added')}</th>
+                      <th className="text-right p-3">{t('bar.after')}</th>
                     </tr>
-                  ))}
-                  <tr className="border-t bg-slate-50">
-                    <td className="p-3 font-semibold">{t('bar.total')}</td>
-                    <td className="p-3" />
-                    <td className="p-3 text-right font-semibold text-teal-700">
-                      +{selectedRestock.items.reduce((sum, x) => sum + x.quantityAdded, 0)}
-                    </td>
-                    <td className="p-3" />
-                  </tr>
-                </tbody>
-              </table>
-              <div className="p-4 border-t bg-white">
-                <button onClick={() => setSelectedRestock(null)} className="w-full px-4 py-2 bg-slate-200 rounded">
-                  {t('common.close')}
-                </button>
+                  </thead>
+                  <tbody>
+                    {selectedRestock.items.map((it) => (
+                      <tr key={it.id} className="border-t">
+                        <td className="p-3 font-medium">{it.barItem.name}</td>
+                        <td className="p-3 text-right text-slate-700">{it.stockBefore}</td>
+                        <td className="p-3 text-right text-teal-700">+{it.quantityAdded}</td>
+                        <td className="p-3 text-right text-slate-900">{it.stockAfter}</td>
+                      </tr>
+                    ))}
+                    <tr className="border-t bg-slate-50">
+                      <td className="p-3 font-semibold">{t('bar.total')}</td>
+                      <td className="p-3" />
+                      <td className="p-3 text-right font-semibold text-teal-700">
+                        +{selectedRestock.items.reduce((sum, x) => sum + x.quantityAdded, 0)}
+                      </td>
+                      <td className="p-3" />
+                    </tr>
+                  </tbody>
+                </table>
+                <div className="p-4 border-t bg-white">
+                  <button onClick={() => setSelectedRestock(null)} className="w-full px-4 py-2 bg-slate-200 rounded">
+                    {t('common.close')}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {showAddItem && (
