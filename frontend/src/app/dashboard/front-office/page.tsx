@@ -7,6 +7,7 @@ import { useTranslation } from '@/lib/i18n/context';
 import { useDashboardBack } from '@/app/dashboard/layout';
 import { CalendarView } from './CalendarView';
 import { useSearch } from '@/store/search';
+import { notifyError } from '@/store/notifications';
 
 type Room = { id: string; roomNumber: string; roomName?: string; status: string; category: { id: string; name: string; pricePerNight: string } };
 type Category = { id: string; name: string; pricePerNight: string };
@@ -534,7 +535,7 @@ function RoomSetup({
       onCategoryAdded?.(newCat);
       onAction();
     } catch (err) {
-      alert((err as Error).message || 'Failed to add category');
+      notifyError((err as Error).message || 'Failed to add category');
     } finally {
       setLoading(false);
     }
@@ -557,7 +558,12 @@ function RoomSetup({
       setRoomNumber('');
       onAction();
     } catch (err) {
-      alert((err as Error).message);
+      const message = (err as Error)?.message || 'Failed to add room';
+      if (/room.*exist/i.test(message) || /already exists/i.test(message) || /unique/i.test(message)) {
+        notifyError(t('frontOffice.roomAlreadyExists'));
+      } else {
+        notifyError(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -572,7 +578,7 @@ function RoomSetup({
       });
       onAction();
     } catch (err) {
-      alert((err as Error).message);
+      notifyError((err as Error).message);
     }
   }
 
@@ -599,7 +605,7 @@ function RoomSetup({
       setEditingCategory(null);
       onAction();
     } catch (err) {
-      alert((err as Error).message);
+      notifyError((err as Error).message);
     } finally {
       setLoading(false);
     }
@@ -615,7 +621,7 @@ function RoomSetup({
       await api(`/hotel/categories/${categoryId}`, { method: 'DELETE', token });
       onAction();
     } catch (err) {
-      alert((err as Error).message);
+      notifyError((err as Error).message);
     }
   }
 
@@ -641,7 +647,12 @@ function RoomSetup({
       setEditingRoom(null);
       onAction();
     } catch (err) {
-      alert((err as Error).message);
+      const message = (err as Error)?.message || 'Failed to save room';
+      if (/room.*exist/i.test(message) || /already exists/i.test(message) || /unique/i.test(message)) {
+        notifyError(t('frontOffice.roomAlreadyExists'));
+      } else {
+        notifyError(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -653,7 +664,7 @@ function RoomSetup({
       await api(`/hotel/rooms/${roomId}`, { method: 'DELETE', token });
       onAction();
     } catch (err) {
-      alert((err as Error).message);
+      notifyError((err as Error).message);
     }
   }
 

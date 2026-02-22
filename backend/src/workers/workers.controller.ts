@@ -34,8 +34,7 @@ class MarkPaidDto {
 }
 
 @Controller('workers')
-@UseGuards(JwtAuthGuard, SubscriptionGuard, BusinessModuleGuard)
-@UseGuards(RolesGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard, BusinessModuleGuard, RolesGuard)
 @RequireModule('workers')
 @Roles('MANAGER', 'ADMIN', 'OWNER')
 export class WorkersController {

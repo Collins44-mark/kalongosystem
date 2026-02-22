@@ -113,6 +113,7 @@
   "frontOffice.addCategoryFirst": "Add a category above first",
   "frontOffice.roomNumber": "Room number",
   "frontOffice.roomNumberPlaceholder": "e.g. 101",
+  "frontOffice.roomAlreadyExists": "Room already exists. Please use a different room number.",
   "frontOffice.roomNameOptional": "Room name (optional)",
   "frontOffice.roomNamePlaceholder": "e.g. Lake View",
   "frontOffice.addRoom": "Add Room",

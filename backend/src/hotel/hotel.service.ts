@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
 import { isManagerLevel } from '../common/utils/roles';
@@ -129,18 +129,26 @@ export class HotelService {
     data: { categoryId: string; roomNumber: string; roomName?: string },
     createdBy: string,
   ) {
-    const room = await this.prisma.room.create({
-      data: {
-        businessId,
-        branchId,
-        categoryId: data.categoryId,
-        roomNumber: data.roomNumber,
-        roomName: data.roomName,
-        status: 'VACANT',
-        createdBy,
-      },
-    });
-    return room;
+    try {
+      const room = await this.prisma.room.create({
+        data: {
+          businessId,
+          branchId,
+          categoryId: data.categoryId,
+          roomNumber: data.roomNumber,
+          roomName: data.roomName,
+          status: 'VACANT',
+          createdBy,
+        },
+      });
+      return room;
+    } catch (e: any) {
+      // Prisma unique constraint error
+      if (e?.code === 'P2002') {
+        throw new ConflictException('Room already exists. Please use a different room number.');
+      }
+      throw e;
+    }
   }
 
   async getRooms(businessId: string, branchId?: string) {
@@ -177,11 +185,18 @@ export class HotelService {
     if (data.roomNumber !== undefined) updateData.roomNumber = data.roomNumber;
     if (data.roomName !== undefined) updateData.roomName = data.roomName;
     if (data.categoryId !== undefined) updateData.categoryId = data.categoryId;
-    return this.prisma.room.update({
-      where: { id: roomId },
-      data: updateData,
-      include: { category: true },
-    });
+    try {
+      return await this.prisma.room.update({
+        where: { id: roomId },
+        data: updateData,
+        include: { category: true },
+      });
+    } catch (e: any) {
+      if (e?.code === 'P2002') {
+        throw new ConflictException('Room number already exists. Please use a different room number.');
+      }
+      throw e;
+    }
   }
 
   async deleteRoom(businessId: string, roomId: string) {
