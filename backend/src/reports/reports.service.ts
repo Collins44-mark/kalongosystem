@@ -89,6 +89,7 @@ export class ReportsService {
     sector: string,
     from?: Date,
     to?: Date,
+    generatedBy: string = 'User',
   ): Promise<{ filename: string; contentType: string; body: Buffer }> {
     const rtRaw = String(reportType || '').toLowerCase();
     const rt =
@@ -104,6 +105,14 @@ export class ReportsService {
 
     const safeDate = (d?: Date) => (d ? d.toISOString().slice(0, 10) : 'all');
     const baseName = `report-${rt}${sec !== 'all' ? `-${sec}` : ''}-${safeDate(from)}-${safeDate(to)}`;
+
+    const business = await this.prisma.business.findUnique({
+      where: { id: businessId },
+      select: { name: true, businessId: true, businessType: true },
+    });
+    const businessName = business?.name || 'Business';
+    const businessDisplayId = business?.businessId || businessId;
+    const businessType = business?.businessType || '-';
 
     if (rt === 'sales') {
       const txns = await this.finance.collectTransactions(
@@ -126,7 +135,7 @@ export class ReportsService {
           String(round0(t.grossAmount)),
           String(t.paymentMode || ''),
         ].map(csvEscape).join(','));
-        const totalLine = ['', 'SALES TOTAL', String(round0(totalNet)), String(round0(totalVat)), String(round0(totalGross)), ''].map(csvEscape).join(',');
+        const totalLine = ['', 'TOTAL SALES', String(round0(totalNet)), String(round0(totalVat)), String(round0(totalGross)), ''].map(csvEscape).join(',');
         const csv = [header, ...lines, totalLine].join('\n') + '\n';
         return { filename: `${baseName}.csv`, contentType: 'text/csv; charset=utf-8', body: Buffer.from(csv, 'utf8') };
       }
@@ -152,7 +161,7 @@ export class ReportsService {
           gross: round0(t.grossAmount),
           paymentMode: t.paymentMode,
         }));
-        ws.addRow({ date: '', sector: 'SALES TOTAL', net: round0(totalNet), vat: round0(totalVat), gross: round0(totalGross), paymentMode: '' });
+        ws.addRow({ date: '', sector: 'TOTAL SALES', net: round0(totalNet), vat: round0(totalVat), gross: round0(totalGross), paymentMode: '' });
         const buf: any = await wb.xlsx.writeBuffer();
         return {
           filename: `${baseName}.xlsx`,
@@ -162,11 +171,13 @@ export class ReportsService {
       }
 
       const pdf = await renderSalesPdf({
-        businessId,
+        businessName,
+        businessId: businessDisplayId,
+        businessType,
         branchId,
         dateRange: { from, to },
         generatedAt: new Date(),
-        generatedBy: 'SYSTEM',
+        generatedBy,
         sector: sec,
         rows: txns.map((t: any) => ({
           date: t.date,
@@ -188,17 +199,20 @@ export class ReportsService {
         to ?? new Date(),
         sec === 'all' ? 'all' : (sec as any),
       );
+      const totalNet = txns.reduce((s: number, t: any) => s + Number(t.netAmount || 0), 0);
       const totalVat = txns.reduce((s: number, t: any) => s + Number(t.vatAmount || 0), 0);
+      const totalGross = txns.reduce((s: number, t: any) => s + Number(t.grossAmount || 0), 0);
 
       if (fmt === 'csv') {
-        const header = 'Date,Sector,VAT (TSh),Payment Mode';
+        const header = 'Date,Sector,Net (TSh),VAT (TSh),Gross (TSh)';
         const lines = txns.map((t: any) => [
           formatDdMmYyyy(t.date),
           t.sector,
+          String(round0(t.netAmount)),
           String(round0(t.vatAmount)),
-          String(t.paymentMode || ''),
+          String(round0(t.grossAmount)),
         ].map(csvEscape).join(','));
-        const totalLine = ['', 'TAX TOTAL', String(round0(totalVat)), ''].map(csvEscape).join(',');
+        const totalLine = ['', 'TOTAL TAX', String(round0(totalNet)), String(round0(totalVat)), String(round0(totalGross))].map(csvEscape).join(',');
         const csv = [header, ...lines, totalLine].join('\n') + '\n';
         return { filename: `${baseName}.csv`, contentType: 'text/csv; charset=utf-8', body: Buffer.from(csv, 'utf8') };
       }
@@ -211,16 +225,18 @@ export class ReportsService {
         ws.columns = [
           { header: 'Date', key: 'date', width: 14 },
           { header: 'Sector', key: 'sector', width: 14 },
+          { header: 'Net (TSh)', key: 'net', width: 16 },
           { header: 'VAT (TSh)', key: 'vat', width: 16 },
-          { header: 'Payment Mode', key: 'paymentMode', width: 22 },
+          { header: 'Gross (TSh)', key: 'gross', width: 16 },
         ];
         txns.forEach((t: any) => ws.addRow({
           date: formatDdMmYyyy(t.date),
           sector: t.sector,
+          net: round0(t.netAmount),
           vat: round0(t.vatAmount),
-          paymentMode: t.paymentMode,
+          gross: round0(t.grossAmount),
         }));
-        ws.addRow({ date: '', sector: 'TAX TOTAL', vat: round0(totalVat), paymentMode: '' });
+        ws.addRow({ date: '', sector: 'TOTAL TAX', net: round0(totalNet), vat: round0(totalVat), gross: round0(totalGross) });
         const buf: any = await wb.xlsx.writeBuffer();
         return {
           filename: `${baseName}.xlsx`,
@@ -230,19 +246,22 @@ export class ReportsService {
       }
 
       const pdf = await renderTaxPdf({
-        businessId,
+        businessName,
+        businessId: businessDisplayId,
+        businessType,
         branchId,
         dateRange: { from, to },
         generatedAt: new Date(),
-        generatedBy: 'SYSTEM',
+        generatedBy,
         sector: sec,
         rows: txns.map((t: any) => ({
           date: t.date,
           sector: t.sector,
+          net: t.netAmount,
           vat: t.vatAmount,
-          paymentMode: t.paymentMode,
+          gross: t.grossAmount,
         })),
-        totalVat,
+        totals: { net: totalNet, vat: totalVat, gross: totalGross },
       });
       return { filename: `${baseName}.pdf`, contentType: 'application/pdf', body: pdf };
     }
@@ -262,7 +281,7 @@ export class ReportsService {
         const lines = rows.map((r) =>
           [r.date, r.category, r.description, String(round0(r.amount)), '-'].map(csvEscape).join(','),
         );
-        const csv = [header, ...lines, ['', '', 'EXPENSE TOTAL', String(round0(total)), ''].map(csvEscape).join(',')].join('\n') + '\n';
+        const csv = [header, ...lines, ['', '', 'TOTAL EXPENSES', String(round0(total)), ''].map(csvEscape).join(',')].join('\n') + '\n';
         return {
           filename: `${baseName}.csv`,
           contentType: 'text/csv; charset=utf-8',
@@ -283,7 +302,7 @@ export class ReportsService {
           { header: 'Payment Mode', key: 'paymentMode', width: 18 },
         ];
         rows.forEach((r) => ws.addRow({ ...r, amount: round0(r.amount), paymentMode: '-' }));
-        ws.addRow({ date: '', category: '', description: 'EXPENSE TOTAL', amount: round0(total), paymentMode: '' });
+        ws.addRow({ date: '', category: '', description: 'TOTAL EXPENSES', amount: round0(total), paymentMode: '' });
         const buf: any = await wb.xlsx.writeBuffer();
         return {
           filename: `${baseName}.xlsx`,
@@ -293,11 +312,13 @@ export class ReportsService {
       }
 
       const pdf = await renderExpensesPdf({
-        businessId,
+        businessName,
+        businessId: businessDisplayId,
+        businessType,
         branchId,
         dateRange: { from, to },
         generatedAt: new Date(),
-        generatedBy: 'SYSTEM',
+        generatedBy,
         rows: rows.map((r) => ({
           date: r.date ? new Date(r.date) : new Date(),
           category: r.category,
@@ -329,7 +350,7 @@ export class ReportsService {
     const totalVat = txns.reduce((s: number, t: any) => s + Number(t.vatAmount || 0), 0);
     const totalGross = txns.reduce((s: number, t: any) => s + Number(t.grossAmount || 0), 0);
     const totalExpenses = Number(exp.total ?? expRows.reduce((s: number, r: any) => s + Number(r.amount || 0), 0));
-    const netProfit = totalGross - totalExpenses;
+    const netProfit = totalNet - totalExpenses;
 
     if (fmt === 'csv') {
       const lines: string[] = [];
@@ -337,15 +358,15 @@ export class ReportsService {
       for (const t of txns) {
         lines.push(['SALES', formatDdMmYyyy(t.date), t.sector, String(round0(t.netAmount)), String(round0(t.vatAmount)), String(round0(t.grossAmount)), String(t.paymentMode || '')].map(csvEscape).join(','));
       }
-      lines.push(['SALES TOTAL', '', '', String(round0(totalNet)), String(round0(totalVat)), String(round0(totalGross)), ''].map(csvEscape).join(','));
+      lines.push(['TOTAL SALES', '', '', String(round0(totalNet)), String(round0(totalVat)), String(round0(totalGross)), ''].map(csvEscape).join(','));
       lines.push('');
       lines.push('SECTION,Date,Category,Description,Amount (TSh),Payment Mode');
       for (const r of expRows) {
         lines.push(['EXPENSE', formatDdMmYyyy(r.date), r.category, r.description, String(round0(r.amount)), '-'].map(csvEscape).join(','));
       }
-      lines.push(['EXPENSE TOTAL', '', '', '', String(round0(totalExpenses)), ''].map(csvEscape).join(','));
+      lines.push(['TOTAL EXPENSES', '', '', '', String(round0(totalExpenses)), ''].map(csvEscape).join(','));
       lines.push('');
-      lines.push('SUMMARY,Total Net (TSh),Total VAT (TSh),Total Gross (TSh),Total Expenses (TSh),Net Profit (TSh)');
+      lines.push('SUMMARY,Total Net (TSh),Total VAT (TSh),Total Gross (TSh),Total Expenses (TSh),Net Profit (Net - Expenses) (TSh)');
       lines.push(['SUMMARY', String(round0(totalNet)), String(round0(totalVat)), String(round0(totalGross)), String(round0(totalExpenses)), String(round0(netProfit))].map(csvEscape).join(','));
       const csv = lines.join('\n') + '\n';
       return { filename: `${baseName}.csv`, contentType: 'text/csv; charset=utf-8', body: Buffer.from(csv, 'utf8') };
@@ -365,7 +386,7 @@ export class ReportsService {
       wsSum.addRow({ metric: 'Total VAT', amount: round0(totalVat) });
       wsSum.addRow({ metric: 'Total Gross Revenue', amount: round0(totalGross) });
       wsSum.addRow({ metric: 'Total Expenses', amount: round0(totalExpenses) });
-      wsSum.addRow({ metric: 'Net Profit (Gross - Expenses)', amount: round0(netProfit) });
+      wsSum.addRow({ metric: 'Net Profit (Net Revenue - Expenses)', amount: round0(netProfit) });
 
       const wsSales = wb.addWorksheet('Sales');
       wsSales.columns = [
@@ -384,7 +405,7 @@ export class ReportsService {
         gross: round0(t.grossAmount),
         paymentMode: t.paymentMode,
       }));
-      wsSales.addRow({ date: '', sector: 'SALES TOTAL', net: round0(totalNet), vat: round0(totalVat), gross: round0(totalGross), paymentMode: '' });
+      wsSales.addRow({ date: '', sector: 'TOTAL SALES', net: round0(totalNet), vat: round0(totalVat), gross: round0(totalGross), paymentMode: '' });
 
       const wsExp = wb.addWorksheet('Expenses');
       wsExp.columns = [
@@ -401,7 +422,7 @@ export class ReportsService {
         amount: round0(r.amount),
         paymentMode: '-',
       }));
-      wsExp.addRow({ date: '', category: '', description: 'EXPENSE TOTAL', amount: round0(totalExpenses), paymentMode: '' });
+      wsExp.addRow({ date: '', category: '', description: 'TOTAL EXPENSES', amount: round0(totalExpenses), paymentMode: '' });
 
       const buf: any = await wb.xlsx.writeBuffer();
       return {
@@ -412,11 +433,13 @@ export class ReportsService {
     }
 
     const pdf = await renderPnlPdf({
-      businessId,
+      businessName,
+      businessId: businessDisplayId,
+      businessType,
       branchId,
       dateRange: { from, to },
       generatedAt: new Date(),
-      generatedBy: 'SYSTEM',
+      generatedBy,
       sector: sec,
       salesRows: txns.map((t: any) => ({
         date: t.date,
@@ -455,6 +478,69 @@ function formatNumberTz(n: number) {
   return new Intl.NumberFormat('en-TZ', { maximumFractionDigits: 0 }).format(Math.round(v));
 }
 
+function formatDateTime(d: Date) {
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
+}
+
+function applyPageFooter(doc: any) {
+  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const x = doc.page.margins.left;
+  const range = doc.bufferedPageRange();
+  for (let i = range.start; i < range.start + range.count; i++) {
+    doc.switchToPage(i);
+    const footerY = doc.page.height - doc.page.margins.bottom - 14;
+    doc.font('Helvetica').fontSize(8).fillColor('#6b7280');
+    doc.text('Generated by HMS System', x, footerY, { width: pageWidth / 2, align: 'left' });
+    doc.text(`Page ${i + 1} of ${range.count}`, x, footerY, { width: pageWidth, align: 'right' });
+    doc.fillColor('#000');
+  }
+}
+
+function drawHeaderBlock(doc: any, input: {
+  title: string;
+  businessName: string;
+  businessId: string;
+  businessType: string;
+  branchId: string;
+  dateRange: { from?: Date; to?: Date };
+  generatedAt: Date;
+  generatedBy: string;
+}) {
+  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const x = doc.page.margins.left;
+  const top = doc.page.margins.top;
+  const rightX = x + Math.floor(pageWidth * 0.58);
+  const rightW = x + pageWidth - rightX;
+  const leftW = rightX - x - 10;
+
+  let y = top;
+  doc.font('Helvetica-Bold').fontSize(21).fillColor('#111827').text(input.title, x, y, { width: leftW, align: 'left' });
+  y += 26;
+  doc.font('Helvetica').fontSize(10).fillColor('#374151');
+  doc.text(input.businessName, x, y, { width: leftW, align: 'left' }); y += 13;
+  doc.text(`Business ID: ${input.businessId}`, x, y, { width: leftW, align: 'left' }); y += 13;
+  doc.text(`Branch ID: ${input.branchId}`, x, y, { width: leftW, align: 'left' }); y += 13;
+  doc.text(`Business Type: ${input.businessType}`, x, y, { width: leftW, align: 'left' }); y += 13;
+  const f = input.dateRange.from ? input.dateRange.from.toISOString().slice(0, 10) : '';
+  const t = input.dateRange.to ? input.dateRange.to.toISOString().slice(0, 10) : '';
+  doc.text(`Date Range: ${f} to ${t}`, x, y, { width: leftW, align: 'left' });
+
+  doc.font('Helvetica').fontSize(10).fillColor('#374151');
+  doc.text(`Generated On: ${formatDateTime(input.generatedAt)}`, rightX, top + 6, { width: rightW, align: 'right' });
+  doc.text(`Generated By: ${input.generatedBy}`, rightX, top + 20, { width: rightW, align: 'right' });
+
+  const dividerY = top + 92;
+  doc.moveTo(x, dividerY).lineTo(x + pageWidth, dividerY).lineWidth(1).strokeColor('#e5e7eb').stroke();
+  doc.strokeColor('#000');
+  doc.fillColor('#000');
+  return dividerY + 16;
+}
+
 function fitFontSize(doc: any, text: string, maxWidth: number, baseSize: number, minSize: number) {
   const t = String(text ?? '');
   let size = baseSize;
@@ -482,7 +568,9 @@ function drawCellText(
 }
 
 async function renderSalesPdf(input: {
+  businessName: string;
   businessId: string;
+  businessType: string;
   branchId: string;
   dateRange: { from?: Date; to?: Date };
   generatedAt: Date;
@@ -503,20 +591,16 @@ async function renderSalesPdf(input: {
 
       const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
       const x = doc.page.margins.left;
-      let y = doc.page.margins.top;
-
-      doc.font('Helvetica-Bold').fontSize(16).text('Sales Report', x, y);
-      y += 18;
-      doc.font('Helvetica').fontSize(10).fillColor('#333');
-      doc.text(`Business ID: ${input.businessId}`, x, y); y += 12;
-      doc.text(`Branch ID: ${input.branchId}`, x, y); y += 12;
-      const f = input.dateRange.from ? input.dateRange.from.toISOString().slice(0, 10) : '';
-      const t = input.dateRange.to ? input.dateRange.to.toISOString().slice(0, 10) : '';
-      doc.text(`Date Range: ${f} to ${t}`, x, y); y += 12;
-      doc.text(`Sector: ${input.sector}`, x, y); y += 12;
-      doc.text(`Generated: ${input.generatedAt.toISOString()} • Generated By: ${input.generatedBy}`, x, y); y += 10;
-      doc.fillColor('#000');
-      y += 10;
+      let y = drawHeaderBlock(doc, {
+        title: 'Sales Report',
+        businessName: input.businessName,
+        businessId: input.businessId,
+        businessType: input.businessType,
+        branchId: input.branchId,
+        dateRange: input.dateRange,
+        generatedAt: input.generatedAt,
+        generatedBy: input.generatedBy,
+      });
 
       const fixed = { date: 70, mode: 120 };
       const remaining = pageWidth - fixed.date - fixed.mode;
@@ -526,7 +610,7 @@ async function renderSalesPdf(input: {
       const padX = 6;
       const headerH = 28;
       const rowH = 24;
-      const bottomLimit = () => doc.page.height - doc.page.margins.bottom - 30;
+      const bottomLimit = () => doc.page.height - doc.page.margins.bottom - 20;
 
       const drawDividers = (topY: number, h: number, color: string) => {
         doc.save();
@@ -546,7 +630,7 @@ async function renderSalesPdf(input: {
 
       const drawHeader = () => {
         doc.save();
-        doc.rect(tableX, y, tableW, headerH).fillColor('#f1f5f9').fill();
+        doc.rect(tableX, y, tableW, headerH).fillColor('#f3f4f6').fill();
         doc.restore();
         doc.rect(tableX, y, tableW, headerH).strokeColor('#d0d7de').lineWidth(1).stroke();
         drawDividers(y, headerH, '#d0d7de');
@@ -573,7 +657,16 @@ async function renderSalesPdf(input: {
       for (const r of input.rows) {
         if (y + rowH > bottomLimit()) {
           doc.addPage();
-          y = doc.page.margins.top;
+          y = drawHeaderBlock(doc, {
+            title: 'Sales Report',
+            businessName: input.businessName,
+            businessId: input.businessId,
+            businessType: input.businessType,
+            branchId: input.branchId,
+            dateRange: input.dateRange,
+            generatedAt: input.generatedAt,
+            generatedBy: input.generatedBy,
+          });
           drawHeader();
         }
         if (idx % 2 === 1) {
@@ -602,7 +695,16 @@ async function renderSalesPdf(input: {
       const totalsH = 36;
       if (y + totalsH > bottomLimit()) {
         doc.addPage();
-        y = doc.page.margins.top;
+        y = drawHeaderBlock(doc, {
+          title: 'Sales Report',
+          businessName: input.businessName,
+          businessId: input.businessId,
+          businessType: input.businessType,
+          branchId: input.branchId,
+          dateRange: input.dateRange,
+          generatedAt: input.generatedAt,
+          generatedBy: input.generatedBy,
+        });
         drawHeader();
       }
       doc.moveTo(tableX, y).lineTo(tableX + tableW, y).lineWidth(3).strokeColor('#111827').stroke();
@@ -613,7 +715,7 @@ async function renderSalesPdf(input: {
       doc.rect(tableX, y, tableW, totalsH).strokeColor('#d0d7de').lineWidth(1).stroke();
       drawDividers(y, totalsH, '#d0d7de');
       doc.font('Helvetica-Bold').fontSize(11).fillColor('#000');
-      doc.text('SALES TOTAL', tableX + padX, y + 11, { width: colW.date + colW.sector - padX * 2, align: 'left' });
+      doc.text('TOTAL SALES', tableX + padX, y + 11, { width: colW.date + colW.sector - padX * 2, align: 'left', lineBreak: false });
       let cx = tableX + colW.date + colW.sector;
       doc.text(formatNumberTz(input.totals.net), cx + padX, y + 11, { width: colW.net - padX * 2, align: 'right' });
       cx += colW.net;
@@ -621,6 +723,7 @@ async function renderSalesPdf(input: {
       cx += colW.vat;
       doc.text(formatNumberTz(input.totals.gross), cx + padX, y + 11, { width: colW.gross - padX * 2, align: 'right' });
 
+      applyPageFooter(doc);
       doc.end();
     } catch (e) {
       reject(e);
@@ -629,14 +732,16 @@ async function renderSalesPdf(input: {
 }
 
 async function renderTaxPdf(input: {
+  businessName: string;
   businessId: string;
+  businessType: string;
   branchId: string;
   dateRange: { from?: Date; to?: Date };
   generatedAt: Date;
   generatedBy: string;
   sector: string;
-  rows: Array<{ date: Date; sector: string; vat: number; paymentMode: string }>;
-  totalVat: number;
+  rows: Array<{ date: Date; sector: string; net: number; vat: number; gross: number }>;
+  totals: { net: number; vat: number; gross: number };
 }): Promise<Buffer> {
   return await new Promise((resolve, reject) => {
     try {
@@ -650,26 +755,23 @@ async function renderTaxPdf(input: {
 
       const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
       const x = doc.page.margins.left;
-      let y = doc.page.margins.top;
-      const bottomLimit = () => doc.page.height - doc.page.margins.bottom - 30;
+      let y = drawHeaderBlock(doc, {
+        title: 'Tax Report',
+        businessName: input.businessName,
+        businessId: input.businessId,
+        businessType: input.businessType,
+        branchId: input.branchId,
+        dateRange: input.dateRange,
+        generatedAt: input.generatedAt,
+        generatedBy: input.generatedBy,
+      });
+      const bottomLimit = () => doc.page.height - doc.page.margins.bottom - 20;
 
-      doc.font('Helvetica-Bold').fontSize(16).text('Tax Report', x, y);
-      y += 18;
-      doc.font('Helvetica').fontSize(10).fillColor('#333');
-      doc.text(`Business ID: ${input.businessId}`, x, y); y += 12;
-      doc.text(`Branch ID: ${input.branchId}`, x, y); y += 12;
-      const f = input.dateRange.from ? input.dateRange.from.toISOString().slice(0, 10) : '';
-      const t = input.dateRange.to ? input.dateRange.to.toISOString().slice(0, 10) : '';
-      doc.text(`Date Range: ${f} to ${t}`, x, y); y += 12;
-      doc.text(`Sector: ${input.sector}`, x, y); y += 12;
-      doc.text(`Generated: ${input.generatedAt.toISOString()} • Generated By: ${input.generatedBy}`, x, y); y += 10;
-      doc.fillColor('#000');
-      y += 14;
-
-      const fixed = { date: 70, sector: 110, mode: 150 };
-      const vatW = pageWidth - fixed.date - fixed.sector - fixed.mode;
-      const colW = { date: fixed.date, sector: fixed.sector, vat: Math.max(80, vatW), mode: fixed.mode };
-      const tableW = colW.date + colW.sector + colW.vat + colW.mode;
+      const fixed = { date: 70, sector: 110 };
+      const remaining = pageWidth - fixed.date - fixed.sector;
+      const third = Math.floor(remaining / 3);
+      const colW = { date: fixed.date, sector: fixed.sector, net: third, vat: third, gross: remaining - third * 2 };
+      const tableW = colW.date + colW.sector + colW.net + colW.vat + colW.gross;
       const tableX = x + (pageWidth - tableW) / 2;
       const padX = 6;
       const headerH = 28;
@@ -682,6 +784,8 @@ async function renderTaxPdf(input: {
         doc.moveTo(vx, topY).lineTo(vx, topY + h).stroke();
         vx += colW.sector;
         doc.moveTo(vx, topY).lineTo(vx, topY + h).stroke();
+        vx += colW.net;
+        doc.moveTo(vx, topY).lineTo(vx, topY + h).stroke();
         vx += colW.vat;
         doc.moveTo(vx, topY).lineTo(vx, topY + h).stroke();
         doc.restore();
@@ -689,7 +793,7 @@ async function renderTaxPdf(input: {
 
       const drawHeader = () => {
         doc.save();
-        doc.rect(tableX, y, tableW, headerH).fillColor('#f1f5f9').fill();
+        doc.rect(tableX, y, tableW, headerH).fillColor('#f3f4f6').fill();
         doc.restore();
         doc.rect(tableX, y, tableW, headerH).strokeColor('#d0d7de').lineWidth(1).stroke();
         drawDividers(y, headerH, '#d0d7de');
@@ -699,9 +803,11 @@ async function renderTaxPdf(input: {
         cx += colW.date;
         doc.text('Sector', cx + padX, y + 9, { width: colW.sector - padX * 2, align: 'left' });
         cx += colW.sector;
+        doc.text('Net (TSh)', cx + padX, y + 9, { width: colW.net - padX * 2, align: 'right' });
+        cx += colW.net;
         doc.text('VAT (TSh)', cx + padX, y + 9, { width: colW.vat - padX * 2, align: 'right' });
         cx += colW.vat;
-        doc.text('Payment Mode', cx + padX, y + 9, { width: colW.mode - padX * 2, align: 'center' });
+        doc.text('Gross (TSh)', cx + padX, y + 9, { width: colW.gross - padX * 2, align: 'right' });
         y += headerH;
       };
 
@@ -712,7 +818,16 @@ async function renderTaxPdf(input: {
       for (const r of input.rows) {
         if (y + rowH > bottomLimit()) {
           doc.addPage();
-          y = doc.page.margins.top;
+          y = drawHeaderBlock(doc, {
+            title: 'Tax Report',
+            businessName: input.businessName,
+            businessId: input.businessId,
+            businessType: input.businessType,
+            branchId: input.branchId,
+            dateRange: input.dateRange,
+            generatedAt: input.generatedAt,
+            generatedBy: input.generatedBy,
+          });
           drawHeader();
         }
         if (idx % 2 === 1) {
@@ -727,9 +842,11 @@ async function renderTaxPdf(input: {
         cx += colW.date;
         drawCellText(doc, String(r.sector), cx + padX, y + 7, colW.sector - padX * 2, { align: 'left', baseSize: 10, minSize: 9, font: 'Helvetica' });
         cx += colW.sector;
+        drawCellText(doc, formatNumberTz(r.net), cx + padX, y + 7, colW.net - padX * 2, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
+        cx += colW.net;
         drawCellText(doc, formatNumberTz(r.vat), cx + padX, y + 7, colW.vat - padX * 2, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
         cx += colW.vat;
-        drawCellText(doc, String(r.paymentMode || ''), cx + padX, y + 7, colW.mode - padX * 2, { align: 'center', baseSize: 10, minSize: 8, font: 'Helvetica' });
+        drawCellText(doc, formatNumberTz(r.gross), cx + padX, y + 7, colW.gross - padX * 2, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
         y += rowH;
         idx += 1;
       }
@@ -737,7 +854,16 @@ async function renderTaxPdf(input: {
       const totalsH = 36;
       if (y + totalsH > bottomLimit()) {
         doc.addPage();
-        y = doc.page.margins.top;
+        y = drawHeaderBlock(doc, {
+          title: 'Tax Report',
+          businessName: input.businessName,
+          businessId: input.businessId,
+          businessType: input.businessType,
+          branchId: input.branchId,
+          dateRange: input.dateRange,
+          generatedAt: input.generatedAt,
+          generatedBy: input.generatedBy,
+        });
         drawHeader();
       }
       doc.moveTo(tableX, y).lineTo(tableX + tableW, y).lineWidth(3).strokeColor('#111827').stroke();
@@ -747,10 +873,17 @@ async function renderTaxPdf(input: {
       doc.restore();
       doc.rect(tableX, y, tableW, totalsH).strokeColor('#d0d7de').lineWidth(1).stroke();
       drawDividers(y, totalsH, '#d0d7de');
-      doc.font('Helvetica-Bold').fontSize(11).fillColor('#000');
-      doc.text('TAX TOTAL', tableX + padX, y + 11, { width: colW.date + colW.sector - padX * 2, align: 'left' });
-      doc.text(formatNumberTz(input.totalVat), tableX + colW.date + colW.sector + padX, y + 11, { width: colW.vat - padX * 2, align: 'right' });
 
+      doc.font('Helvetica-Bold').fontSize(11).fillColor('#000');
+      doc.text('TOTAL TAX', tableX + padX, y + 11, { width: colW.date + colW.sector - padX * 2, align: 'left', lineBreak: false });
+      let cx = tableX + colW.date + colW.sector;
+      doc.text(formatNumberTz(input.totals.net), cx + padX, y + 11, { width: colW.net - padX * 2, align: 'right' });
+      cx += colW.net;
+      doc.font('Helvetica-Bold').fontSize(11).text(formatNumberTz(input.totals.vat), cx + padX, y + 11, { width: colW.vat - padX * 2, align: 'right' });
+      cx += colW.vat;
+      doc.font('Helvetica-Bold').fontSize(11).text(formatNumberTz(input.totals.gross), cx + padX, y + 11, { width: colW.gross - padX * 2, align: 'right' });
+
+      applyPageFooter(doc);
       doc.end();
     } catch (e) {
       reject(e);
@@ -759,7 +892,9 @@ async function renderTaxPdf(input: {
 }
 
 async function renderExpensesPdf(input: {
+  businessName: string;
   businessId: string;
+  businessType: string;
   branchId: string;
   dateRange: { from?: Date; to?: Date };
   generatedAt: Date;
@@ -768,7 +903,9 @@ async function renderExpensesPdf(input: {
   total: number;
 }): Promise<Buffer> {
   return await renderPnlPdf({
+    businessName: input.businessName,
     businessId: input.businessId,
+    businessType: input.businessType,
     branchId: input.branchId,
     dateRange: input.dateRange,
     generatedAt: input.generatedAt,
@@ -782,7 +919,9 @@ async function renderExpensesPdf(input: {
 }
 
 async function renderPnlPdf(input: {
+  businessName: string;
   businessId: string;
+  businessType: string;
   branchId: string;
   dateRange: { from?: Date; to?: Date };
   generatedAt: Date;
@@ -805,28 +944,33 @@ async function renderPnlPdf(input: {
 
       const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
       const x = doc.page.margins.left;
-      let y = doc.page.margins.top;
-      const bottomLimit = () => doc.page.height - doc.page.margins.bottom - 30;
+      const title = input.mode === 'expensesOnly' ? 'Expense Report' : 'Profit & Loss';
+      let y = drawHeaderBlock(doc, {
+        title,
+        businessName: input.businessName,
+        businessId: input.businessId,
+        businessType: input.businessType,
+        branchId: input.branchId,
+        dateRange: input.dateRange,
+        generatedAt: input.generatedAt,
+        generatedBy: input.generatedBy,
+      });
+      const bottomLimit = () => doc.page.height - doc.page.margins.bottom - 20;
       const ensureSpace = (h: number) => {
         if (y + h > bottomLimit()) {
           doc.addPage();
-          y = doc.page.margins.top;
+          y = drawHeaderBlock(doc, {
+            title,
+            businessName: input.businessName,
+            businessId: input.businessId,
+            businessType: input.businessType,
+            branchId: input.branchId,
+            dateRange: input.dateRange,
+            generatedAt: input.generatedAt,
+            generatedBy: input.generatedBy,
+          });
         }
       };
-
-      const title = input.mode === 'expensesOnly' ? 'Expense Report' : 'Profit & Loss Report';
-      doc.font('Helvetica-Bold').fontSize(16).text(title, x, y);
-      y += 18;
-      doc.font('Helvetica').fontSize(10).fillColor('#333');
-      doc.text(`Business ID: ${input.businessId}`, x, y); y += 12;
-      doc.text(`Branch ID: ${input.branchId}`, x, y); y += 12;
-      const f = input.dateRange.from ? input.dateRange.from.toISOString().slice(0, 10) : '';
-      const t = input.dateRange.to ? input.dateRange.to.toISOString().slice(0, 10) : '';
-      doc.text(`Date Range: ${f} to ${t}`, x, y); y += 12;
-      if (input.mode !== 'expensesOnly') { doc.text(`Sector: ${input.sector}`, x, y); y += 12; }
-      doc.text(`Generated: ${input.generatedAt.toISOString()} • Generated By: ${input.generatedBy}`, x, y); y += 10;
-      doc.fillColor('#000');
-      y += 14;
 
       const drawSectionTitle = (t2: string) => {
         ensureSpace(26);
@@ -867,7 +1011,7 @@ async function renderPnlPdf(input: {
 
         const drawHeader = () => {
           doc.save();
-          doc.rect(tableX, y, tableW, headerH).fillColor('#f1f5f9').fill();
+          doc.rect(tableX, y, tableW, headerH).fillColor('#f3f4f6').fill();
           doc.restore();
           doc.rect(tableX, y, tableW, headerH).strokeColor('#d0d7de').lineWidth(1).stroke();
           drawDividers(y, headerH, '#d0d7de');
@@ -893,7 +1037,16 @@ async function renderPnlPdf(input: {
         for (const r of input.salesRows) {
           if (y + rowH > bottomLimit()) {
             doc.addPage();
-            y = doc.page.margins.top;
+            y = drawHeaderBlock(doc, {
+              title,
+              businessName: input.businessName,
+              businessId: input.businessId,
+              businessType: input.businessType,
+              branchId: input.branchId,
+              dateRange: input.dateRange,
+              generatedAt: input.generatedAt,
+              generatedBy: input.generatedBy,
+            });
             drawHeader();
           }
           if (idx % 2 === 1) {
@@ -922,7 +1075,16 @@ async function renderPnlPdf(input: {
         const totalsH = 36;
         if (y + totalsH > bottomLimit()) {
           doc.addPage();
-          y = doc.page.margins.top;
+          y = drawHeaderBlock(doc, {
+            title,
+            businessName: input.businessName,
+            businessId: input.businessId,
+            businessType: input.businessType,
+            branchId: input.branchId,
+            dateRange: input.dateRange,
+            generatedAt: input.generatedAt,
+            generatedBy: input.generatedBy,
+          });
           drawHeader();
         }
         doc.moveTo(tableX, y).lineTo(tableX + tableW, y).lineWidth(3).strokeColor('#111827').stroke();
@@ -933,7 +1095,7 @@ async function renderPnlPdf(input: {
         doc.rect(tableX, y, tableW, totalsH).strokeColor('#d0d7de').lineWidth(1).stroke();
         drawDividers(y, totalsH, '#d0d7de');
         doc.font('Helvetica-Bold').fontSize(11).fillColor('#000');
-        doc.text('SALES TOTAL', tableX + padX, y + 11, { width: colW.date + colW.sector - padX * 2, align: 'left' });
+        doc.text('TOTAL SALES', tableX + padX, y + 11, { width: colW.date + colW.sector - padX * 2, align: 'left', lineBreak: false });
         let cx = tableX + colW.date + colW.sector;
         doc.text(formatNumberTz(input.totals.net), cx + padX, y + 11, { width: colW.net - padX * 2, align: 'right' });
         cx += colW.net;
@@ -970,7 +1132,7 @@ async function renderPnlPdf(input: {
 
       const drawExpHeader = () => {
         doc.save();
-        doc.rect(expX, y, expW, expHeaderH).fillColor('#f1f5f9').fill();
+        doc.rect(expX, y, expW, expHeaderH).fillColor('#f3f4f6').fill();
         doc.restore();
         doc.rect(expX, y, expW, expHeaderH).strokeColor('#d0d7de').lineWidth(1).stroke();
         drawExpDividers(y, expHeaderH, '#d0d7de');
@@ -994,7 +1156,16 @@ async function renderPnlPdf(input: {
       for (const r of input.expenseRows) {
         if (y + expRowH > bottomLimit()) {
           doc.addPage();
-          y = doc.page.margins.top;
+          y = drawHeaderBlock(doc, {
+            title,
+            businessName: input.businessName,
+            businessId: input.businessId,
+            businessType: input.businessType,
+            branchId: input.branchId,
+            dateRange: input.dateRange,
+            generatedAt: input.generatedAt,
+            generatedBy: input.generatedBy,
+          });
           drawExpHeader();
         }
         if (expIdx % 2 === 1) {
@@ -1021,7 +1192,16 @@ async function renderPnlPdf(input: {
       const expTotalH = 36;
       if (y + expTotalH > bottomLimit()) {
         doc.addPage();
-        y = doc.page.margins.top;
+        y = drawHeaderBlock(doc, {
+          title,
+          businessName: input.businessName,
+          businessId: input.businessId,
+          businessType: input.businessType,
+          branchId: input.branchId,
+          dateRange: input.dateRange,
+          generatedAt: input.generatedAt,
+          generatedBy: input.generatedBy,
+        });
         drawExpHeader();
       }
       doc.moveTo(expX, y).lineTo(expX + expW, y).lineWidth(3).strokeColor('#111827').stroke();
@@ -1032,7 +1212,7 @@ async function renderPnlPdf(input: {
       doc.rect(expX, y, expW, expTotalH).strokeColor('#d0d7de').lineWidth(1).stroke();
       drawExpDividers(y, expTotalH, '#d0d7de');
       doc.font('Helvetica-Bold').fontSize(11).fillColor('#000');
-      doc.text('EXPENSE TOTAL', expX + expPadX, y + 11, { width: expColW.date + expColW.category + expColW.description - expPadX * 2, align: 'left' });
+      doc.text('TOTAL EXPENSES', expX + expPadX, y + 11, { width: expColW.date + expColW.category + expColW.description - expPadX * 2, align: 'left', lineBreak: false });
       doc.text(formatNumberTz(input.totals.expenses), expX + expColW.date + expColW.category + expColW.description + expPadX, y + 11, { width: expColW.amount - expPadX * 2, align: 'right' });
       y += expTotalH + 18;
 
@@ -1061,9 +1241,10 @@ async function renderPnlPdf(input: {
         kv('Total VAT (TSh)', formatNumberTz(input.totals.vat));
         kv('Total Gross Revenue (TSh)', formatNumberTz(input.totals.gross));
         kv('Total Expenses (TSh)', formatNumberTz(input.totals.expenses));
-        kv('Net Profit (Gross - Expenses) (TSh)', formatNumberTz(input.totals.netProfit), true);
+        kv('Net Profit (Net Revenue - Expenses) (TSh)', formatNumberTz(input.totals.netProfit), true);
       }
 
+      applyPageFooter(doc);
       doc.end();
     } catch (e) {
       reject(e);

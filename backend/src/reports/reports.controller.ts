@@ -104,6 +104,11 @@ export class ReportsController {
     }
 
     const branchId = user.branchId || 'main';
+    const generatedBy =
+      String(user?.name || '').trim() ||
+      String(user?.email || '').trim() ||
+      String(user?.sub || '').trim() ||
+      'User';
     const payload = await this.reports.exportReport(
       user.businessId,
       branchId,
@@ -112,6 +117,7 @@ export class ReportsController {
       sec,
       range?.from,
       range?.to,
+      generatedBy,
     );
 
     res.setHeader('Content-Type', payload.contentType);
