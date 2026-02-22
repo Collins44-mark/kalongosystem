@@ -130,20 +130,26 @@ export class ReportsService {
         const header = 'Date,Transaction_Type,Sector,Net,VAT,Gross,Payment_Mode,Reference';
         const rows = [...txns]
           .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
-          .map((t: any) => [
-            formatIsoDate(new Date(t.date)),
-            'Sale',
-            String(t.sector ?? ''),
-            numberCsv0(t.netAmount),
-            numberCsv0(t.vatAmount),
-            numberCsv0(t.grossAmount),
-            normalizePaymentMode(t.paymentMode),
-            String(t.referenceId ?? ''),
-          ].map(csvEscape).join(','));
+          .map((t: any) => {
+            const date = formatIsoDate(new Date(t.date));
+            const sector = normalizeSector(t.sector);
+            const reference = String(t.referenceId ?? '').trim() || 'UNKNOWN';
+            const paymentMode = normalizePaymentMode(t.paymentMode);
+            return [
+              date,
+              'Sale',
+              sector,
+              numberCsv0(t.netAmount),
+              numberCsv0(t.vatAmount),
+              numberCsv0(t.grossAmount),
+              paymentMode,
+              reference,
+            ].map(csvEscape).join(',');
+          });
         const csv = [header, ...rows].join('\n') + '\n';
         return {
           filename: `sales-report-${exportDate}.csv`,
-          contentType: 'text/csv; charset=utf-8',
+          contentType: 'text/csv',
           body: Buffer.from(csv, 'utf8'),
         };
       }
@@ -513,6 +519,13 @@ function numberCsv0(n: any) {
   const v = Number(n ?? 0);
   if (!Number.isFinite(v)) return '0';
   return String(Math.round(v));
+}
+
+function normalizeSector(input: any): 'ROOMS' | 'BAR' | 'RESTAURANT' {
+  const raw = String(input ?? '').trim().toLowerCase();
+  if (raw === 'rooms' || raw === 'room') return 'ROOMS';
+  if (raw === 'bar') return 'BAR';
+  return 'RESTAURANT';
 }
 
 function normalizePaymentMode(input: any): 'CASH' | 'BANK' | 'MOBILE_MONEY' | 'CARD' | 'OTHER' {
