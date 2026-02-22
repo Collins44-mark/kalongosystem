@@ -114,6 +114,7 @@
   "frontOffice.roomNumber": "Nambari ya chumba",
   "frontOffice.roomNumberPlaceholder": "mf. 101",
   "frontOffice.roomAlreadyExists": "Chumba hiki tayari kipo. Tafadhali tumia nambari nyingine ya chumba.",
+  "frontOffice.roomAlreadyExistsTitle": "Chumba tayari kipo",
   "frontOffice.roomNameOptional": "Jina la chumba (si lazima)",
   "frontOffice.roomNamePlaceholder": "mf. Mtazamo wa Ziwa",
   "frontOffice.addRoom": "Ongeza Chumba",

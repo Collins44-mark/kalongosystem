@@ -508,6 +508,7 @@ function RoomSetup({
   const [editRoomNumber, setEditRoomNumber] = useState('');
   const [editRoomCatId, setEditRoomCatId] = useState('');
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [showRoomExistsModal, setShowRoomExistsModal] = useState(false);
 
   const categoryMap = new Map(categories.map((c) => [c.id, c]));
   const roomsByCategory = [...new Set(rooms.map((r) => r.category.id))].map((catId) => {
@@ -560,7 +561,7 @@ function RoomSetup({
     } catch (err) {
       const message = (err as Error)?.message || 'Failed to add room';
       if (/room.*exist/i.test(message) || /already exists/i.test(message) || /unique/i.test(message)) {
-        notifyError(t('frontOffice.roomAlreadyExists'));
+        setShowRoomExistsModal(true);
       } else {
         notifyError(message);
       }
@@ -649,7 +650,7 @@ function RoomSetup({
     } catch (err) {
       const message = (err as Error)?.message || 'Failed to save room';
       if (/room.*exist/i.test(message) || /already exists/i.test(message) || /unique/i.test(message)) {
-        notifyError(t('frontOffice.roomAlreadyExists'));
+        setShowRoomExistsModal(true);
       } else {
         notifyError(message);
       }
@@ -670,6 +671,36 @@ function RoomSetup({
 
   return (
     <div className="space-y-6">
+      {showRoomExistsModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('frontOffice.roomAlreadyExistsTitle')}
+          onClick={() => setShowRoomExistsModal(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl bg-white shadow-lg border p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-base font-semibold text-slate-900">
+              {t('frontOffice.roomAlreadyExistsTitle')}
+            </div>
+            <div className="mt-2 text-sm text-slate-600">
+              {t('frontOffice.roomAlreadyExists')}
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowRoomExistsModal(false)}
+                className="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700 text-sm"
+              >
+                {t('common.close')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <section className="bg-white border rounded-lg p-4 sm:p-5">
         <h2 className="text-base font-semibold mb-3">{t('frontOffice.step1Category')}</h2>
         <form onSubmit={createCategory} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 items-end">
