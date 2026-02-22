@@ -126,18 +126,26 @@ export class ReportsService {
       const totalGross = txns.reduce((s: number, t: any) => s + Number(t.grossAmount || 0), 0);
 
       if (fmt === 'csv') {
-        const header = 'Date,Sector,Net (TSh),VAT (TSh),Gross (TSh),Payment Mode';
-        const lines = txns.map((t: any) => [
-          formatDdMmYyyy(t.date),
-          t.sector,
-          String(round0(t.netAmount)),
-          String(round0(t.vatAmount)),
-          String(round0(t.grossAmount)),
-          String(t.paymentMode || ''),
-        ].map(csvEscape).join(','));
-        const totalLine = ['', 'TOTAL SALES', String(round0(totalNet)), String(round0(totalVat)), String(round0(totalGross)), ''].map(csvEscape).join(',');
-        const csv = [header, ...lines, totalLine].join('\n') + '\n';
-        return { filename: `${baseName}.csv`, contentType: 'text/csv; charset=utf-8', body: Buffer.from(csv, 'utf8') };
+        const exportDate = formatIsoDate(new Date());
+        const header = 'Date,Transaction_Type,Sector,Net,VAT,Gross,Payment_Mode,Reference';
+        const rows = [...txns]
+          .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
+          .map((t: any) => [
+            formatIsoDate(new Date(t.date)),
+            'Sale',
+            String(t.sector ?? ''),
+            numberCsv0(t.netAmount),
+            numberCsv0(t.vatAmount),
+            numberCsv0(t.grossAmount),
+            normalizePaymentMode(t.paymentMode),
+            String(t.referenceId ?? ''),
+          ].map(csvEscape).join(','));
+        const csv = [header, ...rows].join('\n') + '\n';
+        return {
+          filename: `sales-report-${exportDate}.csv`,
+          contentType: 'text/csv; charset=utf-8',
+          body: Buffer.from(csv, 'utf8'),
+        };
       }
 
       if (fmt === 'xlsx') {
@@ -204,17 +212,23 @@ export class ReportsService {
       const totalGross = txns.reduce((s: number, t: any) => s + Number(t.grossAmount || 0), 0);
 
       if (fmt === 'csv') {
-        const header = 'Date,Sector,Net (TSh),VAT (TSh),Gross (TSh)';
-        const lines = txns.map((t: any) => [
-          formatDdMmYyyy(t.date),
-          t.sector,
-          String(round0(t.netAmount)),
-          String(round0(t.vatAmount)),
-          String(round0(t.grossAmount)),
-        ].map(csvEscape).join(','));
-        const totalLine = ['', 'TOTAL TAX', String(round0(totalNet)), String(round0(totalVat)), String(round0(totalGross))].map(csvEscape).join(',');
-        const csv = [header, ...lines, totalLine].join('\n') + '\n';
-        return { filename: `${baseName}.csv`, contentType: 'text/csv; charset=utf-8', body: Buffer.from(csv, 'utf8') };
+        const exportDate = formatIsoDate(new Date());
+        const header = 'Date,Sector,Net,VAT,Gross';
+        const rows = [...txns]
+          .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
+          .map((t: any) => [
+            formatIsoDate(new Date(t.date)),
+            String(t.sector ?? ''),
+            numberCsv0(t.netAmount),
+            numberCsv0(t.vatAmount),
+            numberCsv0(t.grossAmount),
+          ].map(csvEscape).join(','));
+        const csv = [header, ...rows].join('\n') + '\n';
+        return {
+          filename: `tax-report-${exportDate}.csv`,
+          contentType: 'text/csv; charset=utf-8',
+          body: Buffer.from(csv, 'utf8'),
+        };
       }
 
       if (fmt === 'xlsx') {
@@ -273,17 +287,30 @@ export class ReportsService {
         category: String(e.category ?? ''),
         description: String(e.description ?? ''),
         amount: Number(e.amount ?? 0),
+        reference: String(e.id ?? ''),
       }));
       const total = Number(exp.total ?? rows.reduce((s, r) => s + r.amount, 0));
 
       if (fmt === 'csv') {
-        const header = 'Date,Category,Description,Amount (TSh),Payment Mode';
-        const lines = rows.map((r) =>
-          [r.date, r.category, r.description, String(round0(r.amount)), '-'].map(csvEscape).join(','),
-        );
-        const csv = [header, ...lines, ['', '', 'TOTAL EXPENSES', String(round0(total)), ''].map(csvEscape).join(',')].join('\n') + '\n';
+        const exportDate = formatIsoDate(new Date());
+        const header = 'Date,Transaction_Type,Category,Description,Amount,Payment_Mode,Reference';
+        const lines = [...rows]
+          .filter((r) => Boolean(r.date))
+          .sort((a, b) => String(a.date).localeCompare(String(b.date)))
+          .map((r) =>
+            [
+              r.date,
+              'Expense',
+              r.category,
+              r.description,
+              numberCsv0(r.amount),
+              'OTHER',
+              r.reference,
+            ].map(csvEscape).join(','),
+          );
+        const csv = [header, ...lines].join('\n') + '\n';
         return {
-          filename: `${baseName}.csv`,
+          filename: `expense-report-${exportDate}.csv`,
           contentType: 'text/csv; charset=utf-8',
           body: Buffer.from(csv, 'utf8'),
         };
@@ -476,6 +503,40 @@ function formatDdMmYyyy(d: Date) {
 function formatNumberTz(n: number) {
   const v = Number(n || 0);
   return new Intl.NumberFormat('en-TZ', { maximumFractionDigits: 0 }).format(Math.round(v));
+}
+
+function formatIsoDate(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
+
+function numberCsv0(n: any) {
+  const v = Number(n ?? 0);
+  if (!Number.isFinite(v)) return '0';
+  return String(Math.round(v));
+}
+
+function normalizePaymentMode(input: any): 'CASH' | 'BANK' | 'MOBILE_MONEY' | 'CARD' | 'OTHER' {
+  const raw = String(input ?? '')
+    .replace(/\(.*?\)/g, '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, ' ');
+
+  if (!raw) return 'OTHER';
+  if (raw.includes('CASH')) return 'CASH';
+  if (raw.includes('CARD') || raw.includes('VISA') || raw.includes('MASTERCARD')) return 'CARD';
+  if (raw.includes('BANK') || raw.includes('TRANSFER') || raw.includes('EFT')) return 'BANK';
+  if (
+    raw.includes('MOBILE') ||
+    raw.includes('MPESA') ||
+    raw.includes('M-PESA') ||
+    raw.includes('TIGO') ||
+    raw.includes('AIRTEL') ||
+    raw.includes('HALOPESA')
+  ) {
+    return 'MOBILE_MONEY';
+  }
+  return 'OTHER';
 }
 
 function formatDateTime(d: Date) {
