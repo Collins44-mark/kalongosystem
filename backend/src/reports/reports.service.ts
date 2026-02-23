@@ -847,6 +847,8 @@ function normalizePaymentMethodCsv(input: any): 'CASH' | 'BANK' | 'MOBILE_MONEY'
     .replace(/\s+/g, ' ');
 
   if (!raw) return 'CASH';
+  if (raw === 'PAID DIRECT' || raw.includes('PAID DIRECT') || raw === 'DIRECT') return 'CASH';
+  if (raw === '-' || raw === 'N/A' || raw === 'NA') return 'CASH';
   if (raw.includes('CASH')) return 'CASH';
   if (raw.includes('CARD') || raw.includes('VISA') || raw.includes('MASTERCARD')) return 'CARD';
   if (raw.includes('BANK') || raw.includes('TRANSFER') || raw.includes('EFT')) return 'BANK';
@@ -877,7 +879,9 @@ function normalizePaymentMethodExport(input: any): 'CASH' | 'BANK' | 'MOBILE_MON
     .toUpperCase()
     .replace(/\s+/g, ' ');
 
-  if (!raw) throw new BadRequestException('Payment method is required');
+  if (!raw) return 'CASH';
+  if (raw === 'PAID DIRECT' || raw.includes('PAID DIRECT') || raw === 'DIRECT') return 'CASH';
+  if (raw === '-' || raw === 'N/A' || raw === 'NA') return 'CASH';
   if (raw.includes('CASH')) return 'CASH';
   if (raw.includes('CARD') || raw.includes('VISA') || raw.includes('MASTERCARD')) return 'CARD';
   if (raw.includes('BANK') || raw.includes('TRANSFER') || raw.includes('EFT')) return 'BANK';
