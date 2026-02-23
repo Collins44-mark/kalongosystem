@@ -173,6 +173,11 @@ export class ReportsService {
         const ExcelJS = require('exceljs');
         const wb = new ExcelJS.Workbook();
         const exportDate = formatIsoDate(new Date());
+        const generatedAt = new Date();
+        const branchLabel = normalizeBranchIdExport(branchId);
+        const rangeFromLabel = from ? formatIsoDate(from) : 'ALL';
+        const rangeToLabel = to ? formatIsoDate(to) : 'ALL';
+        const generatedOnLabel = `${formatIsoDate(generatedAt)} ${String(generatedAt.getHours()).padStart(2, '0')}:${String(generatedAt.getMinutes()).padStart(2, '0')}`;
 
         // =========================
         // Sheet 1: Sales_Data (RAW)
@@ -244,15 +249,32 @@ export class ReportsService {
         });
 
         // Formatting rules
-        // Monetary columns: 2 decimals, no thousand separators
+        // Monetary columns: Accounting format, 2 decimals
         for (const colIdx of [5, 6, 7]) {
           const col = wsData.getColumn(colIdx);
-          col.numFmt = '0.00';
+          col.numFmt = '#,##0.00';
           col.alignment = { horizontal: 'right', vertical: 'middle' };
         }
         // Text columns left aligned
         for (const colIdx of [1, 2, 3, 4, 8, 9]) {
           wsData.getColumn(colIdx).alignment = { horizontal: 'left', vertical: 'middle' };
+        }
+
+        // Thin borders on all table cells (header + data)
+        const borderThin = {
+          top: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+          left: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+          bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+          right: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+        };
+        const lastRow = dataRows.length + 1;
+        const lastCol = dataHeaders.length;
+        for (let r = 1; r <= lastRow; r++) {
+          const row = wsData.getRow(r);
+          for (let c = 1; c <= lastCol; c++) {
+            const cell = row.getCell(c);
+            cell.border = borderThin;
+          }
         }
 
         // Auto-fit columns
@@ -271,65 +293,115 @@ export class ReportsService {
           col.width = Math.min(42, Math.max(10, max + 2));
         });
 
+        // Page setup: fit to 1 page width, centered, correct print area (no extra blank pages)
+        wsData.pageSetup = {
+          ...wsData.pageSetup,
+          horizontalCentered: true,
+          fitToPage: true,
+          fitToWidth: 1,
+          fitToHeight: 0,
+          printArea: `A1:I${lastRow}`,
+        };
+
         // =========================
         // Sheet 2: Sales_Summary
         // =========================
         const wsSum = wb.addWorksheet('Sales_Summary');
 
-        wsSum.getCell('B2').value = 'SALES SUMMARY REPORT';
-        wsSum.getCell('B2').font = { bold: true, size: 16 };
+        // Layout widths (clean ERP look)
+        wsSum.getColumn(1).width = 4;  // A
+        wsSum.getColumn(2).width = 26; // B labels
+        wsSum.getColumn(3).width = 26; // C values
+        wsSum.getColumn(4).width = 4;  // D
 
-        wsSum.getCell('B4').value = 'Totals';
-        wsSum.getCell('B4').font = { bold: true };
+        // Title (centered)
+        wsSum.mergeCells('B2:C2');
+        const titleCell = wsSum.getCell('B2');
+        titleCell.value = 'SALES SUMMARY REPORT';
+        titleCell.font = { bold: true, size: 16 };
+        titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
-        wsSum.getCell('B5').value = 'Total Net Revenue';
-        wsSum.getCell('C5').value = { formula: 'SUM(Sales_Data!E:E)' };
-        wsSum.getCell('B6').value = 'Total VAT';
-        wsSum.getCell('C6').value = { formula: 'SUM(Sales_Data!F:F)' };
-        wsSum.getCell('B7').value = 'Total Gross Revenue';
-        wsSum.getCell('C7').value = { formula: 'SUM(Sales_Data!G:G)' };
+        // Header info
+        wsSum.getCell('B4').value = 'Business Name:';
+        wsSum.getCell('C4').value = businessName;
+        wsSum.getCell('B5').value = 'Branch:';
+        wsSum.getCell('C5').value = branchLabel;
+        wsSum.getCell('B6').value = 'Date Range:';
+        wsSum.getCell('C6').value = `${rangeFromLabel} to ${rangeToLabel}`;
+        wsSum.getCell('B7').value = 'Generated On:';
+        wsSum.getCell('C7').value = generatedOnLabel;
 
-        wsSum.getCell('B9').value = 'By Payment Method';
-        wsSum.getCell('B9').font = { bold: true };
-
-        wsSum.getCell('B10').value = 'Cash Total';
-        wsSum.getCell('C10').value = { formula: 'SUMIF(Sales_Data!H:H,"CASH",Sales_Data!G:G)' };
-        wsSum.getCell('B11').value = 'Bank Total';
-        wsSum.getCell('C11').value = { formula: 'SUMIF(Sales_Data!H:H,"BANK",Sales_Data!G:G)' };
-        wsSum.getCell('B12').value = 'Mobile Money Total';
-        wsSum.getCell('C12').value = { formula: 'SUMIF(Sales_Data!H:H,"MOBILE_MONEY",Sales_Data!G:G)' };
-
-        // Accounting format
-        ['C5', 'C6', 'C7', 'C10', 'C11', 'C12'].forEach((addr) => {
-          const c = wsSum.getCell(addr);
-          c.numFmt = '#,##0.00';
-          c.alignment = { horizontal: 'right', vertical: 'middle' };
+        ['B4', 'B5', 'B6', 'B7'].forEach((addr) => {
+          wsSum.getCell(addr).font = { bold: true };
+          wsSum.getCell(addr).alignment = { horizontal: 'left', vertical: 'middle' };
         });
-        ['B5', 'B6', 'B7', 'B10', 'B11', 'B12'].forEach((addr) => {
+        ['C4', 'C5', 'C6', 'C7'].forEach((addr) => {
           wsSum.getCell(addr).alignment = { horizontal: 'left', vertical: 'middle' };
         });
 
-        // Borders around summary area (B4:C12)
-        const borderThin = {
-          top: { style: 'thin', color: { argb: 'FFE5E7EB' } },
-          left: { style: 'thin', color: { argb: 'FFE5E7EB' } },
-          bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } },
-          right: { style: 'thin', color: { argb: 'FFE5E7EB' } },
-        };
-        const fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } };
-        for (let r = 4; r <= 12; r++) {
-          for (let c = 2; c <= 3; c++) {
-            const cell = wsSum.getRow(r).getCell(c);
-            cell.border = borderThin;
-            if (r >= 5) cell.fill = fill;
-          }
-        }
+        // Spacing
+        wsSum.getRow(8).height = 8;
 
-        // Layout widths (centered-ish)
-        wsSum.getColumn(1).width = 4;  // A
-        wsSum.getColumn(2).width = 28; // B
-        wsSum.getColumn(3).width = 18; // C
-        wsSum.getColumn(4).width = 4;  // D
+        // Totals box
+        wsSum.getCell('B9').value = 'TOTALS';
+        wsSum.getCell('B9').font = { bold: true };
+
+        wsSum.getCell('B10').value = 'Total Net Revenue';
+        wsSum.getCell('C10').value = { formula: 'SUM(Sales_Data!E:E)' };
+        wsSum.getCell('B11').value = 'Total VAT';
+        wsSum.getCell('C11').value = { formula: 'SUM(Sales_Data!F:F)' };
+        wsSum.getCell('B12').value = 'Total Gross Revenue';
+        wsSum.getCell('C12').value = { formula: 'SUM(Sales_Data!G:G)' };
+
+        // Payment method breakdown
+        wsSum.getRow(13).height = 8;
+        wsSum.getCell('B14').value = 'PAYMENT METHOD BREAKDOWN';
+        wsSum.getCell('B14').font = { bold: true };
+
+        wsSum.getCell('B15').value = 'Cash Total';
+        wsSum.getCell('C15').value = { formula: 'SUMIF(Sales_Data!H:H,"CASH",Sales_Data!G:G)' };
+        wsSum.getCell('B16').value = 'Bank Total';
+        wsSum.getCell('C16').value = { formula: 'SUMIF(Sales_Data!H:H,"BANK",Sales_Data!G:G)' };
+        wsSum.getCell('B17').value = 'Mobile Money Total';
+        wsSum.getCell('C17').value = { formula: 'SUMIF(Sales_Data!H:H,"MOBILE_MONEY",Sales_Data!G:G)' };
+        wsSum.getCell('B18').value = 'Card Total';
+        wsSum.getCell('C18').value = { formula: 'SUMIF(Sales_Data!H:H,"CARD",Sales_Data!G:G)' };
+
+        // Formats + alignment
+        ['C10', 'C11', 'C12', 'C15', 'C16', 'C17', 'C18'].forEach((addr) => {
+          const c = wsSum.getCell(addr);
+          c.numFmt = '#,##0.00';
+          c.font = { bold: true };
+          c.alignment = { horizontal: 'right', vertical: 'middle' };
+        });
+        ['B10', 'B11', 'B12', 'B15', 'B16', 'B17', 'B18'].forEach((addr) => {
+          wsSum.getCell(addr).alignment = { horizontal: 'left', vertical: 'middle' };
+        });
+
+        // Bordered boxes around totals + breakdown
+        const fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } };
+        const boxBorder = borderThin;
+        const applyBox = (top: number, bottom: number) => {
+          for (let r = top; r <= bottom; r++) {
+            for (let c = 2; c <= 3; c++) {
+              const cell = wsSum.getRow(r).getCell(c);
+              cell.border = boxBorder;
+              if (r > top) cell.fill = fill;
+            }
+          }
+        };
+        applyBox(9, 12);
+        applyBox(14, 18);
+
+        // Page setup
+        wsSum.pageSetup = {
+          ...wsSum.pageSetup,
+          horizontalCentered: true,
+          fitToPage: true,
+          fitToWidth: 1,
+          fitToHeight: 0,
+          printArea: 'A1:D20',
+        };
 
         const buf: any = await wb.xlsx.writeBuffer();
         return {
