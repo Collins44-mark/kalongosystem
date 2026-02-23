@@ -1248,7 +1248,14 @@ async function renderSalesPdf(input: {
       y += totalsH + 12;
 
       // Payment breakdown section
-      const payBoxH = 94;
+      const paymentRowsAll: Array<{ key: 'CASH' | 'BANK' | 'MOBILE_MONEY' | 'CARD'; label: string; amount: number }> = [
+        { key: 'CASH', label: 'Cash Total:', amount: paymentSummary.CASH },
+        { key: 'BANK', label: 'Bank Total:', amount: paymentSummary.BANK },
+        { key: 'MOBILE_MONEY', label: 'Mobile Money Total:', amount: paymentSummary.MOBILE_MONEY },
+        { key: 'CARD', label: 'Card Total:', amount: paymentSummary.CARD },
+      ];
+      const paymentRows = paymentRowsAll.filter((r) => cents2(r.amount) !== 0);
+      const payBoxH = Math.max(58, 22 + paymentRows.length * 18);
       const sigH = 64;
       if (y + payBoxH + sigH > bottomLimit()) {
         doc.addPage();
@@ -1272,10 +1279,7 @@ async function renderSalesPdf(input: {
         doc.text(label, boxX + pad, lineY(i), { width: labelW - pad * 2, align: 'left' });
         drawCellText(doc, formatMoney(amount), valX, lineY(i), valW - pad, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
       };
-      kv(0, 'Cash Total:', paymentSummary.CASH);
-      kv(1, 'Bank Total:', paymentSummary.BANK);
-      kv(2, 'Mobile Money Total:', paymentSummary.MOBILE_MONEY);
-      kv(3, 'Card Total:', paymentSummary.CARD);
+      paymentRows.forEach((r, i) => kv(i, r.label, r.amount));
       y = boxY + payBoxH + 14;
 
       // Signature section (ERP audit footer)
