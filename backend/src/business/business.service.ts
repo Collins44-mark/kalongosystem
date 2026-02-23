@@ -95,7 +95,19 @@ export class BusinessService {
       name: b.name,
       businessId: b.businessId,
       businessType: b.businessType,
+      location: b.location ?? undefined,
+      phone: b.phone ?? undefined,
+      logoUrl: b.logoUrl ?? null,
       subscription: b.subscription,
     };
+  }
+
+  async updateLogoUrl(id: string, logoUrl: string | null) {
+    const b = await this.prisma.business.update({
+      where: { id },
+      data: { logoUrl },
+      select: { id: true, logoUrl: true },
+    });
+    return b;
   }
 }
