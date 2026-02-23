@@ -1,24 +1,32 @@
-import * as crypto from 'crypto';
-
 function requiredEnv(name: string) {
   const v = String(process.env[name] ?? '').trim();
   if (!v) throw new Error(`Missing environment variable: ${name}`);
   return v;
 }
 
-function createOAuthClient() {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const OAuthClient = require('intuit-oauth');
+function quickbooksEnv(): 'sandbox' | 'production' {
+  const raw = String(process.env.QUICKBOOKS_ENV ?? '').trim().toLowerCase();
+  return raw === 'production' ? 'production' : 'sandbox';
+}
 
-  const environmentRaw = String(process.env.QUICKBOOKS_ENV ?? '').trim().toLowerCase();
-  const environment = environmentRaw === 'production' ? 'production' : 'sandbox';
+function base64Basic(user: string, pass: string) {
+  return Buffer.from(`${user}:${pass}`, 'utf8').toString('base64');
+}
 
-  return new OAuthClient({
-    clientId: requiredEnv('QUICKBOOKS_CLIENT_ID'),
-    clientSecret: requiredEnv('QUICKBOOKS_CLIENT_SECRET'),
-    environment,
-    redirectUri: requiredEnv('QUICKBOOKS_REDIRECT_URI'),
-  });
+function buildAuthorizeUrl() {
+  const clientId = requiredEnv('QUICKBOOKS_CLIENT_ID');
+  const redirectUri = requiredEnv('QUICKBOOKS_REDIRECT_URI');
+
+  const qs = new URLSearchParams();
+  qs.set('client_id', clientId);
+  qs.set('scope', 'com.intuit.quickbooks.accounting');
+  qs.set('redirect_uri', redirectUri);
+  qs.set('response_type', 'code');
+  qs.set('state', String(Date.now()));
+
+  // Intuit uses the same authorize host for sandbox/production;
+  // the environment is determined by the app credentials.
+  return `https://appcenter.intuit.com/connect/oauth2?${qs.toString()}`;
 }
 
 // Use runtime express import (project has a minimal express.d.ts)
@@ -29,16 +37,10 @@ export const quickbooksRouter = express.Router();
 // GET /api/quickbooks/connect
 quickbooksRouter.get('/connect', async (_req: any, res: any) => {
   try {
-    const oauthClient = createOAuthClient();
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const OAuthClient = require('intuit-oauth');
-
-    const authUri = oauthClient.authorizeUri({
-      scope: [OAuthClient.scopes.Accounting],
-      state: crypto.randomBytes(16).toString('hex'),
-    });
-
-    return res.redirect(authUri);
+    const env = quickbooksEnv();
+    const authUrl = buildAuthorizeUrl();
+    console.log(`QuickBooks connect: env=${env}`);
+    return res.redirect(authUrl);
   } catch (e) {
     console.error('QuickBooks connect error:', e);
     return res.status(500).json({ message: 'QuickBooks connect failed' });
@@ -48,8 +50,6 @@ quickbooksRouter.get('/connect', async (_req: any, res: any) => {
 // GET /api/quickbooks/callback
 quickbooksRouter.get('/callback', async (req: any, res: any) => {
   try {
-    const oauthClient = createOAuthClient();
-
     const code = String(req?.query?.code ?? '').trim();
     const realmId = String(req?.query?.realmId ?? '').trim();
     const err = String(req?.query?.error ?? '').trim();
@@ -76,11 +76,32 @@ quickbooksRouter.get('/callback', async (req: any, res: any) => {
       return res.status(400).send('QuickBooks OAuth failed: missing authorization code.');
     }
 
-    // Exchange the auth code in the redirect URL for tokens
-    // Prefer originalUrl (includes mount path) for reliability behind mounted routers/proxies
-    const redirectUrl = String(req?.originalUrl || req?.url || '');
-    const authResponse = await oauthClient.createToken(redirectUrl);
-    const token = authResponse.getToken();
+    const clientId = requiredEnv('QUICKBOOKS_CLIENT_ID');
+    const clientSecret = requiredEnv('QUICKBOOKS_CLIENT_SECRET');
+    const redirectUri = requiredEnv('QUICKBOOKS_REDIRECT_URI');
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const axios = require('axios');
+
+    const body = new URLSearchParams();
+    body.set('grant_type', 'authorization_code');
+    body.set('code', code);
+    body.set('redirect_uri', redirectUri);
+
+    const tokenRes = await axios.post(
+      'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer',
+      body.toString(),
+      {
+        headers: {
+          Authorization: `Basic ${base64Basic(clientId, clientSecret)}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Accept: 'application/json',
+        },
+        timeout: 20000,
+      },
+    );
+
+    const token = tokenRes?.data ?? {};
 
     // realmId is needed for QBO API calls later
     if (realmId) {
@@ -100,14 +121,10 @@ quickbooksRouter.get('/callback', async (req: any, res: any) => {
         ].join(''),
       );
   } catch (e: any) {
-    console.error('QuickBooks callback error:', e?.originalMessage || e);
-    if (e?.error || e?.error_description || e?.intuit_tid) {
-      console.error('QuickBooks OAuth details:', {
-        error: e?.error,
-        error_description: e?.error_description,
-        intuit_tid: e?.intuit_tid,
-      });
-    }
+    const status = e?.response?.status;
+    const data = e?.response?.data;
+    console.error('QuickBooks callback error:', status || e?.message || e);
+    if (data) console.error('QuickBooks token error response:', data);
     return res.status(500).send('QuickBooks OAuth failed. Check server logs.');
   }
 });
