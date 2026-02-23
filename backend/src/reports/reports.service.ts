@@ -160,7 +160,7 @@ export class ReportsService {
               money2Csv(t.netAmount),
               money2Csv(t.vatAmount),
               money2Csv(t.grossAmount),
-              'TZS - Tanzanian Shilling',
+              'TZS',
             ].map(csvEscape).join(',');
           });
         const csv = [header, ...rows].join('\n') + '\n';
