@@ -41,7 +41,7 @@ export function BusinessProfileSection({ token, t }: { token: string; t: (k: str
   async function loadProfile() {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/business/profile`, {
+      const res = await fetch(`${API_URL}/api/business/profile`, {
         headers: { Authorization: `Bearer ${token}` },
         credentials: 'include',
       });
@@ -77,7 +77,7 @@ export function BusinessProfileSection({ token, t }: { token: string; t: (k: str
     try {
       const fd = new FormData();
       fd.append('file', f);
-      const res = await fetch(`${API_URL}/business/upload-logo`, {
+      const res = await fetch(`${API_URL}/api/business/upload-logo`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: fd,
