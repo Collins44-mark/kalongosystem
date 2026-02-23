@@ -108,13 +108,13 @@ export class ReportsService {
 
     const business = await this.prisma.business.findUnique({
       where: { id: businessId },
-      select: { name: true, businessId: true, businessType: true },
+      select: { name: true, businessId: true, businessType: true, logoUrl: true },
     });
     const businessName = business?.name || 'Business';
     const businessDisplayId = business?.businessId || businessId;
     const businessType = business?.businessType || '-';
 
-    const logoBuffer = await this.getBusinessLogoBuffer(businessId);
+    const logoBuffer = await this.getBusinessLogoBuffer(businessId, business?.logoUrl ?? null);
 
     if (rt === 'sales') {
       const txns = await this.finance.collectTransactions(
@@ -719,55 +719,49 @@ export class ReportsService {
     return { filename: `${baseName}.pdf`, contentType: 'application/pdf', body: pdf };
   }
 
-  private async getBusinessLogoBuffer(businessId: string): Promise<Buffer | null> {
-    // Try a few common keys; ignore errors if not configured.
-    const keys = ['businessLogo', 'companyLogo', 'logo', 'logoBase64', 'logoDataUrl'];
-    const setting = await this.prisma.businessSetting.findFirst({
-      where: { businessId, key: { in: keys } as any },
-      orderBy: { updatedAt: 'desc' },
-    });
-    if (!setting?.value) return null;
-    const raw = String(setting.value).trim();
-    if (!raw) return null;
+  private async getBusinessLogoBuffer(businessId: string, logoUrl: string | null): Promise<Buffer | null> {
+    const url = String(logoUrl ?? '').trim();
+    if (!url) return null;
+    if (!/^https?:\/\//i.test(url)) return null;
 
-    const tryDecodeDataUrl = (s: string) => {
-      const m = s.match(/^data:image\/[a-zA-Z0-9.+-]+;base64,(.+)$/);
-      if (!m) return null;
-      try {
-        return Buffer.from(m[1], 'base64');
-      } catch {
-        return null;
-      }
-    };
-
-    const fromDataUrl = tryDecodeDataUrl(raw);
-    if (fromDataUrl) return fromDataUrl;
-
-    // If JSON, try common fields
+    // Prefer global fetch if available (Node 18+)
     try {
-      const parsed = JSON.parse(raw);
-      const candidate =
-        parsed?.dataUrl ||
-        parsed?.logoDataUrl ||
-        parsed?.base64 ||
-        parsed?.logoBase64 ||
-        parsed?.value;
-      if (typeof candidate === 'string') {
-        const b1 = tryDecodeDataUrl(candidate);
-        if (b1) return b1;
-        try {
-          return Buffer.from(candidate, 'base64');
-        } catch {
-          return null;
-        }
+      const f: any = (globalThis as any).fetch;
+      if (typeof f === 'function') {
+        const res = await f(url);
+        if (!res?.ok) return null;
+        const ab = await res.arrayBuffer();
+        const buf = Buffer.from(ab);
+        return buf.length ? buf : null;
       }
     } catch {
-      // not JSON
+      // fall through
     }
 
-    // Fallback: treat as base64
+    // Fallback to http/https
     try {
-      return Buffer.from(raw, 'base64');
+      const { request } = require(url.toLowerCase().startsWith('https://') ? 'node:https' : 'node:http');
+      return await new Promise((resolve) => {
+        const req = request(url, (resp: any) => {
+          if (resp.statusCode && resp.statusCode >= 300 && resp.statusCode < 400 && resp.headers?.location) {
+            // no redirect follow (keep simple)
+            resolve(null);
+            return;
+          }
+          if (resp.statusCode !== 200) {
+            resolve(null);
+            return;
+          }
+          const chunks: any[] = [];
+          resp.on('data', (c: any) => chunks.push(c));
+          resp.on('end', () => {
+            const b = Buffer.concat(chunks);
+            resolve(b.length ? b : null);
+          });
+        });
+        req.on('error', () => resolve(null));
+        req.end();
+      });
     } catch {
       return null;
     }
@@ -1042,7 +1036,7 @@ async function renderSalesPdf(input: {
         const rightW = 220;
         const leftW = pageWidth - rightW - 12;
 
-        // Logo (or placeholder)
+        // Logo (business logo_url or default system logo)
         const logoBox = 48;
         const logoX = x;
         const logoY = top;
@@ -1050,13 +1044,14 @@ async function renderSalesPdf(input: {
           try {
             doc.image(input.logoBuffer, logoX, logoY, { fit: [logoBox, logoBox] });
           } catch {
-            doc.rect(logoX, logoY, logoBox, logoBox).strokeColor('#e5e7eb').stroke();
-            doc.font('Helvetica-Bold').fontSize(10).fillColor('#6b7280').text('LOGO', logoX, logoY + 18, { width: logoBox, align: 'center' });
+            // default system logo (vector-like box)
+            doc.rect(logoX, logoY, logoBox, logoBox).fillColor('#111827').fill();
+            doc.font('Helvetica-Bold').fontSize(14).fillColor('#ffffff').text('HMS', logoX, logoY + 14, { width: logoBox, align: 'center' });
             doc.fillColor('#000');
           }
         } else {
-          doc.rect(logoX, logoY, logoBox, logoBox).strokeColor('#e5e7eb').stroke();
-          doc.font('Helvetica-Bold').fontSize(10).fillColor('#6b7280').text('LOGO', logoX, logoY + 18, { width: logoBox, align: 'center' });
+          doc.rect(logoX, logoY, logoBox, logoBox).fillColor('#111827').fill();
+          doc.font('Helvetica-Bold').fontSize(14).fillColor('#ffffff').text('HMS', logoX, logoY + 14, { width: logoBox, align: 'center' });
           doc.fillColor('#000');
         }
 
@@ -1268,7 +1263,7 @@ async function renderSalesPdf(input: {
       kv(3, 'Card Total:', paymentSummary.CARD);
       y = boxY + payBoxH + 14;
 
-      // Signature section (directly below, no forced bottom gap)
+      // Signature section (ERP audit footer)
       let sigY = y;
       if (sigY + sigH > bottomLimit()) {
         doc.addPage();
@@ -1276,12 +1271,13 @@ async function renderSalesPdf(input: {
       }
       doc.font('Helvetica').fontSize(10).fillColor('#111827');
       const lineW = 180;
-      doc.text('Prepared By:', x, sigY);
-      doc.moveTo(x + 78, sigY + 12).lineTo(x + 78 + lineW, sigY + 12).strokeColor('#9ca3af').lineWidth(1).stroke();
-      doc.text('Verified By:', x, sigY + 24);
-      doc.moveTo(x + 78, sigY + 36).lineTo(x + 78 + lineW, sigY + 36).stroke();
-      doc.text('Date:', x, sigY + 48);
-      doc.moveTo(x + 78, sigY + 60).lineTo(x + 78 + lineW, sigY + 60).stroke();
+      // Prepared By auto-filled
+      doc.text(`Prepared By: ${input.generatedBy}`, x, sigY);
+      // Verified By blank for manual signature
+      doc.text('Verified By:', x, sigY + 20);
+      doc.moveTo(x + 78, sigY + 32).lineTo(x + 78 + lineW, sigY + 32).strokeColor('#9ca3af').lineWidth(1).stroke();
+      // Date auto-filled
+      doc.text(`Date: ${formatDateTime(input.generatedAt)}`, x, sigY + 44);
       doc.strokeColor('#000');
 
       applyPageFooter(doc);

@@ -71,6 +71,7 @@ model Business {
   name         String
   location     String?
   phone        String?
+  logoUrl      String?  @map("logo_url")
   isSuspended  Boolean  @default(false)
   createdAt    DateTime @default(now())
   createdBy    String?
