@@ -1035,7 +1035,13 @@ async function renderSalesPdf(input: {
 
       const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
       const x = doc.page.margins.left;
-      const drawSalesHeader = () => {
+      const formatMoney = (n: number) => {
+        const v = Number(n ?? 0);
+        const safe = Number.isFinite(v) ? v : 0;
+        return new Intl.NumberFormat('en-TZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(safe);
+      };
+
+      const drawBrandedFirstPageHeader = () => {
         const top = doc.page.margins.top;
         const rightW = 220;
         const leftW = pageWidth - rightW - 12;
@@ -1089,12 +1095,11 @@ async function renderSalesPdf(input: {
         return titleY + 28;
       };
 
-      let y = drawSalesHeader();
-
-      const formatMoneyTsh = (n: number) => {
-        const v = Number(n ?? 0);
-        const safe = Number.isFinite(v) ? v : 0;
-        return `TSh ${new Intl.NumberFormat('en-TZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(safe)}`;
+      const drawDataOnlyPageHeader = () => {
+        const top = doc.page.margins.top;
+        doc.font('Helvetica-Bold').fontSize(16).fillColor('#111827').text('SALES REPORT', x, top, { width: pageWidth, align: 'center' });
+        doc.fillColor('#000');
+        return top + 28;
       };
 
       const normalizePaymentLabel = (s: any) => {
@@ -1104,6 +1109,9 @@ async function renderSalesPdf(input: {
         if (pm.includes('MOBILE') || pm.includes('MPESA') || pm.includes('TIGO') || pm.includes('AIRTEL') || pm.includes('HALOPESA')) return 'Mobile Money';
         return 'Cash';
       };
+
+      let isFirstPage = true;
+      let y = drawBrandedFirstPageHeader();
 
       // Payment breakdown (by gross)
       const paymentSummary = {
@@ -1187,7 +1195,8 @@ async function renderSalesPdf(input: {
       for (const r of input.rows) {
         if (y + rowH > bottomLimit()) {
           doc.addPage();
-          y = drawSalesHeader();
+          isFirstPage = false;
+          y = drawDataOnlyPageHeader();
           drawHeader();
         }
         if (idx % 2 === 1) {
@@ -1202,11 +1211,11 @@ async function renderSalesPdf(input: {
         cx += colW.date;
         drawCellText(doc, String(r.sector), cx + padX, y + 7, colW.sector - padX * 2, { align: 'left', baseSize: 10, minSize: 9, font: 'Helvetica' });
         cx += colW.sector;
-        drawCellText(doc, formatMoneyTsh(r.net), cx + padX, y + 7, colW.net - padX * 2, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
+        drawCellText(doc, formatMoney(r.net), cx + padX, y + 7, colW.net - padX * 2, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
         cx += colW.net;
-        drawCellText(doc, formatMoneyTsh(r.vat), cx + padX, y + 7, colW.vat - padX * 2, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
+        drawCellText(doc, formatMoney(r.vat), cx + padX, y + 7, colW.vat - padX * 2, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
         cx += colW.vat;
-        drawCellText(doc, formatMoneyTsh(r.gross), cx + padX, y + 7, colW.gross - padX * 2, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
+        drawCellText(doc, formatMoney(r.gross), cx + padX, y + 7, colW.gross - padX * 2, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
         cx += colW.gross;
         drawCellText(doc, normalizePaymentLabel(r.paymentMode), cx + padX, y + 7, colW.mode - padX * 2, { align: 'left', baseSize: 10, minSize: 8, font: 'Helvetica' });
         y += rowH;
@@ -1216,7 +1225,8 @@ async function renderSalesPdf(input: {
       const totalsH = 36;
       if (y + totalsH > bottomLimit()) {
         doc.addPage();
-        y = drawSalesHeader();
+        isFirstPage = false;
+        y = drawDataOnlyPageHeader();
         drawHeader();
       }
       doc.moveTo(tableX, y).lineTo(tableX + tableW, y).lineWidth(3).strokeColor('#111827').stroke();
@@ -1229,11 +1239,11 @@ async function renderSalesPdf(input: {
       doc.font('Helvetica-Bold').fontSize(11).fillColor('#000');
       doc.text('TOTAL SALES', tableX + padX, y + 11, { width: colW.date + colW.sector - padX * 2, align: 'left', lineBreak: false });
       let cx = tableX + colW.date + colW.sector;
-      drawCellText(doc, formatMoneyTsh(input.totals.net), cx + padX, y + 11, colW.net - padX * 2, { align: 'right', baseSize: 11, minSize: 9, font: 'Helvetica-Bold' });
+      drawCellText(doc, formatMoney(input.totals.net), cx + padX, y + 11, colW.net - padX * 2, { align: 'right', baseSize: 11, minSize: 9, font: 'Helvetica-Bold' });
       cx += colW.net;
-      drawCellText(doc, formatMoneyTsh(input.totals.vat), cx + padX, y + 11, colW.vat - padX * 2, { align: 'right', baseSize: 11, minSize: 9, font: 'Helvetica-Bold' });
+      drawCellText(doc, formatMoney(input.totals.vat), cx + padX, y + 11, colW.vat - padX * 2, { align: 'right', baseSize: 11, minSize: 9, font: 'Helvetica-Bold' });
       cx += colW.vat;
-      drawCellText(doc, formatMoneyTsh(input.totals.gross), cx + padX, y + 11, colW.gross - padX * 2, { align: 'right', baseSize: 11, minSize: 9, font: 'Helvetica-Bold' });
+      drawCellText(doc, formatMoney(input.totals.gross), cx + padX, y + 11, colW.gross - padX * 2, { align: 'right', baseSize: 11, minSize: 9, font: 'Helvetica-Bold' });
 
       y += totalsH + 12;
 
@@ -1242,7 +1252,8 @@ async function renderSalesPdf(input: {
       const sigH = 64;
       if (y + payBoxH + sigH > bottomLimit()) {
         doc.addPage();
-        y = drawSalesHeader();
+        isFirstPage = false;
+        y = drawDataOnlyPageHeader();
       }
 
       doc.font('Helvetica-Bold').fontSize(12).fillColor('#111827').text('Payment Summary', x, y, { width: pageWidth, align: 'center' });
@@ -1259,7 +1270,7 @@ async function renderSalesPdf(input: {
       const valW = boxW - labelW - pad;
       const kv = (i: number, label: string, amount: number) => {
         doc.text(label, boxX + pad, lineY(i), { width: labelW - pad * 2, align: 'left' });
-        drawCellText(doc, formatMoneyTsh(amount), valX, lineY(i), valW - pad, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
+        drawCellText(doc, formatMoney(amount), valX, lineY(i), valW - pad, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
       };
       kv(0, 'Cash Total:', paymentSummary.CASH);
       kv(1, 'Bank Total:', paymentSummary.BANK);
@@ -1271,7 +1282,8 @@ async function renderSalesPdf(input: {
       let sigY = y;
       if (sigY + sigH > bottomLimit()) {
         doc.addPage();
-        sigY = drawSalesHeader();
+        isFirstPage = false;
+        sigY = drawDataOnlyPageHeader();
       }
       doc.font('Helvetica').fontSize(10).fillColor('#111827');
       const lineW = 180;
