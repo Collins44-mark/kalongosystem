@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
+import { AccountingService } from '../accounting/accounting.service';
 
 @Injectable()
 export class FinanceService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private accounting: AccountingService,
+  ) {}
 
   private async getTaxConfig(
     businessId: string,
@@ -164,7 +168,7 @@ export class FinanceService {
     },
     createdBy: string,
   ) {
-    return this.prisma.expense.create({
+    const exp = await this.prisma.expense.create({
       data: {
         businessId,
         branchId,
@@ -175,6 +179,11 @@ export class FinanceService {
         createdBy,
       },
     });
+
+    // Optional QuickBooks sync (never blocks / never throws)
+    void this.accounting.syncExpense(businessId, exp.id).catch(() => {});
+
+    return exp;
   }
 
   async getNetProfit(businessId: string, branchId: string, from?: Date, to?: Date) {

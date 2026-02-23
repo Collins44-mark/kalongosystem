@@ -72,6 +72,8 @@ model Business {
   location     String?
   phone        String?
   logoUrl      String?  @map("logo_url")
+  quickbooksConnected Boolean @default(false) @map("quickbooks_connected")
+  quickbooksRealmId   String? @map("quickbooks_realm_id")
   isSuspended  Boolean  @default(false)
   createdAt    DateTime @default(now())
   createdBy    String?
@@ -79,6 +81,8 @@ model Business {
 
   businessUsers     BusinessUser[]
   subscription      Subscription?
+  quickbooksTokens  QuickbooksToken[]
+  syncLogs          SyncLog[]
   roomCategories    RoomCategory[]
   rooms             Room[]
   bookings          Booking[]
@@ -182,6 +186,7 @@ model Booking {
   paymentMode String?   // CASH, BANK, MPESA, TIGOPESA, AIRTEL_MONEY
   status      String    @default("CONFIRMED") // CONFIRMED, CHECKED_IN, CHECKED_OUT, CANCELLED
   folioNumber String?
+  quickbooksInvoiceId String? @map("quickbooks_invoice_id")
   createdAt   DateTime  @default(now())
   createdBy   String?
   createdByWorkerId   String?
@@ -193,6 +198,38 @@ model Booking {
   payments FolioPayment[]
 
   @@map("bookings")
+}
+
+model QuickbooksToken {
+  id           String   @id @default(cuid())
+  companyId    String   @map("company_id")
+  accessToken  String   @map("access_token") @db.Text
+  refreshToken String   @map("refresh_token") @db.Text
+  expiresAt    DateTime @map("expires_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  company Business @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId])
+  @@map("quickbooks_tokens")
+}
+
+model SyncLog {
+  id           String   @id @default(cuid())
+  companyId    String   @map("company_id")
+  entityType   String   @map("entity_type") // BOOKING | PAYMENT | BAR_SALE | EXPENSE
+  entityId     String   @map("entity_id")
+  status       String   // SUCCESS | FAILED
+  errorMessage String?  @map("error_message") @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  company Business @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt])
+  @@index([companyId, entityType])
+  @@index([companyId, status])
+  @@map("sync_logs")
 }
 
 model FolioPayment {

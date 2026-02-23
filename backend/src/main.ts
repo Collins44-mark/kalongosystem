@@ -5,7 +5,6 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { SuperAdminService } from './super-admin/super-admin.service';
 import { join } from 'path';
-import { quickbooksRouter } from './quickbooks/quickbooks.router';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -50,9 +49,6 @@ async function bootstrap() {
 
   // Serve uploaded files (e.g., business logos)
   app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads/' });
-
-  // QuickBooks Online OAuth routes (Express router)
-  app.use('/api/quickbooks', quickbooksRouter);
 
   const port = process.env.PORT || 4000;
   await app.listen(port);

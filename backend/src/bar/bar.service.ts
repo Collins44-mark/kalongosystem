@@ -1,10 +1,14 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
+import { AccountingService } from '../accounting/accounting.service';
 
 @Injectable()
 export class BarService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private accounting: AccountingService,
+  ) {}
 
   async getItems(businessId: string, branchId: string) {
     const bid = branchId || 'main';
@@ -204,6 +208,9 @@ export class BarService {
       paymentMethod,
       items: orderItems.map((i) => ({ barItemId: i.barItemId, quantity: i.quantity })),
     });
+
+    // Optional QuickBooks sync (never blocks / never throws)
+    void this.accounting.syncBarSale(businessId, order.id).catch(() => {});
 
     return order;
   }

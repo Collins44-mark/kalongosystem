@@ -2,12 +2,16 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { PrismaService } from '../prisma/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
 import { isManagerLevel } from '../common/utils/roles';
+import { AccountingService } from '../accounting/accounting.service';
 
 const PAYMENT_MODES = ['CASH', 'BANK', 'MPESA', 'TIGOPESA', 'AIRTEL_MONEY'] as const;
 
 @Injectable()
 export class HotelService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private accounting: AccountingService,
+  ) {}
 
   private computePaymentSummary(totalAmount: Decimal, payments: { amount: Decimal }[]) {
     const total = Number(totalAmount);
@@ -322,6 +326,9 @@ export class HotelService {
       return b;
     });
 
+    // Optional QuickBooks sync (never blocks / never throws)
+    void this.accounting.syncBookingCreated(businessId, booking.id).catch(() => {});
+
     // Customer pays at booking: if no amount entered, treat as full payment (Paid)
     const total = Number(totalAmount);
     const paid = initialPaid > 0 ? initialPaid : total;
@@ -360,7 +367,7 @@ export class HotelService {
     if (data.amount > summary.balance + 0.0001) {
       throw new NotFoundException('Payment exceeds remaining balance');
     }
-    await this.prisma.folioPayment.create({
+    const payment = await this.prisma.folioPayment.create({
       data: {
         bookingId,
         amount: new Decimal(data.amount),
@@ -371,6 +378,10 @@ export class HotelService {
         createdByWorkerName: createdByWorker?.workerName ?? null,
       },
     });
+
+    // Optional QuickBooks sync (never blocks / never throws)
+    void this.accounting.syncFolioPayment(businessId, payment.id).catch(() => {});
+
     return { message: 'Payment added' };
   }
 
