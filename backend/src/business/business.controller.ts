@@ -18,7 +18,6 @@ import { IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { memoryStorage } from 'multer';
 import { mkdir, unlink, writeFile } from 'fs/promises';
 import { join } from 'path';
 import * as crypto from 'crypto';
@@ -102,7 +101,6 @@ export class BusinessController {
   @Roles('MANAGER', 'ADMIN')
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: memoryStorage(),
       limits: { fileSize: 2 * 1024 * 1024 },
       fileFilter: (_req, file, cb) => {
         const ok = ['image/png', 'image/jpeg', 'image/jpg'].includes(String(file?.mimetype || '').toLowerCase());
@@ -113,7 +111,7 @@ export class BusinessController {
   )
   async uploadLogo(
     @CurrentUser('businessId') businessId: string,
-    @UploadedFile() file: Express.Multer.File | undefined,
+    @UploadedFile() file: any,
     @Req() req: any,
   ) {
     if (!file) throw new BadRequestException('Logo file is required');
@@ -194,7 +192,6 @@ export class BusinessApiController {
   @Roles('MANAGER', 'ADMIN')
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: memoryStorage(),
       limits: { fileSize: 2 * 1024 * 1024 },
       fileFilter: (_req, file, cb) => {
         const ok = ['image/png', 'image/jpeg', 'image/jpg'].includes(String(file?.mimetype || '').toLowerCase());
@@ -205,7 +202,7 @@ export class BusinessApiController {
   )
   async uploadLogo(
     @CurrentUser('businessId') businessId: string,
-    @UploadedFile() file: Express.Multer.File | undefined,
+    @UploadedFile() file: any,
     @Req() req: any,
   ) {
     if (!file) throw new BadRequestException('Logo file is required');
