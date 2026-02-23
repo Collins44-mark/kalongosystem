@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
 import { isManagerLevel } from '@/lib/roles';
+import { notifyError, notifySuccess } from '@/store/notifications';
 import { UserRolesSection } from './UserRolesSection';
 import { SystemSettingsSection } from './SystemSettingsSection';
 import { StaffWorkersSection } from './StaffWorkersSection';
@@ -18,6 +20,8 @@ type MeResponse = { email: string; role: string; business: { id: string; name: s
 export default function SettingsPage() {
   const { token, user } = useAuth();
   const { t } = useTranslation();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [sub, setSub] = useState<Subscription | null>(null);
   const [me, setMe] = useState<MeResponse | null>(null);
   const [meLoading, setMeLoading] = useState(true);
@@ -26,6 +30,16 @@ export default function SettingsPage() {
     if (!token) return;
     api<Subscription>('/subscription', { token }).then(setSub).catch(() => setSub(null));
   }, [token]);
+
+  useEffect(() => {
+    const qb = searchParams?.get('quickbooks');
+    if (!qb) return;
+    if (qb === 'connected') notifySuccess(t('settings.quickbooksConnectedToast'));
+    if (qb === 'error') notifyError(t('settings.quickbooksErrorToast'));
+    // clean URL (remove query param) to avoid repeated toasts
+    router.replace('/dashboard/settings');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   useEffect(() => {
     if (!token) {

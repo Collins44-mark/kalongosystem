@@ -401,6 +401,8 @@
   "settings.lastSync": "Muda wa mwisho wa kusawazisha",
   "settings.connectQuickbooks": "Unganisha QuickBooks",
   "settings.quickbooksDisconnected": "QuickBooks imekatwa.",
+  "settings.quickbooksConnectedToast": "QuickBooks imeunganishwa kikamilifu.",
+  "settings.quickbooksErrorToast": "Muunganisho wa QuickBooks umeshindikana. Tafadhali jaribu tena.",
   "settings.quickbooksHint": "Uunganisho wa QuickBooks ni wa hiari. Ukikatwa, HMS itaendelea kufanya kazi kawaida.",
   "settings.name": "Jina",
   "settings.businessId": "Kitambulisho cha Biashara",

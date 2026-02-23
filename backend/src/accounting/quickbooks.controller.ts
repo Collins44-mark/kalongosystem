@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Query, Res, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -39,6 +39,14 @@ function decodeState(state: string) {
   }
 }
 
+function frontendSettingsUrl(q: 'connected' | 'error') {
+  const base =
+    String(process.env.FRONTEND_URL ?? '').trim() ||
+    'https://kalongosystem.onrender.com';
+  const safeBase = base.replace(/\/$/, '');
+  return `${safeBase}/settings?quickbooks=${q}`;
+}
+
 @Controller('api/quickbooks')
 export class QuickBooksController {
   constructor(
@@ -74,6 +82,7 @@ export class QuickBooksController {
   // Intuit redirects here: must be public; uses signed state to map to company
   @Get('callback')
   async callback(
+    @Res() res: any,
     @Query('code') code?: string,
     @Query('realmId') realmId?: string,
     @Query('state') state?: string,
@@ -83,28 +92,24 @@ export class QuickBooksController {
     const error = String(err ?? '').trim();
     const errorDescription = String(errDesc ?? '').trim();
     if (error) {
-      return {
-        success: false,
-        message: 'QuickBooks connection failed.',
-        error,
-        errorDescription,
-      };
+      console.error('QuickBooks OAuth error:', { error, errorDescription });
+      return res.redirect(frontendSettingsUrl('error'));
     }
 
     const st = decodeState(String(state ?? ''));
     const companyId = String(st?.companyId ?? '').trim();
     const ts = Number(st?.ts ?? 0);
     if (!companyId || !Number.isFinite(ts) || Date.now() - ts > 15 * 60_000) {
-      return { success: false, message: 'Invalid or expired QuickBooks state.' };
+      return res.redirect(frontendSettingsUrl('error'));
     }
 
     const authCode = String(code ?? '').trim();
     const realm = String(realmId ?? '').trim();
     if (!authCode) {
-      return { success: false, message: 'QuickBooks callback missing authorization code.' };
+      return res.redirect(frontendSettingsUrl('error'));
     }
     if (!realm) {
-      return { success: false, message: 'QuickBooks callback missing realmId.' };
+      return res.redirect(frontendSettingsUrl('error'));
     }
 
     try {
@@ -157,7 +162,7 @@ export class QuickBooksController {
       });
 
       // No token console logging (security rule)
-      return { success: true, message: 'QuickBooks connected successfully.' };
+      return res.redirect(frontendSettingsUrl('connected'));
     } catch (e: any) {
       const status = e?.response?.status;
       const data = e?.response?.data;
@@ -166,7 +171,7 @@ export class QuickBooksController {
       if (data?.error) {
         console.error('QuickBooks OAuth error:', { error: data?.error, error_description: data?.error_description });
       }
-      return { success: false, message: 'QuickBooks connection failed. Check server logs.' };
+      return res.redirect(frontendSettingsUrl('error'));
     }
   }
 
