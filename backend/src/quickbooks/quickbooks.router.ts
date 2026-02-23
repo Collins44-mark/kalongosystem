@@ -50,9 +50,42 @@ quickbooksRouter.get('/callback', async (req: any, res: any) => {
   try {
     const oauthClient = createOAuthClient();
 
+    const code = String(req?.query?.code ?? '').trim();
+    const realmId = String(req?.query?.realmId ?? '').trim();
+    const err = String(req?.query?.error ?? '').trim();
+    const errDesc = String(req?.query?.error_description ?? '').trim();
+
+    // User cancelled/denied or Intuit returned an error
+    if (err) {
+      console.error('QuickBooks OAuth returned error:', { error: err, error_description: errDesc });
+      return res
+        .status(400)
+        .send(
+          [
+            '<html><head><title>QuickBooks Connection Failed</title></head><body style="font-family: Arial, sans-serif;">',
+            '<h2>QuickBooks connection failed.</h2>',
+            `<p>Error: ${err}</p>`,
+            errDesc ? `<p>${errDesc}</p>` : '',
+            '</body></html>',
+          ].join(''),
+        );
+    }
+
+    if (!code) {
+      console.error('QuickBooks callback missing code parameter');
+      return res.status(400).send('QuickBooks OAuth failed: missing authorization code.');
+    }
+
     // Exchange the auth code in the redirect URL for tokens
-    const authResponse = await oauthClient.createToken(req.url);
+    // Prefer originalUrl (includes mount path) for reliability behind mounted routers/proxies
+    const redirectUrl = String(req?.originalUrl || req?.url || '');
+    const authResponse = await oauthClient.createToken(redirectUrl);
     const token = authResponse.getToken();
+
+    // realmId is needed for QBO API calls later
+    if (realmId) {
+      console.log('QuickBooks realmId:', realmId);
+    }
 
     console.log('QuickBooks OAuth token:', JSON.stringify(token, null, 2));
 
