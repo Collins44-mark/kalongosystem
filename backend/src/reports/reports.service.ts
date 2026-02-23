@@ -135,7 +135,7 @@ export class ReportsService {
             const sector = normalizeSector(t.sector);
             const reference = String(t.referenceId ?? '').trim() || 'UNKNOWN';
             const customerName = defaultCustomerNameForSector(sector, t.customerName);
-            const paymentMode = normalizePaymentMode(t.paymentMode);
+            const paymentMode = normalizePaymentModeCsvStrict(t.paymentMode);
             const netC = cents2(t.netAmount);
             const vatC = cents2(t.vatAmount);
             const grossC = cents2(t.grossAmount);
@@ -318,7 +318,7 @@ export class ReportsService {
               r.category,
               r.description,
               numberCsv0(r.amount),
-              'OTHER',
+              'CASH',
               r.reference,
             ].map(csvEscape).join(','),
           );
@@ -550,16 +550,15 @@ function cents2(n: any) {
   return Math.round(v * 100);
 }
 
-function normalizePaymentMode(input: any): 'CASH' | 'BANK' | 'MOBILE_MONEY' | 'CARD' | 'OTHER' {
+function normalizePaymentModeCsvStrict(input: any): 'CASH' | 'BANK' | 'MOBILE_MONEY' {
   const raw = String(input ?? '')
     .replace(/\(.*?\)/g, '')
     .trim()
     .toUpperCase()
     .replace(/\s+/g, ' ');
 
-  if (!raw) return 'OTHER';
+  if (!raw) throw new BadRequestException('Payment method is required');
   if (raw.includes('CASH')) return 'CASH';
-  if (raw.includes('CARD') || raw.includes('VISA') || raw.includes('MASTERCARD')) return 'CARD';
   if (raw.includes('BANK') || raw.includes('TRANSFER') || raw.includes('EFT')) return 'BANK';
   if (
     raw.includes('MOBILE') ||
@@ -571,7 +570,7 @@ function normalizePaymentMode(input: any): 'CASH' | 'BANK' | 'MOBILE_MONEY' | 'C
   ) {
     return 'MOBILE_MONEY';
   }
-  return 'OTHER';
+  throw new BadRequestException('Invalid payment method');
 }
 
 function formatDateTime(d: Date) {

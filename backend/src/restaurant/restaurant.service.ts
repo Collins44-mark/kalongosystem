@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
 
@@ -123,12 +123,18 @@ export class RestaurantService {
 
     const orderNumber = `REST-${Date.now()}`;
     const customer = String(customerName ?? '').trim() || 'Restaurant Walk-in Customer';
+    const pm = String(paymentMethod ?? '').trim();
+    if (!pm) throw new BadRequestException('Payment method is required');
+    const paymentModeUpper = pm.toUpperCase();
+    if (!['CASH', 'BANK', 'MOBILE_MONEY'].includes(paymentModeUpper)) {
+      throw new BadRequestException('Invalid payment method');
+    }
     const order = await this.prisma.restaurantOrder.create({
       data: {
         businessId,
         branchId,
         orderNumber,
-        paymentMethod: String(paymentMethod || '').toUpperCase(),
+        paymentMethod: paymentModeUpper,
         customerName: customer,
         totalAmount: new Decimal(total),
         createdById: createdBy.userId,

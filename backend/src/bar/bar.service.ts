@@ -156,12 +156,18 @@ export class BarService {
 
     const orderNumber = `BAR-${Date.now()}`;
     const customer = String(customerName ?? '').trim() || 'Bar Walk-in Customer';
+    const pm = String(paymentMethod ?? '').trim();
+    if (!pm) throw new BadRequestException('Payment method is required');
+    const paymentModeUpper = pm.toUpperCase();
+    if (!['CASH', 'BANK', 'MOBILE_MONEY'].includes(paymentModeUpper)) {
+      throw new BadRequestException('Invalid payment method');
+    }
     const order = await this.prisma.barOrder.create({
       data: {
         businessId,
         branchId,
         orderNumber,
-        paymentMethod: String(paymentMethod || '').toUpperCase(),
+        paymentMethod: paymentModeUpper,
         customerName: customer,
         totalAmount: new Decimal(total),
         createdById: createdBy.userId,

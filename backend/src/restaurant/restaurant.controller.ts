@@ -22,7 +22,7 @@ class CreateOrderDto {
   @IsArray()
   items: OrderItemDto[];
   @IsString()
-  @IsIn(['CASH', 'BANK', 'MPESA', 'TIGOPESA', 'AIRTEL_MONEY'])
+  @IsIn(['CASH', 'BANK', 'MOBILE_MONEY'])
   paymentMethod: string;
   @IsOptional()
   @IsString()
