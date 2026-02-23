@@ -166,55 +166,36 @@ export class ReportsService {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const ExcelJS = require('exceljs');
         const wb = new ExcelJS.Workbook();
-        const ws = wb.addWorksheet('Sales');
         const exportDate = formatIsoDate(new Date());
 
-        ws.columns = [
-          { header: 'Date', key: 'date', width: 12 },
-          { header: 'Transaction_Type', key: 'transactionType', width: 16 },
-          { header: 'Sector', key: 'sector', width: 14 },
-          { header: 'Customer_Name', key: 'customerName', width: 26 },
-          { header: 'Net', key: 'net', width: 14 },
-          { header: 'VAT', key: 'vat', width: 14 },
-          { header: 'Gross', key: 'gross', width: 14 },
-          { header: 'Payment_Mode', key: 'paymentMode', width: 16 },
-          { header: 'Reference', key: 'reference', width: 22 },
+        // =========================
+        // Sheet 1: Sales_Data (RAW)
+        // =========================
+        const wsData = wb.addWorksheet('Sales_Data');
+        wsData.views = [{ state: 'frozen', ySplit: 1 }];
+
+        const dataHeaders = [
+          'Date',
+          'Transaction_Type',
+          'Sector',
+          'Customer_Name',
+          'Net_Amount',
+          'VAT_Amount',
+          'Gross_Amount',
+          'Payment_Method',
+          'Reference',
         ];
 
-        // Freeze top row and add filters
-        ws.views = [{ state: 'frozen', ySplit: 1 }];
-        ws.autoFilter = { from: 'A1', to: 'I1' };
-
-        // Header styling
-        const headerRow = ws.getRow(1);
-        headerRow.height = 18;
-        headerRow.eachCell((cell: any) => {
-          cell.font = { bold: true };
-          cell.alignment = { vertical: 'middle', horizontal: 'center' };
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
-        });
-
-        // Column formatting
-        ws.getColumn('date').numFmt = 'yyyy-mm-dd';
-        for (const k of ['net', 'vat', 'gross']) {
-          const col = ws.getColumn(k);
-          col.numFmt = '#,##0.00';
-          col.alignment = { horizontal: 'right', vertical: 'middle' };
-        }
-        for (const k of ['transactionType', 'sector', 'customerName', 'paymentMode', 'reference']) {
-          ws.getColumn(k).alignment = { horizontal: 'left', vertical: 'middle' };
-        }
-
-        // Row export + validation
         const ordered = [...txns].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        ordered.forEach((t: any) => {
+        const dataRows: any[][] = ordered.map((t: any) => {
           const sector = normalizeSector(t.sector);
           const reference = String(t.referenceId ?? '').trim() || 'UNKNOWN';
           const customerName = defaultCustomerNameForSector(sector, t.customerName);
-          const paymentMode = normalizePaymentModeCsvStrict(t.paymentMode);
+          const paymentMethod = normalizePaymentMethodExport(t.paymentMode);
           const net = Number(t.netAmount ?? 0);
           const vat = Number(t.vatAmount ?? 0);
           const gross = Number(t.grossAmount ?? 0);
+
           const netC = cents2(net);
           const vatC = cents2(vat);
           const grossC = cents2(gross);
@@ -222,57 +203,127 @@ export class ReportsService {
             throw new BadRequestException(`Invalid sale export amounts for ${reference}: Net+VAT must equal Gross`);
           }
 
-          ws.addRow({
-            date: new Date(t.date),
-            transactionType: 'Sale',
+          // Date exported as ISO text (YYYY-MM-DD)
+          return [
+            formatIsoDate(new Date(t.date)),
+            'Sale',
             sector,
             customerName,
             net,
             vat,
             gross,
-            paymentMode,
+            paymentMethod,
             reference,
-          });
+          ];
         });
 
-        // Totals row (accountant-ready)
-        const totalRow = ws.addRow({
-          date: null,
-          transactionType: null,
-          sector: null,
-          customerName: 'TOTAL SALES',
-          net: totalNet,
-          vat: totalVat,
-          gross: totalGross,
-          paymentMode: null,
-          reference: null,
+        // Excel table: raw data only, no totals row, no blank rows, filters enabled
+        wsData.addTable({
+          name: 'SalesData',
+          ref: 'A1',
+          headerRow: true,
+          totalsRow: false,
+          style: { theme: 'TableStyleLight9', showRowStripes: true },
+          columns: dataHeaders.map((h) => ({ name: h, filterButton: true })),
+          rows: dataRows,
         });
-        totalRow.height = 18;
-        totalRow.eachCell((cell: any) => {
+
+        // Header styling (bold, centered, light grey)
+        const hdr = wsData.getRow(1);
+        hdr.height = 18;
+        hdr.eachCell((cell: any) => {
           cell.font = { bold: true };
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
-          cell.alignment = cell.alignment || { vertical: 'middle' };
-          cell.border = {
-            top: { style: 'medium', color: { argb: 'FF9CA3AF' } },
-          };
         });
+
+        // Formatting rules
+        // Monetary columns: 2 decimals, no thousand separators
+        for (const colIdx of [5, 6, 7]) {
+          const col = wsData.getColumn(colIdx);
+          col.numFmt = '0.00';
+          col.alignment = { horizontal: 'right', vertical: 'middle' };
+        }
+        // Text columns left aligned
+        for (const colIdx of [1, 2, 3, 4, 8, 9]) {
+          wsData.getColumn(colIdx).alignment = { horizontal: 'left', vertical: 'middle' };
+        }
 
         // Auto-fit columns
-        ws.columns.forEach((col: any) => {
-          const header = String(col.header ?? '');
+        wsData.columns.forEach((col: any) => {
+          const header = String(col.values?.[1] ?? '');
           let max = header.length;
           col.eachCell({ includeEmpty: false }, (cell: any) => {
             const v = cell.value;
             let len = 0;
             if (v == null) len = 0;
             else if (typeof v === 'string') len = v.length;
-            else if (v instanceof Date) len = 10;
             else if (typeof v === 'number') len = String(v.toFixed(2)).length;
             else len = String(v).length;
             if (len > max) max = len;
           });
           col.width = Math.min(42, Math.max(10, max + 2));
         });
+
+        // =========================
+        // Sheet 2: Sales_Summary
+        // =========================
+        const wsSum = wb.addWorksheet('Sales_Summary');
+
+        wsSum.getCell('B2').value = 'SALES SUMMARY REPORT';
+        wsSum.getCell('B2').font = { bold: true, size: 16 };
+
+        wsSum.getCell('B4').value = 'Totals';
+        wsSum.getCell('B4').font = { bold: true };
+
+        wsSum.getCell('B5').value = 'Total Net Revenue';
+        wsSum.getCell('C5').value = { formula: 'SUM(Sales_Data!E:E)' };
+        wsSum.getCell('B6').value = 'Total VAT';
+        wsSum.getCell('C6').value = { formula: 'SUM(Sales_Data!F:F)' };
+        wsSum.getCell('B7').value = 'Total Gross Revenue';
+        wsSum.getCell('C7').value = { formula: 'SUM(Sales_Data!G:G)' };
+
+        wsSum.getCell('B9').value = 'By Payment Method';
+        wsSum.getCell('B9').font = { bold: true };
+
+        wsSum.getCell('B10').value = 'Cash Total';
+        wsSum.getCell('C10').value = { formula: 'SUMIF(Sales_Data!H:H,"CASH",Sales_Data!G:G)' };
+        wsSum.getCell('B11').value = 'Bank Total';
+        wsSum.getCell('C11').value = { formula: 'SUMIF(Sales_Data!H:H,"BANK",Sales_Data!G:G)' };
+        wsSum.getCell('B12').value = 'Mobile Money Total';
+        wsSum.getCell('C12').value = { formula: 'SUMIF(Sales_Data!H:H,"MOBILE_MONEY",Sales_Data!G:G)' };
+
+        // Accounting format
+        ['C5', 'C6', 'C7', 'C10', 'C11', 'C12'].forEach((addr) => {
+          const c = wsSum.getCell(addr);
+          c.numFmt = '#,##0.00';
+          c.alignment = { horizontal: 'right', vertical: 'middle' };
+        });
+        ['B5', 'B6', 'B7', 'B10', 'B11', 'B12'].forEach((addr) => {
+          wsSum.getCell(addr).alignment = { horizontal: 'left', vertical: 'middle' };
+        });
+
+        // Borders around summary area (B4:C12)
+        const borderThin = {
+          top: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+          left: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+          bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+          right: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+        };
+        const fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } };
+        for (let r = 4; r <= 12; r++) {
+          for (let c = 2; c <= 3; c++) {
+            const cell = wsSum.getRow(r).getCell(c);
+            cell.border = borderThin;
+            if (r >= 5) cell.fill = fill;
+          }
+        }
+
+        // Layout widths (centered-ish)
+        wsSum.getColumn(1).width = 4;  // A
+        wsSum.getColumn(2).width = 28; // B
+        wsSum.getColumn(3).width = 18; // C
+        wsSum.getColumn(4).width = 4;  // D
 
         const buf: any = await wb.xlsx.writeBuffer();
         return {
@@ -638,6 +689,30 @@ function cents2(n: any) {
   const v = Number(n ?? 0);
   if (!Number.isFinite(v)) return 0;
   return Math.round(v * 100);
+}
+
+function normalizePaymentMethodExport(input: any): 'CASH' | 'BANK' | 'MOBILE_MONEY' | 'CARD' {
+  const raw = String(input ?? '')
+    .replace(/\(.*?\)/g, '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, ' ');
+
+  if (!raw) throw new BadRequestException('Payment method is required');
+  if (raw.includes('CASH')) return 'CASH';
+  if (raw.includes('CARD') || raw.includes('VISA') || raw.includes('MASTERCARD')) return 'CARD';
+  if (raw.includes('BANK') || raw.includes('TRANSFER') || raw.includes('EFT')) return 'BANK';
+  if (
+    raw.includes('MOBILE') ||
+    raw.includes('MPESA') ||
+    raw.includes('M-PESA') ||
+    raw.includes('TIGO') ||
+    raw.includes('AIRTEL') ||
+    raw.includes('HALOPESA')
+  ) {
+    return 'MOBILE_MONEY';
+  }
+  throw new BadRequestException('Invalid payment method');
 }
 
 function normalizePaymentModeCsvStrict(input: any): 'CASH' | 'BANK' | 'MOBILE_MONEY' {
