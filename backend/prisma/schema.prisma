@@ -288,6 +288,7 @@ model BarOrder {
   branchId      String   @default("main")
   orderNumber   String
   paymentMethod String   // CASH, MOBILE_MONEY, BANK
+  customerName  String?  // optional; walk-in defaults applied in service
   totalAmount   Decimal  @db.Decimal(12, 2)
   createdById   String
   createdByRole String?  // BAR, MANAGER (for reporting)
@@ -343,6 +344,7 @@ model RestaurantOrder {
   branchId      String   @default("main")
   orderNumber   String
   paymentMethod String
+  customerName  String?  // optional; walk-in defaults applied in service
   totalAmount   Decimal  @db.Decimal(12, 2)
   createdById   String
   createdByRole String?  // RESTAURANT, MANAGER (for accountability)

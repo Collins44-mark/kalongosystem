@@ -24,6 +24,9 @@ class CreateOrderDto {
   @IsString()
   @IsIn(['CASH', 'MOBILE_MONEY', 'BANK'])
   paymentMethod: string;
+  @IsOptional()
+  @IsString()
+  customerName?: string;
 }
 
 class CreateItemDto {
@@ -103,6 +106,7 @@ export class BarController {
       user.branchId,
       dto.items,
       dto.paymentMethod,
+      dto.customerName,
       { userId: user.sub, role: user.role, workerId: user.workerId, workerName: user.workerName },
     );
     return { orderId: order.id, orderNumber: order.orderNumber, message: 'Order confirmed' };

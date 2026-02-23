@@ -411,6 +411,7 @@ export class FinanceService {
       date: Date;
       referenceId: string;
       sector: 'rooms' | 'bar' | 'restaurant';
+      customerName: string;
       netAmount: number;
       vatAmount: number;
       grossAmount: number;
@@ -427,7 +428,7 @@ export class FinanceService {
           createdAt: { gte: from, lte: to },
         },
         orderBy: { createdAt: 'desc' },
-        select: { id: true, folioNumber: true, totalAmount: true, createdAt: true, paymentMode: true },
+        select: { id: true, folioNumber: true, guestName: true, totalAmount: true, createdAt: true, paymentMode: true },
       });
       for (const b of bookings) {
         const gross = Number(b.totalAmount);
@@ -437,6 +438,7 @@ export class FinanceService {
           date: b.createdAt,
           referenceId: b.folioNumber || b.id,
           sector: 'rooms',
+          customerName: String(b.guestName || '').trim(),
           netAmount: this.round2(split.net),
           vatAmount: this.round2(split.tax),
           grossAmount: this.round2(split.gross),
@@ -449,7 +451,7 @@ export class FinanceService {
       const orders = await this.prisma.barOrder.findMany({
         where: { businessId, createdAt: { gte: from, lte: to } },
         orderBy: { createdAt: 'desc' },
-        select: { id: true, orderNumber: true, totalAmount: true, paymentMethod: true, createdAt: true },
+        select: { id: true, orderNumber: true, totalAmount: true, paymentMethod: true, customerName: true, createdAt: true },
       });
       for (const o of orders) {
         const gross = Number(o.totalAmount);
@@ -458,6 +460,7 @@ export class FinanceService {
           date: o.createdAt,
           referenceId: o.orderNumber || o.id,
           sector: 'bar',
+          customerName: String(o.customerName || '').trim(),
           netAmount: this.round2(split.net),
           vatAmount: this.round2(split.tax),
           grossAmount: this.round2(split.gross),
@@ -470,7 +473,7 @@ export class FinanceService {
       const orders = await this.prisma.restaurantOrder.findMany({
         where: { businessId, createdAt: { gte: from, lte: to } },
         orderBy: { createdAt: 'desc' },
-        select: { id: true, orderNumber: true, totalAmount: true, paymentMethod: true, createdAt: true },
+        select: { id: true, orderNumber: true, totalAmount: true, paymentMethod: true, customerName: true, createdAt: true },
       });
       for (const o of orders) {
         const gross = Number(o.totalAmount);
@@ -479,6 +482,7 @@ export class FinanceService {
           date: o.createdAt,
           referenceId: o.orderNumber || o.id,
           sector: 'restaurant',
+          customerName: String(o.customerName || '').trim(),
           netAmount: this.round2(split.net),
           vatAmount: this.round2(split.tax),
           grossAmount: this.round2(split.gross),

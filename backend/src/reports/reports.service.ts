@@ -1,4 +1,4 @@
-import { forwardRef, Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, forwardRef, Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { FinanceService } from '../finance/finance.service';
 import { BarService } from '../bar/bar.service';
@@ -127,18 +127,26 @@ export class ReportsService {
 
       if (fmt === 'csv') {
         const exportDate = formatIsoDate(new Date());
-        const header = 'Date,Transaction_Type,Sector,Net,VAT,Gross,Payment_Mode,Reference';
+        const header = 'Date,Transaction_Type,Sector,Customer_Name,Net,VAT,Gross,Payment_Mode,Reference';
         const rows = [...txns]
           .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
           .map((t: any) => {
             const date = formatIsoDate(new Date(t.date));
             const sector = normalizeSector(t.sector);
             const reference = String(t.referenceId ?? '').trim() || 'UNKNOWN';
+            const customerName = defaultCustomerNameForSector(sector, t.customerName);
             const paymentMode = normalizePaymentMode(t.paymentMode);
+            const netC = cents2(t.netAmount);
+            const vatC = cents2(t.vatAmount);
+            const grossC = cents2(t.grossAmount);
+            if (netC + vatC !== grossC) {
+              throw new BadRequestException(`Invalid sale export amounts for ${reference}: Net+VAT must equal Gross`);
+            }
             return [
               date,
               'Sale',
               sector,
+              customerName,
               numberCsv0(t.netAmount),
               numberCsv0(t.vatAmount),
               numberCsv0(t.grossAmount),
@@ -526,6 +534,20 @@ function normalizeSector(input: any): 'ROOMS' | 'BAR' | 'RESTAURANT' {
   if (raw === 'rooms' || raw === 'room') return 'ROOMS';
   if (raw === 'bar') return 'BAR';
   return 'RESTAURANT';
+}
+
+function defaultCustomerNameForSector(sector: 'ROOMS' | 'BAR' | 'RESTAURANT', raw: any) {
+  const name = String(raw ?? '').trim();
+  if (name) return name;
+  if (sector === 'BAR') return 'Bar Walk-in Customer';
+  if (sector === 'RESTAURANT') return 'Restaurant Walk-in Customer';
+  return 'UNKNOWN';
+}
+
+function cents2(n: any) {
+  const v = Number(n ?? 0);
+  if (!Number.isFinite(v)) return 0;
+  return Math.round(v * 100);
 }
 
 function normalizePaymentMode(input: any): 'CASH' | 'BANK' | 'MOBILE_MONEY' | 'CARD' | 'OTHER' {

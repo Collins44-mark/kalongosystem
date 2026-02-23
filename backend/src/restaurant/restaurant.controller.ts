@@ -24,6 +24,9 @@ class CreateOrderDto {
   @IsString()
   @IsIn(['CASH', 'BANK', 'MPESA', 'TIGOPESA', 'AIRTEL_MONEY'])
   paymentMethod: string;
+  @IsOptional()
+  @IsString()
+  customerName?: string;
 }
 
 class CreateItemDto {
@@ -63,6 +66,7 @@ export class RestaurantController {
       user.branchId,
       dto.items,
       dto.paymentMethod,
+      dto.customerName,
       { userId: user.sub, role: user.role, workerId: user.workerId, workerName: user.workerName },
     );
     return { orderId: order.id, orderNumber: order.orderNumber, message: 'Order confirmed' };

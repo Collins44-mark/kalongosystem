@@ -94,6 +94,7 @@ export class RestaurantService {
     branchId: string,
     items: { restaurantItemId: string; quantity: number }[],
     paymentMethod: string,
+    customerName: string | undefined,
     createdBy: { userId: string; role: string; workerId?: string | null; workerName?: string | null },
   ) {
     // Enforce worker accountability for Restaurant staff
@@ -121,12 +122,14 @@ export class RestaurantService {
     }
 
     const orderNumber = `REST-${Date.now()}`;
+    const customer = String(customerName ?? '').trim() || 'Restaurant Walk-in Customer';
     const order = await this.prisma.restaurantOrder.create({
       data: {
         businessId,
         branchId,
         orderNumber,
-        paymentMethod,
+        paymentMethod: String(paymentMethod || '').toUpperCase(),
+        customerName: customer,
         totalAmount: new Decimal(total),
         createdById: createdBy.userId,
         createdByRole: createdBy.role,

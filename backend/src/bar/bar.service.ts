@@ -122,6 +122,7 @@ export class BarService {
     branchId: string,
     items: { barItemId: string; quantity: number }[],
     paymentMethod: string,
+    customerName: string | undefined,
     createdBy: { userId: string; role: string; workerId?: string | null; workerName?: string | null },
   ) {
     let total = 0;
@@ -154,12 +155,14 @@ export class BarService {
     }
 
     const orderNumber = `BAR-${Date.now()}`;
+    const customer = String(customerName ?? '').trim() || 'Bar Walk-in Customer';
     const order = await this.prisma.barOrder.create({
       data: {
         businessId,
         branchId,
         orderNumber,
-        paymentMethod,
+        paymentMethod: String(paymentMethod || '').toUpperCase(),
+        customerName: customer,
         totalAmount: new Decimal(total),
         createdById: createdBy.userId,
         createdByRole: createdBy.role,
