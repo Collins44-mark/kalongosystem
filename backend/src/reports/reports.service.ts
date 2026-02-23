@@ -127,8 +127,8 @@ export class ReportsService {
 
       if (fmt === 'csv') {
         const exportDate = formatIsoDate(new Date());
-        const branchExport = normalizeBranchIdExport(branchId);
-        const header = 'Branch_ID,Date,Transaction_Type,Sector,Customer_Name,Net_Amount,VAT_Amount,Gross_Amount,Payment_Method,Reference,Currency';
+        const branchExport = formatBranchIdLabel(branchId);
+        const header = 'Branch ID,Date,Transaction Type,Sector,Customer Name,Reference,Payment Method,Net Amount,VAT Amount,Gross Amount,Currency';
         const rows = [...txns]
           .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
           .map((t: any) => {
@@ -140,6 +140,7 @@ export class ReportsService {
               throw new BadRequestException(`Missing guest name for ROOMS sale ${reference}`);
             }
             const paymentMethod = normalizePaymentMethodCsv(t.paymentMode);
+            const paymentMethodLabel = formatPaymentMethodLabel(paymentMethod);
             const netC = cents2(t.netAmount);
             const vatC = cents2(t.vatAmount);
             const grossC = cents2(t.grossAmount);
@@ -149,15 +150,15 @@ export class ReportsService {
             return [
               branchExport,
               date,
-              'SALE',
+              'Sale',
               sector,
               customerName,
+              reference,
+              paymentMethodLabel,
               money2Csv(t.netAmount),
               money2Csv(t.vatAmount),
               money2Csv(t.grossAmount),
-              paymentMethod,
-              reference,
-              'TZS',
+              'TZS - Tanzanian Shilling',
             ].map(csvEscape).join(',');
           });
         const csv = [header, ...rows].join('\n') + '\n';
@@ -782,6 +783,11 @@ function normalizeBranchIdExport(branchId: any) {
   return b.toUpperCase();
 }
 
+function formatBranchIdLabel(branchId: any) {
+  const v = normalizeBranchIdExport(branchId);
+  return v === 'MAIN' ? 'Main' : v;
+}
+
 function normalizePaymentMethodCsv(input: any): 'CASH' | 'BANK' | 'MOBILE_MONEY' | 'CARD' {
   const raw = String(input ?? '')
     .replace(/\(.*?\)/g, '')
@@ -804,6 +810,13 @@ function normalizePaymentMethodCsv(input: any): 'CASH' | 'BANK' | 'MOBILE_MONEY'
     return 'MOBILE_MONEY';
   }
   throw new BadRequestException('Invalid payment method');
+}
+
+function formatPaymentMethodLabel(m: 'CASH' | 'BANK' | 'MOBILE_MONEY' | 'CARD') {
+  if (m === 'CASH') return 'Cash';
+  if (m === 'BANK') return 'Bank';
+  if (m === 'MOBILE_MONEY') return 'Mobile Money';
+  return 'Card';
 }
 
 function normalizePaymentMethodExport(input: any): 'CASH' | 'BANK' | 'MOBILE_MONEY' | 'CARD' {
