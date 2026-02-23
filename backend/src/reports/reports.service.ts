@@ -1043,7 +1043,7 @@ async function renderSalesPdf(input: {
         const leftW = pageWidth - rightW - 12;
 
         // Logo (or placeholder)
-        const logoBox = 54;
+        const logoBox = 48;
         const logoX = x;
         const logoY = top;
         if (input.logoBuffer && Buffer.isBuffer(input.logoBuffer) && input.logoBuffer.length > 0) {
@@ -1098,6 +1098,14 @@ async function renderSalesPdf(input: {
         return `TSh ${new Intl.NumberFormat('en-TZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(safe)}`;
       };
 
+      const normalizePaymentLabel = (s: any) => {
+        const pm = String(s || '').toUpperCase();
+        if (pm.includes('CARD') || pm.includes('VISA') || pm.includes('MASTERCARD')) return 'Card';
+        if (pm.includes('BANK') || pm.includes('TRANSFER') || pm.includes('EFT')) return 'Bank';
+        if (pm.includes('MOBILE') || pm.includes('MPESA') || pm.includes('TIGO') || pm.includes('AIRTEL') || pm.includes('HALOPESA')) return 'Mobile Money';
+        return 'Cash';
+      };
+
       // Payment breakdown (by gross)
       const paymentSummary = {
         CASH: 0,
@@ -1118,12 +1126,18 @@ async function renderSalesPdf(input: {
         paymentSummary[k] = (paymentSummary[k] ?? 0) + Number(r.gross || 0);
       }
 
-      // Table: use full width
-      const fixed = { date: 82, mode: 120, net: 92, vat: 82, gross: 96 };
-      const sectorW = pageWidth - (fixed.date + fixed.mode + fixed.net + fixed.vat + fixed.gross);
-      const colW = { date: fixed.date, sector: Math.max(96, sectorW), net: fixed.net, vat: fixed.vat, gross: fixed.gross, mode: fixed.mode };
-      const tableW = pageWidth;
-      const tableX = x;
+      // Table: fit exactly within page width
+      const base = { date: 72, sector: 120, net: 80, vat: 80, gross: 90 };
+      let modeW = pageWidth - (base.date + base.sector + base.net + base.vat + base.gross);
+      let sectorW = base.sector;
+      if (modeW < 64) {
+        const need = 64 - modeW;
+        sectorW = Math.max(90, sectorW - need);
+        modeW = pageWidth - (base.date + sectorW + base.net + base.vat + base.gross);
+      }
+      const colW = { date: base.date, sector: sectorW, net: base.net, vat: base.vat, gross: base.gross, mode: modeW };
+      const tableW = colW.date + colW.sector + colW.net + colW.vat + colW.gross + colW.mode;
+      const tableX = x + (pageWidth - tableW) / 2;
       const padX = 6;
       const headerH = 30;
       const rowH = 24;
@@ -1195,7 +1209,7 @@ async function renderSalesPdf(input: {
         cx += colW.vat;
         drawCellText(doc, formatMoneyTsh(r.gross), cx + padX, y + 7, colW.gross - padX * 2, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
         cx += colW.gross;
-        drawCellText(doc, String(r.paymentMode || ''), cx + padX, y + 7, colW.mode - padX * 2, { align: 'left', baseSize: 10, minSize: 8, font: 'Helvetica' });
+        drawCellText(doc, normalizePaymentLabel(r.paymentMode), cx + padX, y + 7, colW.mode - padX * 2, { align: 'left', baseSize: 10, minSize: 8, font: 'Helvetica' });
         y += rowH;
         idx += 1;
       }
@@ -1216,47 +1230,52 @@ async function renderSalesPdf(input: {
       doc.font('Helvetica-Bold').fontSize(11).fillColor('#000');
       doc.text('TOTAL SALES', tableX + padX, y + 11, { width: colW.date + colW.sector - padX * 2, align: 'left', lineBreak: false });
       let cx = tableX + colW.date + colW.sector;
-      doc.text(formatMoneyTsh(input.totals.net), cx + padX, y + 11, { width: colW.net - padX * 2, align: 'right' });
+      drawCellText(doc, formatMoneyTsh(input.totals.net), cx + padX, y + 11, colW.net - padX * 2, { align: 'right', baseSize: 11, minSize: 9, font: 'Helvetica-Bold' });
       cx += colW.net;
-      doc.text(formatMoneyTsh(input.totals.vat), cx + padX, y + 11, { width: colW.vat - padX * 2, align: 'right' });
+      drawCellText(doc, formatMoneyTsh(input.totals.vat), cx + padX, y + 11, colW.vat - padX * 2, { align: 'right', baseSize: 11, minSize: 9, font: 'Helvetica-Bold' });
       cx += colW.vat;
-      doc.text(formatMoneyTsh(input.totals.gross), cx + padX, y + 11, { width: colW.gross - padX * 2, align: 'right' });
+      drawCellText(doc, formatMoneyTsh(input.totals.gross), cx + padX, y + 11, colW.gross - padX * 2, { align: 'right', baseSize: 11, minSize: 9, font: 'Helvetica-Bold' });
 
-      y += totalsH + 18;
+      y += totalsH + 12;
 
       // Payment breakdown section
-      const payBoxH = 92;
-      const sigH = 72;
+      const payBoxH = 94;
+      const sigH = 64;
       if (y + payBoxH + sigH > bottomLimit()) {
         doc.addPage();
         y = drawSalesHeader();
       }
 
-      doc.font('Helvetica-Bold').fontSize(12).fillColor('#111827').text('Payment Summary', x, y);
-      y += 12;
+      doc.font('Helvetica-Bold').fontSize(12).fillColor('#111827').text('Payment Summary', x, y, { width: pageWidth, align: 'center' });
+      y += 10;
       const boxY = y;
       const boxW = Math.min(320, pageWidth);
-      doc.rect(x, boxY, boxW, payBoxH).strokeColor('#e5e7eb').lineWidth(1).stroke();
+      const boxX = x + (pageWidth - boxW) / 2;
+      doc.rect(boxX, boxY, boxW, payBoxH).strokeColor('#e5e7eb').lineWidth(1).stroke();
       doc.font('Helvetica').fontSize(10).fillColor('#111827');
       const lineY = (n: number) => boxY + 12 + n * 18;
+      const pad = 12;
       const labelW = 170;
-      const valX = x + labelW;
-      const valW = boxW - labelW - 10;
+      const valX = boxX + labelW;
+      const valW = boxW - labelW - pad;
       const kv = (i: number, label: string, amount: number) => {
-        doc.text(label, x + 10, lineY(i), { width: labelW - 20, align: 'left' });
-        doc.text(formatMoneyTsh(amount), valX, lineY(i), { width: valW, align: 'right' });
+        doc.text(label, boxX + pad, lineY(i), { width: labelW - pad * 2, align: 'left' });
+        drawCellText(doc, formatMoneyTsh(amount), valX, lineY(i), valW - pad, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
       };
       kv(0, 'Cash Total:', paymentSummary.CASH);
       kv(1, 'Bank Total:', paymentSummary.BANK);
       kv(2, 'Mobile Money Total:', paymentSummary.MOBILE_MONEY);
       kv(3, 'Card Total:', paymentSummary.CARD);
-      y = boxY + payBoxH + 18;
+      y = boxY + payBoxH + 14;
 
-      // Signature section (bottom)
-      const sigY = Math.max(y, doc.page.height - doc.page.margins.bottom - sigH);
+      // Signature section (directly below, no forced bottom gap)
+      let sigY = y;
+      if (sigY + sigH > bottomLimit()) {
+        doc.addPage();
+        sigY = drawSalesHeader();
+      }
       doc.font('Helvetica').fontSize(10).fillColor('#111827');
       const lineW = 180;
-      const gap = 36;
       doc.text('Prepared By:', x, sigY);
       doc.moveTo(x + 78, sigY + 12).lineTo(x + 78 + lineW, sigY + 12).strokeColor('#9ca3af').lineWidth(1).stroke();
       doc.text('Verified By:', x, sigY + 24);
