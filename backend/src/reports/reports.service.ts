@@ -167,26 +167,116 @@ export class ReportsService {
         const ExcelJS = require('exceljs');
         const wb = new ExcelJS.Workbook();
         const ws = wb.addWorksheet('Sales');
+        const exportDate = formatIsoDate(new Date());
+
         ws.columns = [
-          { header: 'Date', key: 'date', width: 14 },
+          { header: 'Date', key: 'date', width: 12 },
+          { header: 'Transaction_Type', key: 'transactionType', width: 16 },
           { header: 'Sector', key: 'sector', width: 14 },
-          { header: 'Net (TSh)', key: 'net', width: 16 },
-          { header: 'VAT (TSh)', key: 'vat', width: 16 },
-          { header: 'Gross (TSh)', key: 'gross', width: 16 },
-          { header: 'Payment Mode', key: 'paymentMode', width: 22 },
+          { header: 'Customer_Name', key: 'customerName', width: 26 },
+          { header: 'Net', key: 'net', width: 14 },
+          { header: 'VAT', key: 'vat', width: 14 },
+          { header: 'Gross', key: 'gross', width: 14 },
+          { header: 'Payment_Mode', key: 'paymentMode', width: 16 },
+          { header: 'Reference', key: 'reference', width: 22 },
         ];
-        txns.forEach((t: any) => ws.addRow({
-          date: formatDdMmYyyy(t.date),
-          sector: t.sector,
-          net: round0(t.netAmount),
-          vat: round0(t.vatAmount),
-          gross: round0(t.grossAmount),
-          paymentMode: t.paymentMode,
-        }));
-        ws.addRow({ date: '', sector: 'TOTAL SALES', net: round0(totalNet), vat: round0(totalVat), gross: round0(totalGross), paymentMode: '' });
+
+        // Freeze top row and add filters
+        ws.views = [{ state: 'frozen', ySplit: 1 }];
+        ws.autoFilter = { from: 'A1', to: 'I1' };
+
+        // Header styling
+        const headerRow = ws.getRow(1);
+        headerRow.height = 18;
+        headerRow.eachCell((cell: any) => {
+          cell.font = { bold: true };
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
+        });
+
+        // Column formatting
+        ws.getColumn('date').numFmt = 'yyyy-mm-dd';
+        for (const k of ['net', 'vat', 'gross']) {
+          const col = ws.getColumn(k);
+          col.numFmt = '#,##0.00';
+          col.alignment = { horizontal: 'right', vertical: 'middle' };
+        }
+        for (const k of ['transactionType', 'sector', 'customerName', 'paymentMode', 'reference']) {
+          ws.getColumn(k).alignment = { horizontal: 'left', vertical: 'middle' };
+        }
+
+        // Row export + validation
+        const ordered = [...txns].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        ordered.forEach((t: any) => {
+          const sector = normalizeSector(t.sector);
+          const reference = String(t.referenceId ?? '').trim() || 'UNKNOWN';
+          const customerName = defaultCustomerNameForSector(sector, t.customerName);
+          const paymentMode = normalizePaymentModeCsvStrict(t.paymentMode);
+          const net = Number(t.netAmount ?? 0);
+          const vat = Number(t.vatAmount ?? 0);
+          const gross = Number(t.grossAmount ?? 0);
+          const netC = cents2(net);
+          const vatC = cents2(vat);
+          const grossC = cents2(gross);
+          if (netC + vatC !== grossC) {
+            throw new BadRequestException(`Invalid sale export amounts for ${reference}: Net+VAT must equal Gross`);
+          }
+
+          ws.addRow({
+            date: new Date(t.date),
+            transactionType: 'Sale',
+            sector,
+            customerName,
+            net,
+            vat,
+            gross,
+            paymentMode,
+            reference,
+          });
+        });
+
+        // Totals row (accountant-ready)
+        const totalRow = ws.addRow({
+          date: null,
+          transactionType: null,
+          sector: null,
+          customerName: 'TOTAL SALES',
+          net: totalNet,
+          vat: totalVat,
+          gross: totalGross,
+          paymentMode: null,
+          reference: null,
+        });
+        totalRow.height = 18;
+        totalRow.eachCell((cell: any) => {
+          cell.font = { bold: true };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
+          cell.alignment = cell.alignment || { vertical: 'middle' };
+          cell.border = {
+            top: { style: 'medium', color: { argb: 'FF9CA3AF' } },
+          };
+        });
+
+        // Auto-fit columns
+        ws.columns.forEach((col: any) => {
+          const header = String(col.header ?? '');
+          let max = header.length;
+          col.eachCell({ includeEmpty: false }, (cell: any) => {
+            const v = cell.value;
+            let len = 0;
+            if (v == null) len = 0;
+            else if (typeof v === 'string') len = v.length;
+            else if (v instanceof Date) len = 10;
+            else if (typeof v === 'number') len = String(v.toFixed(2)).length;
+            else len = String(v).length;
+            if (len > max) max = len;
+          });
+          col.width = Math.min(42, Math.max(10, max + 2));
+        });
+
         const buf: any = await wb.xlsx.writeBuffer();
         return {
-          filename: `${baseName}.xlsx`,
+          filename: `sales-report-${exportDate}.xlsx`,
           contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
           body: Buffer.isBuffer(buf) ? buf : Buffer.from(buf),
         };
