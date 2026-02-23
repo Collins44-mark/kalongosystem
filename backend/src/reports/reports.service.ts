@@ -130,7 +130,7 @@ export class ReportsService {
       if (fmt === 'csv') {
         const exportDate = formatIsoDate(new Date());
         const branchExport = formatBranchIdLabel(branchId);
-        const header = 'Branch ID,Date,Transaction Type,Sector,Customer Name,Reference,Payment Method,Net Amount,VAT Amount,Gross Amount,Currency';
+        const header = 'Branch ID,Date,Transaction Type,Reference,Sector,Customer Name,Payment Method,Net Amount,VAT Amount,Gross Amount,Currency';
         const rows = [...txns]
           .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
           .map((t: any) => {
@@ -153,9 +153,9 @@ export class ReportsService {
               branchExport,
               date,
               'Sale',
+              reference,
               sector,
               customerName,
-              reference,
               paymentMethodLabel,
               money2Csv(t.netAmount),
               money2Csv(t.vatAmount),
