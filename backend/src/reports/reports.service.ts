@@ -127,7 +127,8 @@ export class ReportsService {
 
       if (fmt === 'csv') {
         const exportDate = formatIsoDate(new Date());
-        const header = 'Date,Transaction_Type,Sector,Customer_Name,Net,VAT,Gross,Payment_Mode,Reference';
+        const branchExport = normalizeBranchIdExport(branchId);
+        const header = 'Branch_ID,Date,Transaction_Type,Sector,Customer_Name,Net_Amount,VAT_Amount,Gross_Amount,Payment_Method,Reference,Currency';
         const rows = [...txns]
           .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
           .map((t: any) => {
@@ -135,7 +136,10 @@ export class ReportsService {
             const sector = normalizeSector(t.sector);
             const reference = String(t.referenceId ?? '').trim() || 'UNKNOWN';
             const customerName = defaultCustomerNameForSector(sector, t.customerName);
-            const paymentMode = normalizePaymentModeCsvStrict(t.paymentMode);
+            if (sector === 'ROOMS' && !String(t.customerName ?? '').trim()) {
+              throw new BadRequestException(`Missing guest name for ROOMS sale ${reference}`);
+            }
+            const paymentMethod = normalizePaymentMethodCsv(t.paymentMode);
             const netC = cents2(t.netAmount);
             const vatC = cents2(t.vatAmount);
             const grossC = cents2(t.grossAmount);
@@ -143,21 +147,23 @@ export class ReportsService {
               throw new BadRequestException(`Invalid sale export amounts for ${reference}: Net+VAT must equal Gross`);
             }
             return [
+              branchExport,
               date,
-              'Sale',
+              'SALE',
               sector,
               customerName,
-              numberCsv0(t.netAmount),
-              numberCsv0(t.vatAmount),
-              numberCsv0(t.grossAmount),
-              paymentMode,
+              money2Csv(t.netAmount),
+              money2Csv(t.vatAmount),
+              money2Csv(t.grossAmount),
+              paymentMethod,
               reference,
+              'TZS',
             ].map(csvEscape).join(',');
           });
         const csv = [header, ...rows].join('\n') + '\n';
         return {
           filename: `sales-report-${exportDate}.csv`,
-          contentType: 'text/csv',
+          contentType: 'text/csv; charset=utf-8',
           body: Buffer.from(csv, 'utf8'),
         };
       }
@@ -670,6 +676,12 @@ function numberCsv0(n: any) {
   return String(Math.round(v));
 }
 
+function money2Csv(n: any) {
+  const v = Number(n ?? 0);
+  if (!Number.isFinite(v)) throw new BadRequestException('Invalid money amount');
+  return (Math.round(v * 100) / 100).toFixed(2);
+}
+
 function normalizeSector(input: any): 'ROOMS' | 'BAR' | 'RESTAURANT' {
   const raw = String(input ?? '').trim().toLowerCase();
   if (raw === 'rooms' || raw === 'room') return 'ROOMS';
@@ -689,6 +701,37 @@ function cents2(n: any) {
   const v = Number(n ?? 0);
   if (!Number.isFinite(v)) return 0;
   return Math.round(v * 100);
+}
+
+function normalizeBranchIdExport(branchId: any) {
+  const b = String(branchId ?? '').trim();
+  if (!b) return 'MAIN';
+  if (b.toLowerCase() === 'main') return 'MAIN';
+  return b.toUpperCase();
+}
+
+function normalizePaymentMethodCsv(input: any): 'CASH' | 'BANK' | 'MOBILE_MONEY' | 'CARD' {
+  const raw = String(input ?? '')
+    .replace(/\(.*?\)/g, '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, ' ');
+
+  if (!raw) return 'CASH';
+  if (raw.includes('CASH')) return 'CASH';
+  if (raw.includes('CARD') || raw.includes('VISA') || raw.includes('MASTERCARD')) return 'CARD';
+  if (raw.includes('BANK') || raw.includes('TRANSFER') || raw.includes('EFT')) return 'BANK';
+  if (
+    raw.includes('MOBILE') ||
+    raw.includes('MPESA') ||
+    raw.includes('M-PESA') ||
+    raw.includes('TIGO') ||
+    raw.includes('AIRTEL') ||
+    raw.includes('HALOPESA')
+  ) {
+    return 'MOBILE_MONEY';
+  }
+  throw new BadRequestException('Invalid payment method');
 }
 
 function normalizePaymentMethodExport(input: any): 'CASH' | 'BANK' | 'MOBILE_MONEY' | 'CARD' {
