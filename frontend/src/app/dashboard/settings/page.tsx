@@ -13,6 +13,7 @@ import { StaffWorkersSection } from './StaffWorkersSection';
 import { TaxConfigurationSection } from './TaxConfigurationSection';
 import { BusinessProfileSection } from './BusinessProfileSection';
 import { QuickBooksSection } from './QuickBooksSection';
+import { RevenueCategoriesSection } from './RevenueCategoriesSection';
 
 type Subscription = { plan: string; status: string; trialEndsAt: string };
 type MeResponse = { email: string; role: string; business: { id: string; name: string; code: string } };
@@ -90,6 +91,7 @@ export default function SettingsPage() {
         <>
           <BusinessProfileSection token={token} t={t} />
           <QuickBooksSection token={token} t={t} />
+          <RevenueCategoriesSection token={token} t={t} />
           <UserRolesSection token={token} t={t} />
           <StaffWorkersSection token={token} t={t} />
           <SystemSettingsSection token={token} t={t} />

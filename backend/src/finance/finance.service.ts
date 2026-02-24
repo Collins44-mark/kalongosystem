@@ -400,7 +400,7 @@ export class FinanceService {
     businessId: string,
     from: Date,
     to: Date,
-    sector: 'all' | 'rooms' | 'bar' | 'restaurant',
+    sector: 'all' | 'rooms' | 'bar' | 'restaurant' | 'other',
     page: number,
     pageSize: number,
   ) {
@@ -419,14 +419,14 @@ export class FinanceService {
     businessId: string,
     from: Date,
     to: Date,
-    sector: 'all' | 'rooms' | 'bar' | 'restaurant',
+    sector: 'all' | 'rooms' | 'bar' | 'restaurant' | 'other',
   ) {
     const tax = await this.getTaxConfig(businessId);
 
     type Txn = {
       date: Date;
       referenceId: string;
-      sector: 'rooms' | 'bar' | 'restaurant';
+      sector: 'rooms' | 'bar' | 'restaurant' | 'other';
       customerName: string;
       netAmount: number;
       vatAmount: number;
@@ -485,6 +485,41 @@ export class FinanceService {
       }
     }
 
+    if (sector === 'all' || sector === 'other') {
+      const revenues = await this.prisma.otherRevenue.findMany({
+        where: { companyId: businessId, date: { gte: from, lte: to } },
+        orderBy: { date: 'desc' },
+        select: {
+          id: true,
+          bookingId: true,
+          amount: true,
+          paymentMethod: true,
+          description: true,
+          date: true,
+          category: { select: { name: true } },
+          booking: { select: { folioNumber: true, guestName: true } },
+        },
+      });
+      for (const r of revenues) {
+        const gross = Number(r.amount);
+        const split = this.splitTaxFromGross(gross, tax.enabled, tax.rateBySector.rooms);
+        const ref = r.booking?.folioNumber || `OR-${String(r.id).slice(-8)}`;
+        const cust = String(r.booking?.guestName ?? '').trim();
+        const label = String(r.category?.name ?? '').trim();
+        const desc = String(r.description ?? '').trim();
+        txns.push({
+          date: r.date,
+          referenceId: ref,
+          sector: 'other',
+          customerName: cust || label || 'Other Revenue',
+          netAmount: this.round2(split.net),
+          vatAmount: this.round2(split.tax),
+          grossAmount: this.round2(split.gross),
+          paymentMode: String(r.paymentMethod ?? '').trim() || 'CASH',
+        });
+      }
+    }
+
     if (sector === 'all' || sector === 'restaurant') {
       const orders = await this.prisma.restaurantOrder.findMany({
         where: { businessId, createdAt: { gte: from, lte: to } },
@@ -515,7 +550,7 @@ export class FinanceService {
     businessId: string,
     from: Date,
     to: Date,
-    sector: 'all' | 'rooms' | 'bar' | 'restaurant',
+    sector: 'all' | 'rooms' | 'bar' | 'restaurant' | 'other',
     format: 'csv' | 'xlsx' | 'pdf',
     generatedByRole: string = 'USER',
   ): Promise<{ filename: string; contentType: string; body: Buffer }> {
@@ -538,7 +573,13 @@ export class FinanceService {
         const day = formatDdMmYyyy(t.date);
         const cashAccount = mapPaymentAccount(t.paymentMode);
         const revenueAccount =
-          t.sector === 'rooms' ? 'Room Revenue' : t.sector === 'bar' ? 'Bar Revenue' : 'Restaurant Revenue';
+          t.sector === 'rooms'
+            ? 'Room Revenue'
+            : t.sector === 'bar'
+              ? 'Bar Revenue'
+              : t.sector === 'restaurant'
+                ? 'Restaurant Revenue'
+                : 'Other Revenue';
 
         const agg: DayAgg = byDay.get(day) ?? { debitByAccount: {}, vatTotal: 0, netByRevenueAccount: {} };
         agg.debitByAccount[cashAccount] = (agg.debitByAccount[cashAccount] ?? 0) + Number(t.grossAmount || 0);
@@ -788,7 +829,7 @@ async function renderFinanceTransactionsPdf(input: {
   businessId: string;
   businessType: string;
   reportTitle: string;
-  sector: 'all' | 'rooms' | 'bar' | 'restaurant';
+  sector: 'all' | 'rooms' | 'bar' | 'restaurant' | 'other';
   dateRange: { from: string; to: string };
   generatedAt: Date;
   generatedByRole: string;

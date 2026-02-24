@@ -214,12 +214,12 @@ export class FinanceController {
     @Query('period') period?: 'today' | 'week' | 'month' | 'bydate',
     @Query('from') from?: string,
     @Query('to') to?: string,
-    @Query('sector') sector?: 'all' | 'rooms' | 'bar' | 'restaurant',
+    @Query('sector') sector?: 'all' | 'rooms' | 'bar' | 'restaurant' | 'other',
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ) {
     const p = period && ['today', 'week', 'month', 'bydate'].includes(period) ? period : 'today';
-    const s = sector && ['all', 'rooms', 'bar', 'restaurant'].includes(sector) ? sector : 'all';
+    const s = sector && ['all', 'rooms', 'bar', 'restaurant', 'other'].includes(sector) ? sector : 'all';
     const range = this.getRangeFromQuery(p, from, to);
     const pg = Math.max(1, Number(page || 1) || 1);
     const ps = Math.min(100, Math.max(10, Number(pageSize || 20) || 20));
@@ -236,11 +236,11 @@ export class FinanceController {
     @Query('period') period?: 'today' | 'week' | 'month' | 'bydate',
     @Query('from') from?: string,
     @Query('to') to?: string,
-    @Query('sector') sector?: 'all' | 'rooms' | 'bar' | 'restaurant',
+    @Query('sector') sector?: 'all' | 'rooms' | 'bar' | 'restaurant' | 'other',
   ) {
     const fmt = format === 'pdf' || format === 'xlsx' ? format : 'csv';
     const p = period && ['today', 'week', 'month', 'bydate'].includes(period) ? period : 'today';
-    const s = sector && ['all', 'rooms', 'bar', 'restaurant'].includes(sector) ? sector : 'all';
+    const s = sector && ['all', 'rooms', 'bar', 'restaurant', 'other'].includes(sector) ? sector : 'all';
     const range = this.getRangeFromQuery(p, from, to);
 
     const out = await this.finance.exportTransactions(user.businessId, range.from, range.to, s, fmt, user.role || 'USER');

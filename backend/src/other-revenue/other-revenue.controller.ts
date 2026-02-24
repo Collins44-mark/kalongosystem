@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { SubscriptionGuard } from '../common/guards/subscription.guard';
 import { BusinessModuleGuard } from '../common/guards/business-module.guard';
@@ -16,6 +16,16 @@ class CreateRevenueCategoryDto {
   @IsOptional()
   @IsString()
   linkedQuickBooksAccountId?: string;
+}
+
+class UpdateRevenueCategoryDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  linkedQuickBooksAccountId?: string | null;
 }
 
 class CreateOtherRevenueDto {
@@ -56,6 +66,23 @@ export class OtherRevenueController {
   @Post('revenue-categories')
   async createCategory(@CurrentUser('businessId') companyId: string, @Body() dto: CreateRevenueCategoryDto) {
     return this.other.createCategory(companyId, dto.name, dto.linkedQuickBooksAccountId);
+  }
+
+  @Put('revenue-categories/:id')
+  async updateCategory(
+    @CurrentUser('businessId') companyId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateRevenueCategoryDto,
+  ) {
+    return this.other.updateCategory(companyId, id, { name: dto.name, linkedQuickBooksAccountId: dto.linkedQuickBooksAccountId ?? undefined });
+  }
+
+  @Delete('revenue-categories/:id')
+  async deleteCategory(
+    @CurrentUser('businessId') companyId: string,
+    @Param('id') id: string,
+  ) {
+    return this.other.deleteCategory(companyId, id);
   }
 
   @Get('other-revenues')

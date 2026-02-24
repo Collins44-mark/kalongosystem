@@ -19,24 +19,6 @@ export class OtherRevenueService {
       orderBy: { name: 'asc' },
       select: { id: true, name: true, linkedQuickBooksAccountId: true, createdAt: true },
     });
-    if (rows.length === 0) {
-      const defaults = ['Swimming', 'Laundry', 'Spa', 'Tour', 'Hall Rental'];
-      // Best-effort seed; never fail the request
-      try {
-        await this.prisma.revenueCategory.createMany({
-          data: defaults.map((name) => ({ companyId, name })),
-          skipDuplicates: true,
-        });
-      } catch {
-        // ignore
-      }
-      const seeded = await this.prisma.revenueCategory.findMany({
-        where: { companyId },
-        orderBy: { name: 'asc' },
-        select: { id: true, name: true, linkedQuickBooksAccountId: true, createdAt: true },
-      });
-      return seeded;
-    }
     return rows;
   }
 
@@ -61,6 +43,50 @@ export class OtherRevenueService {
       }
       throw e;
     }
+  }
+
+  async updateCategory(companyId: string, categoryId: string, data: { name?: string; linkedQuickBooksAccountId?: string | null }) {
+    const existing = await this.prisma.revenueCategory.findFirst({
+      where: { id: categoryId, companyId },
+      select: { id: true },
+    });
+    if (!existing) throw new NotFoundException('Revenue category not found');
+
+    const update: any = {};
+    if (data.name !== undefined) {
+      const nm = String(data.name ?? '').trim();
+      if (!nm) throw new BadRequestException('Category name is required');
+      if (nm.length > 80) throw new BadRequestException('Category name is too long');
+      update.name = nm;
+    }
+    if (data.linkedQuickBooksAccountId !== undefined) {
+      update.linkedQuickBooksAccountId = String(data.linkedQuickBooksAccountId ?? '').trim() || null;
+    }
+
+    try {
+      return await this.prisma.revenueCategory.update({
+        where: { id: categoryId },
+        data: update,
+        select: { id: true, name: true, linkedQuickBooksAccountId: true, createdAt: true },
+      });
+    } catch (e: any) {
+      if (e?.code === 'P2002') throw new BadRequestException('Category already exists');
+      throw e;
+    }
+  }
+
+  async deleteCategory(companyId: string, categoryId: string) {
+    const existing = await this.prisma.revenueCategory.findFirst({
+      where: { id: categoryId, companyId },
+      select: { id: true },
+    });
+    if (!existing) throw new NotFoundException('Revenue category not found');
+
+    const used = await this.prisma.otherRevenue.count({ where: { companyId, categoryId } });
+    if (used > 0) throw new BadRequestException('Cannot delete a category that already has revenue records');
+
+    await this.prisma.revenueCategory.delete({ where: { id: categoryId } });
+    return { success: true };
   }
 
   async lookupBookings(companyId: string, q?: string) {
