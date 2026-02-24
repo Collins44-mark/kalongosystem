@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
 import { AccountingService } from '../accounting/accounting.service';
+import { readFile } from 'fs/promises';
+import { join as joinPath } from 'path';
 
 @Injectable()
 export class FinanceService {
@@ -410,6 +412,7 @@ export class FinanceService {
     const rows = txns.slice(start, start + pageSize).map((r) => ({
       ...r,
       date: r.date.toISOString(),
+      createdAt: (r.createdAt ?? r.date).toISOString(),
     }));
 
     return { page, pageSize, total, rows };
@@ -428,6 +431,9 @@ export class FinanceService {
       referenceId: string;
       sector: 'rooms' | 'bar' | 'restaurant' | 'other';
       customerName: string;
+      category?: string;
+      description?: string;
+      createdAt?: Date;
       netAmount: number;
       vatAmount: number;
       grossAmount: number;
@@ -452,6 +458,7 @@ export class FinanceService {
         const mode = b.paymentMode ? `${b.paymentMode} (Paid direct)` : 'Paid direct';
         txns.push({
           date: b.createdAt,
+          createdAt: b.createdAt,
           referenceId: b.folioNumber || b.id,
           sector: 'rooms',
           customerName: String(b.guestName || '').trim(),
@@ -474,6 +481,7 @@ export class FinanceService {
         const split = this.splitTaxFromGross(gross, tax.enabled, tax.rateBySector.bar);
         txns.push({
           date: o.createdAt,
+          createdAt: o.createdAt,
           referenceId: o.orderNumber || o.id,
           sector: 'bar',
           customerName: String(o.customerName || '').trim(),
@@ -496,6 +504,7 @@ export class FinanceService {
           paymentMethod: true,
           description: true,
           date: true,
+          createdAt: true,
           category: { select: { name: true } },
           booking: { select: { folioNumber: true, guestName: true } },
         },
@@ -509,9 +518,12 @@ export class FinanceService {
         const desc = String(r.description ?? '').trim();
         txns.push({
           date: r.date,
+          createdAt: r.createdAt ?? r.date,
           referenceId: ref,
           sector: 'other',
           customerName: cust || label || 'Other Revenue',
+          category: label || undefined,
+          description: desc || undefined,
           netAmount: this.round2(split.net),
           vatAmount: this.round2(split.tax),
           grossAmount: this.round2(split.gross),
@@ -531,6 +543,7 @@ export class FinanceService {
         const split = this.splitTaxFromGross(gross, tax.enabled, tax.rateBySector.restaurant);
         txns.push({
           date: o.createdAt,
+          createdAt: o.createdAt,
           referenceId: o.orderNumber || o.id,
           sector: 'restaurant',
           customerName: String(o.customerName || '').trim(),
@@ -553,6 +566,7 @@ export class FinanceService {
     sector: 'all' | 'rooms' | 'bar' | 'restaurant' | 'other',
     format: 'csv' | 'xlsx' | 'pdf',
     generatedByRole: string = 'USER',
+    branchId: string = 'main',
   ): Promise<{ filename: string; contentType: string; body: Buffer }> {
     const txns = await this.collectTransactions(businessId, from, to, sector);
     const safe = (d: Date) => d.toISOString().slice(0, 10);
@@ -677,8 +691,9 @@ export class FinanceService {
 
     const business = await this.prisma.business.findUnique({
       where: { id: businessId },
-      select: { name: true, businessId: true, businessType: true },
+      select: { name: true, businessId: true, businessType: true, logoUrl: true },
     });
+    const logoBuffer = await this.getBusinessLogoBuffer(business?.logoUrl ?? null);
 
     const totalNet = txns.reduce((s, t) => s + Number(t.netAmount || 0), 0);
     const totalVat = txns.reduce((s, t) => s + Number(t.vatAmount || 0), 0);
@@ -698,8 +713,10 @@ export class FinanceService {
     });
 
     const pdf = await renderFinanceTransactionsPdf({
+      logoBuffer,
       businessName: business?.name || 'Business',
       businessId: business?.businessId || businessId,
+      branchId: String(branchId || 'main'),
       businessType: business?.businessType || '-',
       reportTitle: 'Finance Transactions Report',
       sector,
@@ -731,6 +748,72 @@ export class FinanceService {
       })),
     });
     return { filename: `${baseName}.pdf`, contentType: 'application/pdf', body: pdf };
+  }
+
+  private async getBusinessLogoBuffer(logoUrl: string | null): Promise<Buffer | null> {
+    const url = String(logoUrl ?? '').trim();
+    if (!url) return null;
+
+    // Local uploads (preferred)
+    try {
+      if (url.startsWith('/uploads/')) {
+        const p = joinPath(process.cwd(), url.slice(1));
+        const buf = await readFile(p);
+        return buf.length ? buf : null;
+      }
+      if (url.startsWith('uploads/')) {
+        const p = joinPath(process.cwd(), url);
+        const buf = await readFile(p);
+        return buf.length ? buf : null;
+      }
+    } catch {
+      // fall through to URL fetch
+    }
+
+    // Remote URL (HTTP/S only)
+    if (!/^https?:\/\//i.test(url)) return null;
+
+    // Prefer global fetch if available (Node 18+)
+    try {
+      const f: any = (globalThis as any).fetch;
+      if (typeof f === 'function') {
+        const res = await f(url);
+        if (!res?.ok) return null;
+        const ab = await res.arrayBuffer();
+        const buf = Buffer.from(ab);
+        return buf.length ? buf : null;
+      }
+    } catch {
+      // fall through
+    }
+
+    // Fallback to http/https (no redirects)
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { request } = require(url.toLowerCase().startsWith('https://') ? 'node:https' : 'node:http');
+      return await new Promise((resolve) => {
+        const req = request(url, (resp: any) => {
+          if (resp.statusCode && resp.statusCode >= 300 && resp.statusCode < 400 && resp.headers?.location) {
+            resolve(null);
+            return;
+          }
+          if (resp.statusCode !== 200) {
+            resolve(null);
+            return;
+          }
+          const chunks: any[] = [];
+          resp.on('data', (c: any) => chunks.push(c));
+          resp.on('end', () => {
+            const b = Buffer.concat(chunks);
+            resolve(b.length ? b : null);
+          });
+        });
+        req.on('error', () => resolve(null));
+        req.end();
+      });
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -824,9 +907,31 @@ function drawCellText(doc: any, text: string, x: number, y: number, width: numbe
   doc.text(t, x, y, { width, align: opts.align, lineBreak: false });
 }
 
+function drawCellTextBox(
+  doc: any,
+  text: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  opts: { align: 'left' | 'right' | 'center'; size: number; font?: string },
+) {
+  const t = String(text ?? '');
+  if (opts.font) doc.font(opts.font);
+  doc.fontSize(opts.size);
+  doc.text(t, x, y, {
+    width: Math.max(1, width),
+    height: Math.max(1, height),
+    align: opts.align,
+    ellipsis: true,
+  });
+}
+
 async function renderFinanceTransactionsPdf(input: {
+  logoBuffer?: Buffer | null;
   businessName: string;
   businessId: string;
+  branchId: string;
   businessType: string;
   reportTitle: string;
   sector: 'all' | 'rooms' | 'bar' | 'restaurant' | 'other';
@@ -847,7 +952,7 @@ async function renderFinanceTransactionsPdf(input: {
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const PDFDocument = require('pdfkit');
-      const doc = new PDFDocument({ margin: 40, size: 'A4', bufferPages: true });
+      const doc = new PDFDocument({ margin: 30, size: 'A4', bufferPages: true });
       const chunks: Buffer[] = [];
       doc.on('data', (c: any) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
       doc.on('end', () => {
@@ -872,23 +977,63 @@ async function renderFinanceTransactionsPdf(input: {
       const x = doc.page.margins.left;
       let y = doc.page.margins.top;
 
-      // Header block
-      doc.font('Helvetica-Bold').fontSize(18).text(input.businessName, x, y);
-      y += 22;
-      doc.font('Helvetica-Bold').fontSize(14).text(input.reportTitle, x, y);
-      y += 18;
+      // =========================
+      // HEADER (fixed 3 columns)
+      // =========================
+      const headerTop = y;
+      const headerBlockH = 96;
+      const gap = 14;
+      const leftW = 150;
+      const rightW = 190;
+      const centerW = pageWidth - leftW - rightW - gap * 2;
+      const leftX = x;
+      const centerX = x + leftW + gap;
+      const rightX = centerX + centerW + gap;
 
-      doc.font('Helvetica').fontSize(10).fillColor('#333');
-      doc.text(`Business ID: ${input.businessId}`, x, y); y += 14;
-      doc.text(`Business Type: ${input.businessType}`, x, y); y += 14;
-      if (input.sector !== 'all') { doc.text(`Sector: ${input.sector}`, x, y); y += 14; }
-      doc.text(`Date Range: ${input.dateRange.from} to ${input.dateRange.to}`, x, y); y += 14;
-      doc.text(`Generated: ${formatDateTime(input.generatedAt)} • Generated By: ${input.generatedByRole}`, x, y); y += 10;
-      doc.fillColor('#000');
+      // Left: logo area (always reserve space)
+      const logoMaxW = 120;
+      const logoMaxH = 80;
+      const logoBoxX = leftX + Math.max(0, (leftW - logoMaxW) / 2);
+      const logoBoxY = headerTop + Math.max(0, (headerBlockH - logoMaxH) / 2);
+      try {
+        if (input.logoBuffer && input.logoBuffer.length) {
+          doc.image(input.logoBuffer, logoBoxX, logoBoxY, { fit: [logoMaxW, logoMaxH], align: 'center', valign: 'center' });
+        }
+      } catch {
+        // ignore broken logo buffers
+      }
 
-      y += 10;
-      doc.moveTo(x, y).lineTo(x + pageWidth, y).lineWidth(1).strokeColor('#ccc').stroke();
+      // Center: title + business metadata
+      doc.fillColor('#111827');
+      doc.font('Helvetica-Bold').fontSize(14).text(String(input.reportTitle || 'Report'), centerX, headerTop + 6, { width: centerW, align: 'center' });
+      doc.font('Helvetica').fontSize(9).fillColor('#374151');
+      const metaLines = [
+        `Business ID: ${String(input.businessId || '-')}`,
+        `Branch ID: ${String(input.branchId || '-')}`,
+        `Business Type: ${String(input.businessType || '-')}`,
+        `Date Range: ${String(input.dateRange?.from || '-') } to ${String(input.dateRange?.to || '-')}`,
+      ];
+      let metaY = headerTop + 28;
+      for (const line of metaLines) {
+        doc.text(line, centerX, metaY, { width: centerW, align: 'center', lineBreak: false });
+        metaY += 12;
+      }
+
+      // Right: generated info
+      doc.font('Helvetica').fontSize(9).fillColor('#374151');
+      doc.text('Generated On', rightX, headerTop + 18, { width: rightW, align: 'right', lineBreak: false });
+      doc.font('Helvetica-Bold').fontSize(9).fillColor('#111827');
+      doc.text(formatDateTime(input.generatedAt), rightX, headerTop + 30, { width: rightW, align: 'right', lineBreak: false });
+      doc.font('Helvetica').fontSize(9).fillColor('#374151');
+      doc.text('Generated By', rightX, headerTop + 50, { width: rightW, align: 'right', lineBreak: false });
+      doc.font('Helvetica-Bold').fontSize(9).fillColor('#111827');
+      doc.text(String(input.generatedByRole || 'USER'), rightX, headerTop + 62, { width: rightW, align: 'right', lineBreak: false });
+
+      // Divider under header
+      y = headerTop + headerBlockH + 10;
+      doc.moveTo(x, y).lineTo(x + pageWidth, y).lineWidth(1).strokeColor('#d1d5db').stroke();
       doc.strokeColor('#000');
+      doc.fillColor('#000');
       y += 16;
 
       const bottomLimit = () => doc.page.height - doc.page.margins.bottom - 30;
@@ -1045,19 +1190,17 @@ async function renderFinanceTransactionsPdf(input: {
       // =========================
       drawSectionTitle('Expense Transactions');
 
-      const expFixed = { date: 70, category: 95, amount: 90, mode: 95 };
-      const expDescW = pageWidth - expFixed.date - expFixed.category - expFixed.amount - expFixed.mode;
-      const expColW = {
-        date: expFixed.date,
-        category: expFixed.category,
-        description: Math.max(150, expDescW),
-        amount: expFixed.amount,
-        mode: expFixed.mode,
-      };
-      const expTableW = expColW.date + expColW.category + expColW.description + expColW.amount + expColW.mode;
-      const expTableX = x + (pageWidth - expTableW) / 2;
+      // Fixed % widths to prevent overflow: Date 15%, Category 20%, Description 30%, Amount 20%, Payment Mode 15%
+      const expTableX = x;
+      const expTableW = pageWidth;
+      const wDate = Math.floor(expTableW * 0.15);
+      const wCategory = Math.floor(expTableW * 0.20);
+      const wDesc = Math.floor(expTableW * 0.30);
+      const wAmount = Math.floor(expTableW * 0.20);
+      const wMode = Math.max(1, expTableW - (wDate + wCategory + wDesc + wAmount));
+      const expColW = { date: wDate, category: wCategory, description: wDesc, amount: wAmount, mode: wMode };
       const expHeaderH = 28;
-      const expRowH = 24;
+      const expRowH = 32;
       const expPadX = 6;
 
       const drawExpDividers = (topY: number, h: number, color: string) => {
@@ -1106,15 +1249,16 @@ async function renderFinanceTransactionsPdf(input: {
         doc.rect(expTableX, y, expTableW, expRowH).strokeColor('#e5e7eb').lineWidth(1).stroke();
         drawExpDividers(y, expRowH, '#e5e7eb');
         let cx2 = expTableX;
-        drawCellText(doc, formatDdMmYyyy(r.date), cx2 + expPadX, y + 7, expColW.date - expPadX * 2, { align: 'left', baseSize: 10, minSize: 9, font: 'Helvetica' });
+        drawCellText(doc, formatDdMmYyyy(r.date), cx2 + expPadX, y + 10, expColW.date - expPadX * 2, { align: 'left', baseSize: 10, minSize: 9, font: 'Helvetica' });
         cx2 += expColW.date;
-        drawCellText(doc, String(r.category || ''), cx2 + expPadX, y + 7, expColW.category - expPadX * 2, { align: 'left', baseSize: 10, minSize: 8, font: 'Helvetica' });
+        drawCellTextBox(doc, String(r.category || ''), cx2 + expPadX, y + 8, expColW.category - expPadX * 2, expRowH - 16, { align: 'left', size: 9, font: 'Helvetica' });
         cx2 += expColW.category;
-        drawCellText(doc, String(r.description || ''), cx2 + expPadX, y + 7, expColW.description - expPadX * 2, { align: 'left', baseSize: 10, minSize: 7, font: 'Helvetica' });
+        // Wrap/trim long descriptions safely inside the cell.
+        drawCellTextBox(doc, String(r.description || ''), cx2 + expPadX, y + 8, expColW.description - expPadX * 2, expRowH - 16, { align: 'left', size: 9, font: 'Helvetica' });
         cx2 += expColW.description;
-        drawCellText(doc, formatNumberTz(r.amount), cx2 + expPadX, y + 7, expColW.amount - expPadX * 2, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
+        drawCellText(doc, formatNumberTz(r.amount), cx2 + expPadX, y + 10, expColW.amount - expPadX * 2, { align: 'right', baseSize: 10, minSize: 9, font: 'Helvetica' });
         cx2 += expColW.amount;
-        drawCellText(doc, String(r.paymentMode || '-'), cx2 + expPadX, y + 7, expColW.mode - expPadX * 2, { align: 'center', baseSize: 10, minSize: 8, font: 'Helvetica' });
+        drawCellTextBox(doc, String(r.paymentMode || '-'), cx2 + expPadX, y + 8, expColW.mode - expPadX * 2, expRowH - 16, { align: 'center', size: 9, font: 'Helvetica' });
         y += expRowH;
       };
 
@@ -1145,7 +1289,12 @@ async function renderFinanceTransactionsPdf(input: {
       drawExpDividers(y, expTotalH, '#d0d7de');
       doc.font('Helvetica-Bold').fontSize(11).fillColor('#000');
       doc.text('EXPENSE TOTAL', expTableX + expPadX, y + 11, { width: expColW.date + expColW.category + expColW.description - expPadX * 2, align: 'left' });
-      doc.text(formatNumberTz(input.summary.totalExpenses), expTableX + expColW.date + expColW.category + expColW.description + expPadX, y + 11, { width: expColW.amount - expPadX * 2, align: 'right' });
+      doc.text(
+        formatNumberTz(input.summary.totalExpenses),
+        expTableX + expColW.date + expColW.category + expColW.description + expPadX,
+        y + 11,
+        { width: expColW.amount - expPadX * 2, align: 'right' },
+      );
       y += expTotalH;
 
       // =========

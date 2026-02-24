@@ -296,6 +296,8 @@
   "finance.transactions": "Transactions",
   "finance.showingFor": "Showing for",
   "finance.referenceId": "Reference ID",
+  "finance.transactionDetails": "Transaction details",
+  "finance.createdAt": "Created date & time",
   "finance.sector": "Sector",
   "finance.netAmount": "Net Amount",
   "finance.vatAmount": "VAT Amount",

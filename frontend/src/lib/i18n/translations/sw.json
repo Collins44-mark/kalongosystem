@@ -296,6 +296,8 @@
   "finance.transactions": "Miamala",
   "finance.showingFor": "Inaonyesha",
   "finance.referenceId": "Kitambulisho",
+  "finance.transactionDetails": "Maelezo ya muamala",
+  "finance.createdAt": "Tarehe na muda wa kuundwa",
   "finance.sector": "Sekta",
   "finance.netAmount": "Kiasi bila VAT",
   "finance.vatAmount": "Kiasi cha VAT",

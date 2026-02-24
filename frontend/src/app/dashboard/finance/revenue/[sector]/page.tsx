@@ -22,6 +22,9 @@ type TxnRow = {
   date: string;
   referenceId: string;
   sector: 'rooms' | 'bar' | 'restaurant' | 'other';
+  category?: string;
+  description?: string;
+  createdAt?: string;
   netAmount: number;
   vatAmount: number;
   grossAmount: number;
@@ -56,6 +59,7 @@ export default function FinanceRevenueSectorPage() {
   const [pageSize, setPageSize] = useState(20);
   const [txLoading, setTxLoading] = useState(false);
   const [tx, setTx] = useState<{ total: number; rows: TxnRow[] }>({ total: 0, rows: [] });
+  const [selected, setSelected] = useState<TxnRow | null>(null);
 
   useEffect(() => {
     setSector(sectorFromUrl);
@@ -101,7 +105,7 @@ export default function FinanceRevenueSectorPage() {
   const displayedRows = useMemo(() => {
     if (!q) return tx.rows;
     return tx.rows.filter((r) => {
-      const txt = `${r.date} ${r.referenceId} ${r.sector} ${r.paymentMode} ${r.netAmount} ${r.vatAmount} ${r.grossAmount}`.toLowerCase();
+      const txt = `${r.date} ${r.createdAt || ''} ${r.referenceId} ${r.sector} ${r.category || ''} ${r.description || ''} ${r.paymentMode} ${r.netAmount} ${r.vatAmount} ${r.grossAmount}`.toLowerCase();
       return txt.includes(q);
     });
   }, [q, tx.rows]);
@@ -202,7 +206,11 @@ export default function FinanceRevenueSectorPage() {
             <thead className="bg-slate-50 border-b">
               <tr className="text-left text-slate-600">
                 <th className="p-3 font-medium">{t('common.date')}</th>
-                <th className="p-3 font-medium">{t('finance.referenceId')}</th>
+                {sector === 'other' ? (
+                  <th className="p-3 font-medium">{t('finance.category')}</th>
+                ) : (
+                  <th className="p-3 font-medium">{t('finance.referenceId')}</th>
+                )}
                 <th className="p-3 font-medium">{t('finance.sector')}</th>
                 <th className="p-3 font-medium text-right">{t('finance.netAmount')}</th>
                 <th className="p-3 font-medium text-right">{t('finance.vatAmount')}</th>
@@ -217,9 +225,20 @@ export default function FinanceRevenueSectorPage() {
                 <tr><td className="p-3 text-slate-500" colSpan={7}>{t('common.noItems')}</td></tr>
               ) : (
                 displayedRows.map((r, idx) => (
-                  <tr key={`${r.referenceId}-${idx}`} className="hover:bg-slate-50">
+                  <tr
+                    key={`${r.referenceId}-${idx}`}
+                    className="hover:bg-slate-50 cursor-pointer"
+                    onClick={() => setSelected(r)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelected(r); }}
+                  >
                     <td className="p-3 whitespace-nowrap">{new Date(r.date).toLocaleString()}</td>
-                    <td className="p-3 font-mono text-xs">{r.referenceId}</td>
+                    {sector === 'other' ? (
+                      <td className="p-3">{r.category || '-'}</td>
+                    ) : (
+                      <td className="p-3 font-mono text-xs">{r.referenceId}</td>
+                    )}
                     <td className="p-3">{r.sector}</td>
                     <td className="p-3 text-right whitespace-nowrap">{formatTzs(r.netAmount)}</td>
                     <td className="p-3 text-right whitespace-nowrap">{formatTzs(r.vatAmount)}</td>
@@ -246,6 +265,65 @@ export default function FinanceRevenueSectorPage() {
           </div>
         </div>
       </div>
+
+      {selected && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto overscroll-contain touch-none" style={{ overscrollBehavior: 'contain' }}>
+          <div className="bg-white rounded-lg w-full max-w-lg p-4 sm:p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="font-medium text-slate-900">{t('finance.transactionDetails')}</div>
+                <div className="text-xs text-slate-500 mt-1">{labelSector(sector)}</div>
+              </div>
+              <button type="button" onClick={() => setSelected(null)} className="text-sm text-slate-600 hover:text-slate-800 hover:underline">
+                {t('common.close')}
+              </button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div className="bg-slate-50 border rounded p-3">
+                <div className="text-xs text-slate-500">{t('finance.referenceId')}</div>
+                <div className="font-mono text-xs mt-1 break-all">{selected.referenceId}</div>
+              </div>
+              <div className="bg-slate-50 border rounded p-3">
+                <div className="text-xs text-slate-500">{t('finance.category')}</div>
+                <div className="mt-1">{selected.category || '-'}</div>
+              </div>
+              <div className="bg-slate-50 border rounded p-3 sm:col-span-2">
+                <div className="text-xs text-slate-500">{t('finance.descriptionOptional')}</div>
+                <div className="mt-1 text-slate-800 whitespace-pre-wrap break-words">{selected.description || '-'}</div>
+              </div>
+              <div className="bg-slate-50 border rounded p-3">
+                <div className="text-xs text-slate-500">{t('finance.netAmount')}</div>
+                <div className="mt-1 font-medium">{formatTzs(selected.netAmount)}</div>
+              </div>
+              <div className="bg-slate-50 border rounded p-3">
+                <div className="text-xs text-slate-500">{t('finance.vatAmount')}</div>
+                <div className="mt-1 font-medium">{formatTzs(selected.vatAmount)}</div>
+              </div>
+              <div className="bg-slate-50 border rounded p-3">
+                <div className="text-xs text-slate-500">{t('finance.grossAmount')}</div>
+                <div className="mt-1 font-medium">{formatTzs(selected.grossAmount)}</div>
+              </div>
+              <div className="bg-slate-50 border rounded p-3">
+                <div className="text-xs text-slate-500">{t('finance.paymentMode')}</div>
+                <div className="mt-1">{selected.paymentMode || '-'}</div>
+              </div>
+              <div className="bg-slate-50 border rounded p-3 sm:col-span-2">
+                <div className="text-xs text-slate-500">{t('finance.createdAt')}</div>
+                <div className="mt-1">
+                  {new Date(selected.createdAt || selected.date).toLocaleString()}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <button type="button" onClick={() => setSelected(null)} className="px-4 py-2 bg-slate-200 rounded hover:bg-slate-300">
+                {t('common.close')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

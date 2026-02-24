@@ -243,7 +243,15 @@ export class FinanceController {
     const s = sector && ['all', 'rooms', 'bar', 'restaurant', 'other'].includes(sector) ? sector : 'all';
     const range = this.getRangeFromQuery(p, from, to);
 
-    const out = await this.finance.exportTransactions(user.businessId, range.from, range.to, s, fmt, user.role || 'USER');
+    const out = await this.finance.exportTransactions(
+      user.businessId,
+      range.from,
+      range.to,
+      s,
+      fmt,
+      user.role || 'USER',
+      user.branchId || 'main',
+    );
     const body = Buffer.isBuffer(out.body) ? out.body : Buffer.from(out.body);
     res.setHeader('Content-Type', out.contentType);
     res.setHeader('Content-Disposition', `attachment; filename="${out.filename}"`);
