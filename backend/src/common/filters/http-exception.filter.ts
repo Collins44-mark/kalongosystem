@@ -28,11 +28,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
           ? exception.message
           : 'Internal server error';
 
-    // Log full error for debugging (shows in Render logs)
-    this.logger.error(
-      `${request.method} ${request.url} ${status}`,
-      exception instanceof Error ? exception.stack : String(exception),
-    );
+    const url = String(request?.url ?? '');
+    const isUploads404 = status === 404 && url.startsWith('/uploads/');
+    // Avoid noisy error logs for missing static uploads (e.g., after deploy/restart)
+    if (!isUploads404) {
+      this.logger.error(
+        `${request.method} ${request.url} ${status}`,
+        exception instanceof Error ? exception.stack : String(exception),
+      );
+    }
 
     const body =
       typeof message === 'object' && message !== null && 'message' in message

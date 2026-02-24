@@ -21,6 +21,31 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { mkdir, unlink, writeFile } from 'fs/promises';
 import { join } from 'path';
 import * as crypto from 'crypto';
+import { stat } from 'fs/promises';
+
+async function sanitizeLocalLogoUrl(
+  businessId: string,
+  logoUrl: string | null,
+  updateLogoUrl: (id: string, url: string | null) => Promise<any>,
+): Promise<string | null> {
+  const url = String(logoUrl ?? '').trim();
+  if (!url) return null;
+  if (!url.startsWith('/uploads/business-logos/')) return url;
+
+  const dir = join(process.cwd(), 'uploads', 'business-logos');
+  const name = url.replace('/uploads/business-logos/', '').trim();
+  if (!name) return null;
+
+  try {
+    const p = join(dir, name);
+    await stat(p);
+    return url;
+  } catch {
+    // File is missing: clear DB best-effort so UI stops requesting dead URLs
+    try { await updateLogoUrl(businessId, null); } catch {}
+    return null;
+  }
+}
 
 class RegisterBusinessDto {
   @IsString()
@@ -90,9 +115,10 @@ export class BusinessController {
   @UseGuards(JwtAuthGuard)
   async profile(@CurrentUser('businessId') businessId: string) {
     const b: any = await this.business.getById(businessId);
+    const safeLogo = await sanitizeLocalLogoUrl(businessId, b.logoUrl ?? null, (id, url) => this.business.updateLogoUrl(id, url));
     return {
       ...b,
-      logo_url: b.logoUrl ?? null,
+      logo_url: safeLogo,
     };
   }
 
@@ -209,9 +235,10 @@ export class BusinessApiController {
   @UseGuards(JwtAuthGuard)
   async profile(@CurrentUser('businessId') businessId: string) {
     const b: any = await this.business.getById(businessId);
+    const safeLogo = await sanitizeLocalLogoUrl(businessId, b.logoUrl ?? null, (id, url) => this.business.updateLogoUrl(id, url));
     return {
       ...b,
-      logo_url: b.logoUrl ?? null,
+      logo_url: safeLogo,
     };
   }
 
