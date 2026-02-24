@@ -83,6 +83,8 @@ model Business {
   subscription      Subscription?
   quickbooksTokens  QuickbooksToken[]
   syncLogs          SyncLog[]
+  revenueCategories RevenueCategory[]
+  otherRevenues     OtherRevenue[]
   roomCategories    RoomCategory[]
   rooms             Room[]
   bookings          Booking[]
@@ -181,6 +183,7 @@ model Booking {
   checkIn     DateTime
   checkOut    DateTime
   nights      Int
+  roomAmount  Decimal   @db.Decimal(12, 2) @map("room_amount")
   totalAmount Decimal   @db.Decimal(12, 2)
   currency    String    @default("TZS") // TZS, USD, etc.
   paymentMode String?   // CASH, BANK, MPESA, TIGOPESA, AIRTEL_MONEY
@@ -196,8 +199,46 @@ model Booking {
   business Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
   room     Room           @relation(fields: [roomId], references: [id], onDelete: Restrict)
   payments FolioPayment[]
+  otherRevenues OtherRevenue[]
 
   @@map("bookings")
+}
+
+model RevenueCategory {
+  id                       String   @id @default(uuid())
+  companyId                String   @map("company_id")
+  name                     String
+  linkedQuickBooksAccountId String? @map("linked_quickbooks_account_id")
+  createdAt                DateTime @default(now()) @map("created_at")
+
+  company Business @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  revenues OtherRevenue[]
+
+  @@unique([companyId, name])
+  @@index([companyId, createdAt])
+  @@map("revenue_categories")
+}
+
+model OtherRevenue {
+  id          String   @id @default(uuid())
+  companyId   String   @map("company_id")
+  bookingId   String?  @map("booking_id")
+  categoryId  String   @map("category_id")
+  description String?
+  amount      Decimal  @db.Decimal(12, 2)
+  paymentMethod String @map("payment_method") // CASH | BANK | CARD
+  date        DateTime
+  createdBy   String?  @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  company  Business         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  booking  Booking?         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  category RevenueCategory  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, date])
+  @@index([companyId, bookingId])
+  @@index([companyId, categoryId])
+  @@map("other_revenues")
 }
 
 model QuickbooksToken {

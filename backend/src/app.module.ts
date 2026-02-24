@@ -20,6 +20,7 @@ import { HealthModule } from './health/health.module';
 import { SuperAdminModule } from './super-admin/super-admin.module';
 import { MessagesModule } from './messages/messages.module';
 import { AccountingModule } from './accounting/accounting.module';
+import { OtherRevenueModule } from './other-revenue/other-revenue.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { AccountingModule } from './accounting/accounting.module';
     SuperAdminModule,
     MessagesModule,
     AccountingModule,
+    OtherRevenueModule,
   ],
 })
 export class AppModule {}

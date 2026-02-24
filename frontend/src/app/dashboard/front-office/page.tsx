@@ -7,7 +7,7 @@ import { useTranslation } from '@/lib/i18n/context';
 import { useDashboardBack } from '@/app/dashboard/layout';
 import { CalendarView } from './CalendarView';
 import { useSearch } from '@/store/search';
-import { notifyError } from '@/store/notifications';
+import { notifyError, notifySuccess } from '@/store/notifications';
 
 type Room = { id: string; roomNumber: string; roomName?: string; status: string; category: { id: string; name: string; pricePerNight: string } };
 type Category = { id: string; name: string; pricePerNight: string };
@@ -19,6 +19,7 @@ type Booking = {
   checkIn: string;
   checkOut: string;
   nights: number;
+  roomAmount?: string;
   totalAmount: string;
   paidAmount?: string;
   balance?: string;
@@ -1227,6 +1228,23 @@ type FolioPayment = {
   createdByWorkerName?: string | null;
 };
 
+type RevenueCategory = {
+  id: string;
+  name: string;
+};
+
+type BookingCharge = {
+  id: string;
+  bookingId: string | null;
+  categoryId: string;
+  categoryName: string;
+  description: string;
+  amount: number;
+  paymentMethod: string;
+  date: string;
+  createdAt: string;
+};
+
 function AddPaymentModal({ booking, token, onDone, t }: { booking: Booking; token: string; onDone: () => void; t: (k: string) => string }) {
   const [show, setShow] = useState(false);
   const [amount, setAmount] = useState('');
@@ -1246,9 +1264,10 @@ function AddPaymentModal({ booking, token, onDone, t }: { booking: Booking; toke
       if (typeof window !== 'undefined') try { localStorage.setItem('hms-data-updated', Date.now().toString()); } catch { /* ignore */ }
       setShow(false);
       setAmount('');
+      notifySuccess('Saved.');
       onDone();
     } catch (e) {
-      alert((e as Error).message);
+      notifyError((e as Error).message);
     } finally {
       setLoading(false);
     }
@@ -1298,43 +1317,178 @@ function AddPaymentModal({ booking, token, onDone, t }: { booking: Booking; toke
   );
 }
 
+function AddChargeModal({ booking, token, onDone }: { booking: Booking; token: string; onDone: () => void }) {
+  const [show, setShow] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [cats, setCats] = useState<RevenueCategory[]>([]);
+  const [categoryId, setCategoryId] = useState('');
+  const [description, setDescription] = useState('');
+  const [amount, setAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'BANK' | 'CARD'>('CASH');
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+
+  useEffect(() => {
+    if (!show) return;
+    api<RevenueCategory[]>(`/hotel/revenue-categories`, { token })
+      .then((r) => setCats(Array.isArray(r) ? r : []))
+      .catch(() => setCats([]));
+  }, [show, token]);
+
+  useEffect(() => {
+    if (!show) return;
+    if (!categoryId && cats.length) setCategoryId(cats[0].id);
+  }, [show, cats, categoryId]);
+
+  async function submit() {
+    const amt = parseFloat(amount);
+    if (!amt || amt <= 0) {
+      notifyError('Enter a valid amount');
+      return;
+    }
+    if (!categoryId) {
+      notifyError('Select a category');
+      return;
+    }
+    setLoading(true);
+    try {
+      await api(`/hotel/bookings/${booking.id}/charges`, {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          categoryId,
+          description: description || undefined,
+          amount: amt,
+          paymentMethod,
+          date,
+        }),
+      });
+      if (typeof window !== 'undefined') try { localStorage.setItem('hms-data-updated', Date.now().toString()); } catch { /* ignore */ }
+      setShow(false);
+      setDescription('');
+      setAmount('');
+      notifySuccess('Charge added.');
+      onDone();
+    } catch (e) {
+      notifyError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <>
+      <button onClick={() => setShow(true)} className="min-w-[6.5rem] px-3 py-1.5 bg-indigo-600 text-white rounded text-xs touch-manipulation text-center">
+        Add Charge
+      </button>
+      {show && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-4 sm:p-5 rounded-lg max-w-sm w-full">
+            <h3 className="font-medium mb-3">Add Charge — {booking.guestName}</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm mb-1">Category</label>
+                <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="w-full px-3 py-2 border rounded text-base">
+                  {cats.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                {cats.length === 0 && (
+                  <div className="text-xs text-slate-500 mt-1">No categories yet. Ask a manager to create revenue categories in Finance.</div>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm mb-1">Description</label>
+                <input value={description} onChange={(e) => setDescription(e.target.value)} className="w-full px-3 py-2 border rounded text-base" placeholder="e.g. Laundry service" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm mb-1">Amount</label>
+                  <input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full px-3 py-2 border rounded text-base" placeholder="0" />
+                </div>
+                <div>
+                  <label className="block text-sm mb-1">Payment</label>
+                  <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as any)} className="w-full px-3 py-2 border rounded text-base">
+                    <option value="CASH">Cash</option>
+                    <option value="BANK">Bank</option>
+                    <option value="CARD">Card</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm mb-1">Date</label>
+                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-3 py-2 border rounded text-base" />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={submit} disabled={loading} className="flex-1 px-4 py-2.5 bg-teal-600 text-white rounded touch-manipulation">
+                {loading ? 'Saving…' : 'Save'}
+              </button>
+              <button onClick={() => setShow(false)} className="px-4 py-2.5 bg-slate-200 rounded touch-manipulation">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function ViewPaymentsModal({ booking, token, t }: { booking: Booking; token: string; t: (k: string) => string }) {
   const [show, setShow] = useState(false);
   const [payments, setPayments] = useState<FolioPayment[]>([]);
+  const [charges, setCharges] = useState<BookingCharge[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (show && booking.id) {
       setLoading(true);
-      api<FolioPayment[]>(`/hotel/bookings/${booking.id}/payments`, { token })
-        .then(setPayments)
-        .catch(() => setPayments([]))
+      Promise.all([
+        api<FolioPayment[]>(`/hotel/bookings/${booking.id}/payments`, { token }).catch(() => [] as FolioPayment[]),
+        api<BookingCharge[]>(`/hotel/bookings/${booking.id}/charges`, { token }).catch(() => [] as BookingCharge[]),
+      ])
+        .then(([p, c]) => {
+          setPayments(Array.isArray(p) ? p : []);
+          setCharges(Array.isArray(c) ? c : []);
+        })
+        .catch(() => {
+          setPayments([]);
+          setCharges([]);
+        })
         .finally(() => setLoading(false));
     }
   }, [show, booking.id, token]);
 
   const total = parseFloat(booking.totalAmount || '0');
+  const room = parseFloat(booking.roomAmount || booking.totalAmount || '0');
   const sortedPayments = [...payments].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   const totalPaid = payments.reduce((s, p) => s + parseFloat(p.amount || '0'), 0);
   const balance = Math.max(0, total - totalPaid);
   const paidAtBooking = sortedPayments.length > 0 ? parseFloat(sortedPayments[0].amount) : 0;
+  const otherCharges = charges.reduce((s, c) => s + Number(c.amount || 0), 0);
 
   return (
     <>
       <button onClick={() => setShow(true)} className="min-w-[6.5rem] px-3 py-1.5 bg-slate-100 text-slate-700 rounded text-xs touch-manipulation text-center">
-        {t('frontOffice.viewPayments')}
+        Invoice
       </button>
       {show && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white p-4 sm:p-5 rounded-lg max-w-sm w-full max-h-[80vh] overflow-auto">
-            <h3 className="font-medium mb-3">{t('frontOffice.paymentHistory')} — {booking.guestName}</h3>
+            <h3 className="font-medium mb-3">Invoice — {booking.guestName}</h3>
             {loading ? (
               <p className="text-slate-500">Loading...</p>
             ) : (
               <>
                 <div className="mb-4 p-3 bg-slate-50 rounded-lg space-y-1.5 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-slate-600">{t('frontOffice.bookingTotal')}</span>
+                    <span className="text-slate-600">Room charges</span>
+                    <span className="font-medium">{formatTzs(room)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">Other charges</span>
+                    <span className="font-medium">{formatTzs(otherCharges)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-700 font-medium">Total bill</span>
                     <span className="font-medium">{formatTzs(total)}</span>
                   </div>
                   <div className="flex justify-between">
@@ -1350,6 +1504,28 @@ function ViewPaymentsModal({ booking, token, t }: { booking: Booking; token: str
                     <span className={`font-medium ${balance > 0 ? 'text-amber-700' : 'text-green-700'}`}>{formatTzs(balance)}</span>
                   </div>
                 </div>
+
+                <div className="mb-4">
+                  <div className="text-sm font-medium text-slate-800 mb-2">Other charges</div>
+                  {charges.length === 0 ? (
+                    <p className="text-slate-500 text-sm">No extra charges.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {charges.map((c) => (
+                        <li key={c.id} className="flex justify-between text-sm py-2 border-b gap-3">
+                          <span className="min-w-0">
+                            <span className="font-medium">{formatTzs(Number(c.amount || 0))}</span> · {c.categoryName || 'Charge'}
+                            {c.description ? <span className="block text-xs text-slate-500 truncate">{c.description}</span> : null}
+                          </span>
+                          <span className="text-slate-500 text-xs whitespace-nowrap">{new Date(c.date).toLocaleDateString()}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <div className="mb-2">
+                  <div className="text-sm font-medium text-slate-800 mb-2">{t('frontOffice.paymentHistory')}</div>
                 {payments.length === 0 ? (
                   <p className="text-slate-500">{t('frontOffice.noPayments')}</p>
                 ) : (
@@ -1370,6 +1546,7 @@ function ViewPaymentsModal({ booking, token, t }: { booking: Booking; token: str
                     ))}
                   </ul>
                 )}
+                </div>
               </>
             )}
             <button onClick={() => setShow(false)} className="mt-4 w-full px-4 py-2 bg-slate-200 rounded touch-manipulation">{t('common.close')}</button>
@@ -1470,6 +1647,7 @@ function FolioList({
                           {t('frontOffice.checkOutBtn')}
                         </button>
                         <ExtendStayModal booking={b} token={token} onDone={onAction} t={t} />
+                        <AddChargeModal booking={b} token={token} onDone={onAction} />
                         <AddPaymentModal booking={b} token={token} onDone={onAction} t={t} />
                         {isManager && <ViewPaymentsModal booking={b} token={token} t={t} />}
                         {vacantRooms.length > 0 && (

@@ -293,6 +293,7 @@ export class HotelService {
           checkIn: data.checkIn,
           checkOut: data.checkOut,
           nights: data.nights,
+          roomAmount: new Decimal(totalAmount),
           totalAmount: new Decimal(totalAmount),
           currency: data.currency || 'TZS',
           paymentMode: data.paymentMode,
@@ -531,10 +532,22 @@ export class HotelService {
       throw new NotFoundException('New check-out must be after current check-out');
     }
     const nights = Math.ceil((newCheckOut.getTime() - new Date(b.checkIn).getTime()) / (1000 * 60 * 60 * 24));
-    const totalAmount = Number(b.room.category.pricePerNight) * nights;
+    const roomAmount = Number(b.room.category.pricePerNight) * nights;
+
+    const chargesAgg = await this.prisma.otherRevenue.aggregate({
+      where: { companyId: businessId, bookingId },
+      _sum: { amount: true },
+    });
+    const chargesSum = Number(chargesAgg._sum.amount || 0);
+    const totalAmount = roomAmount + chargesSum;
     await this.prisma.booking.update({
       where: { id: bookingId },
-      data: { checkOut: newCheckOut, nights, totalAmount: new Decimal(totalAmount) },
+      data: {
+        checkOut: newCheckOut,
+        nights,
+        roomAmount: new Decimal(roomAmount),
+        totalAmount: new Decimal(totalAmount),
+      },
     });
     const updated = await this.prisma.booking.findFirst({
       where: { id: bookingId, businessId },

@@ -341,14 +341,14 @@ export class FinanceService {
     const tax = await this.getTaxConfig(businessId);
 
     // Room revenue = when booking is made (paid at booking). Filter by booking date so daily view matches.
-    const [roomsAgg, barAgg, restAgg] = await Promise.all([
+    const [roomsAgg, barAgg, restAgg, otherAgg] = await Promise.all([
       this.prisma.booking.aggregate({
         where: {
           businessId,
           status: { in: ['CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT'] },
           createdAt: { gte: from, lte: to },
         },
-        _sum: { totalAmount: true },
+        _sum: { roomAmount: true },
       }),
       this.prisma.barOrder.aggregate({
         where: { businessId, createdAt: { gte: from, lte: to } },
@@ -358,19 +358,25 @@ export class FinanceService {
         where: { businessId, createdAt: { gte: from, lte: to } },
         _sum: { totalAmount: true },
       }),
+      this.prisma.otherRevenue.aggregate({
+        where: { companyId: businessId, date: { gte: from, lte: to } },
+        _sum: { amount: true },
+      }),
     ]);
 
-    const roomsGross = Number(roomsAgg._sum.totalAmount || 0);
+    const roomsGross = Number(roomsAgg._sum.roomAmount || 0);
     const barGross = Number(barAgg._sum.totalAmount || 0);
     const restaurantGross = Number(restAgg._sum.totalAmount || 0);
+    const otherGross = Number(otherAgg._sum.amount || 0);
 
     const roomsSplit = this.splitTaxFromGross(roomsGross, tax.enabled, tax.rateBySector.rooms);
     const barSplit = this.splitTaxFromGross(barGross, tax.enabled, tax.rateBySector.bar);
     const restaurantSplit = this.splitTaxFromGross(restaurantGross, tax.enabled, tax.rateBySector.restaurant);
+    const otherSplit = this.splitTaxFromGross(otherGross, tax.enabled, tax.rateBySector.rooms);
 
-    const grossSales = roomsGross + barGross + restaurantGross;
-    const netRevenue = roomsSplit.net + barSplit.net + restaurantSplit.net;
-    const vatCollected = roomsSplit.tax + barSplit.tax + restaurantSplit.tax;
+    const grossSales = roomsGross + barGross + restaurantGross + otherGross;
+    const netRevenue = roomsSplit.net + barSplit.net + restaurantSplit.net + otherSplit.net;
+    const vatCollected = roomsSplit.tax + barSplit.tax + restaurantSplit.tax + otherSplit.tax;
 
     return {
       period: { from: from.toISOString(), to: to.toISOString() },
@@ -385,6 +391,7 @@ export class FinanceService {
         rooms: { net: this.round2(roomsSplit.net), vat: this.round2(roomsSplit.tax), gross: this.round2(roomsSplit.gross) },
         bar: { net: this.round2(barSplit.net), vat: this.round2(barSplit.tax), gross: this.round2(barSplit.gross) },
         restaurant: { net: this.round2(restaurantSplit.net), vat: this.round2(restaurantSplit.tax), gross: this.round2(restaurantSplit.gross) },
+        other: { net: this.round2(otherSplit.net), vat: this.round2(otherSplit.tax), gross: this.round2(otherSplit.gross) },
       },
     };
   }

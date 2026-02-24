@@ -18,6 +18,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles, SkipRolesGuard } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { AllowManagerGuard } from '../common/guards/allow-manager.guard';
+import { OtherRevenueService } from '../other-revenue/other-revenue.service';
 import {
   IsBoolean,
   IsDateString,
@@ -89,13 +90,31 @@ class AddPaymentDto {
   paymentMode: string;
 }
 
+class AddBookingChargeDto {
+  @IsString()
+  categoryId: string;
+  @IsString()
+  @IsOptional()
+  description?: string;
+  @IsNumber()
+  @Min(0.01)
+  amount: number;
+  @IsString()
+  paymentMethod: string; // CASH | BANK | CARD
+  @IsDateString()
+  date: string;
+}
+
 @Controller('hotel')
 @UseGuards(JwtAuthGuard, SubscriptionGuard, BusinessModuleGuard)
 @UseGuards(RolesGuard)
 @RequireModule('front-office')
 @Roles('MANAGER', 'ADMIN', 'OWNER', 'FRONT_OFFICE')
 export class HotelController {
-  constructor(private hotel: HotelService) {}
+  constructor(
+    private hotel: HotelService,
+    private otherRevenue: OtherRevenueService,
+  ) {}
 
   @Post('categories')
   @SkipRolesGuard()
@@ -337,6 +356,38 @@ export class HotelController {
     @Param('id') id: string,
   ) {
     return this.hotel.getPayments(id, user.businessId);
+  }
+
+  // ---------- Other revenue attached to a booking (booking charges) ----------
+
+  @Get('revenue-categories')
+  @SkipRolesGuard()
+  async listRevenueCategories(@CurrentUser() user: any) {
+    return this.otherRevenue.listCategories(user.businessId);
+  }
+
+  @Get('bookings/:id/charges')
+  @SkipRolesGuard()
+  async getBookingCharges(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.otherRevenue.listOtherRevenue(user.businessId, { bookingId: id });
+  }
+
+  @Post('bookings/:id/charges')
+  @SkipRolesGuard()
+  async addBookingCharge(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body() dto: AddBookingChargeDto,
+  ) {
+    return this.otherRevenue.addOtherRevenue(user.businessId, {
+      bookingId: id,
+      categoryId: dto.categoryId,
+      description: dto.description,
+      amount: dto.amount,
+      paymentMethod: dto.paymentMethod,
+      date: new Date(dto.date),
+      createdBy: user.sub,
+    });
   }
 
   @Get('summary')

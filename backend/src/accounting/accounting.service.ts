@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
 
-type SyncEntityType = 'BOOKING' | 'PAYMENT' | 'BAR_SALE' | 'EXPENSE';
+type SyncEntityType = 'BOOKING' | 'PAYMENT' | 'BAR_SALE' | 'EXPENSE' | 'OTHER_REVENUE';
 type SyncStatus = 'SUCCESS' | 'FAILED';
 
 @Injectable()
@@ -262,6 +262,39 @@ export class AccountingService {
     }
   }
 
+  private async ensureOtherRevenueItem(
+    companyId: string,
+    categoryName: string,
+    linkedIncomeAccountId?: string | null,
+  ): Promise<string | null> {
+    const nm = String(categoryName ?? '').trim();
+    if (!nm) return this.ensureSalesItem(companyId);
+    const itemName = `HMS Other Revenue - ${nm}`.slice(0, 100);
+    try {
+      const q = await this.qbQuery(companyId, `select Id, Name from Item where Name = '${itemName.replace(/'/g, "\\'")}' maxresults 1`);
+      const existing = q?.data?.QueryResponse?.Item?.[0];
+      if (existing?.Id) return String(existing.Id);
+
+      const incomeAccountId =
+        (String(linkedIncomeAccountId ?? '').trim() || null) ??
+        (await this.pickAccountId(companyId, 'Income', ['Sales of Product Income', 'Sales']));
+      if (!incomeAccountId) return null;
+
+      const ctx = await this.getConnectedContext(companyId);
+      if (!ctx) return null;
+
+      const created = await this.qbPost(companyId, `/v3/company/${ctx.realmId}/item?minorversion=65`, {
+        Name: itemName,
+        Type: 'Service',
+        IncomeAccountRef: { value: incomeAccountId },
+      });
+      const id = created?.data?.Item?.Id;
+      return id ? String(id) : null;
+    } catch {
+      return null;
+    }
+  }
+
   async syncBookingCreated(companyId: string, bookingId: string) {
     try {
       const ctx = await this.getConnectedContext(companyId);
@@ -450,6 +483,66 @@ export class AccountingService {
       await this.logSync(companyId, 'EXPENSE', expenseId, 'SUCCESS', null);
     } catch (e: any) {
       await this.logSync(companyId, 'EXPENSE', expenseId, 'FAILED', e?.message || 'Expense sync failed');
+    }
+  }
+
+  async syncOtherRevenue(companyId: string, otherRevenueId: string) {
+    try {
+      const ctx = await this.getConnectedContext(companyId);
+      if (!ctx) return;
+
+      const already = await this.prisma.syncLog.findFirst({
+        where: { companyId, entityType: 'OTHER_REVENUE', entityId: otherRevenueId, status: 'SUCCESS' },
+        select: { id: true },
+      });
+      if (already?.id) return;
+
+      const r = await this.prisma.otherRevenue.findFirst({
+        where: { id: otherRevenueId, companyId },
+        include: { category: true, booking: { select: { id: true, guestName: true } } },
+      });
+      if (!r) return;
+
+      const categoryName = String(r.category?.name ?? '').trim() || 'Other Revenue';
+      const customerName =
+        (r.booking?.guestName ? String(r.booking.guestName).trim() : '') ||
+        'Other Revenue Customer';
+
+      const customerId = await this.ensureCustomer(companyId, customerName);
+      const itemId = await this.ensureOtherRevenueItem(companyId, categoryName, r.category?.linkedQuickBooksAccountId ?? null);
+      if (!customerId || !itemId) {
+        await this.logSync(companyId, 'OTHER_REVENUE', otherRevenueId, 'FAILED', 'Missing QuickBooks customer/item for sales receipt');
+        return;
+      }
+
+      const amount = Number(r.amount ?? 0);
+      const descParts = [
+        `HMS Other Revenue`,
+        categoryName ? `(${categoryName})` : '',
+        r.bookingId ? `Booking ${r.bookingId}` : '',
+      ].filter(Boolean);
+      const description = String(r.description ?? '').trim() || descParts.join(' ');
+
+      await this.qbPost(companyId, `/v3/company/${ctx.realmId}/salesreceipt?minorversion=65`, {
+        CustomerRef: { value: customerId },
+        TxnDate: new Date(r.date).toISOString().slice(0, 10),
+        Line: [
+          {
+            Amount: Math.max(0, Math.round(amount * 100) / 100),
+            DetailType: 'SalesItemLineDetail',
+            Description: description,
+            SalesItemLineDetail: {
+              ItemRef: { value: itemId },
+              Qty: 1,
+              UnitPrice: Math.max(0, Math.round(amount * 100) / 100),
+            },
+          },
+        ],
+      });
+
+      await this.logSync(companyId, 'OTHER_REVENUE', otherRevenueId, 'SUCCESS', null);
+    } catch (e: any) {
+      await this.logSync(companyId, 'OTHER_REVENUE', otherRevenueId, 'FAILED', e?.message || 'Other revenue sync failed');
     }
   }
 }

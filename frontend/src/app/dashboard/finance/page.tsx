@@ -28,6 +28,7 @@ type Overview = {
     rooms: { net: number; vat: number; gross: number };
     bar: { net: number; vat: number; gross: number };
     restaurant: { net: number; vat: number; gross: number };
+    other: { net: number; vat: number; gross: number };
   };
 };
 
@@ -77,6 +78,17 @@ export default function FinancePage() {
   const [expenseNotes, setExpenseNotes] = useState('');
   const [savingExpense, setSavingExpense] = useState(false);
   const [selectedExpenseCategory, setSelectedExpenseCategory] = useState<string | null>(null);
+
+  const [revenueCategories, setRevenueCategories] = useState<{ id: string; name: string }[]>([]);
+  const [revCategoryId, setRevCategoryId] = useState('');
+  const [revBookingId, setRevBookingId] = useState<string>('');
+  const [revBookingQuery, setRevBookingQuery] = useState('');
+  const [revBookingOptions, setRevBookingOptions] = useState<{ id: string; label: string }[]>([]);
+  const [revDescription, setRevDescription] = useState('');
+  const [revAmount, setRevAmount] = useState('');
+  const [revPaymentMethod, setRevPaymentMethod] = useState<'CASH' | 'BANK' | 'CARD'>('CASH');
+  const [revDate, setRevDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [savingRevenue, setSavingRevenue] = useState(false);
 
   // Business expectation: "Net revenue" = revenue after expenses (not VAT-only net).
   const netRevenueAfterExpenses = useMemo(() => {
@@ -178,6 +190,33 @@ export default function FinancePage() {
       })
       .finally(() => setLoading(false));
   }, [token, period, dateFrom, dateTo]);
+
+  useEffect(() => {
+    if (!token) return;
+    api<{ id: string; name: string }[]>(`/finance/revenue-categories`, { token })
+      .then((rows) => {
+        const list = Array.isArray(rows) ? rows : [];
+        setRevenueCategories(list);
+        if (!revCategoryId && list.length) setRevCategoryId(list[0].id);
+      })
+      .catch(() => setRevenueCategories([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    const q = revBookingQuery.trim();
+    if (!q) {
+      setRevBookingOptions([]);
+      return;
+    }
+    const handle = window.setTimeout(() => {
+      api<{ id: string; label: string }[]>(`/finance/bookings/lookup?q=${encodeURIComponent(q)}`, { token })
+        .then((rows) => setRevBookingOptions(Array.isArray(rows) ? rows : []))
+        .catch(() => setRevBookingOptions([]));
+    }, 250);
+    return () => window.clearTimeout(handle);
+  }, [token, revBookingQuery]);
 
   useEffect(() => {
     if (!token) return;
@@ -314,6 +353,60 @@ export default function FinancePage() {
     }
   }
 
+  async function recordOtherRevenue() {
+    if (!token) return;
+    const amount = parseTzsInput(revAmount);
+    if (!Number.isFinite(amount) || amount <= 0 || !revDate || !revCategoryId) {
+      notifyError(t('common.fillAllFields'));
+      return;
+    }
+    setSavingRevenue(true);
+    try {
+      await api(`/finance/other-revenues`, {
+        token,
+        method: 'POST',
+        body: JSON.stringify({
+          bookingId: revBookingId || undefined,
+          categoryId: revCategoryId,
+          description: revDescription.trim() || undefined,
+          amount,
+          paymentMethod: revPaymentMethod,
+          date: revDate,
+        }),
+      });
+      notifySuccess(t('finance.otherRevenueRecorded'));
+      setRevBookingId('');
+      setRevBookingQuery('');
+      setRevBookingOptions([]);
+      setRevDescription('');
+      setRevAmount('');
+      setRevPaymentMethod('CASH');
+      setRevDate(new Date().toISOString().slice(0, 10));
+
+      const params = new URLSearchParams();
+      params.set('period', period);
+      if (period === 'bydate' && dateFrom && dateTo) {
+        params.set('from', dateFrom);
+        params.set('to', dateTo);
+      }
+      const expParams = new URLSearchParams();
+      if (dateRange.from) expParams.set('from', dateRange.from);
+      if (dateRange.to) expParams.set('to', dateRange.to);
+      const [ov, tot, exp] = await Promise.all([
+        api<Overview>(`/finance/overview?${params}`, { token }),
+        api<{ expenses: unknown[]; total: number }>(`/finance/expenses?${expParams}`, { token }).then((r) => r?.total ?? 0),
+        api<{ byCategory: Record<string, number>; expenses: { id: string; category: string; amount: number; date: string; notes: string | null }[] }>(`/finance/expenses/by-category?${expParams}`, { token }),
+      ]);
+      setOverview(ov);
+      setTotalExpenses(typeof tot === 'number' ? tot : 0);
+      setExpensesData(exp || null);
+    } catch (e: any) {
+      notifyError(e?.message || 'Request failed');
+    } finally {
+      setSavingRevenue(false);
+    }
+  }
+
   const breadcrumb = (() => {
     const m = metric === 'net' ? t('finance.netRevenue') : metric === 'gross' ? t('finance.grossSales') : metric === 'vat' ? t('finance.vatCollected') : t('finance.expenses');
     if (level === 'overview') return t('finance.title');
@@ -385,45 +478,69 @@ export default function FinancePage() {
       ) : overview ? (
         <>
           {level === 'overview' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <button
-                type="button"
-                onClick={() => pushViewHistory('metric', 'vat', 'all', 1)}
-                className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
-              >
-                <div className="text-sm text-slate-500">{t('finance.vatCollected')}</div>
-                <div className="text-xl font-semibold">{formatTzs(overview.totals.vatCollected)}</div>
-                <div className="text-xs text-slate-500 mt-1">
-                  {vatEnabled ? `${Math.round((overview.vat.vat_rate || 0) * 100)}% · ${overview.vat.vat_type}` : t('finance.vatDisabled')}
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <button
+                  type="button"
+                  onClick={() => pushViewHistory('metric', 'vat', 'all', 1)}
+                  className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
+                >
+                  <div className="text-sm text-slate-500">{t('finance.vatCollected')}</div>
+                  <div className="text-xl font-semibold">{formatTzs(overview.totals.vatCollected)}</div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    {vatEnabled ? `${Math.round((overview.vat.vat_rate || 0) * 100)}% · ${overview.vat.vat_type}` : t('finance.vatDisabled')}
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => pushViewHistory('expenses', 'expenses', 'all', 1)}
+                  className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
+                >
+                  <div className="text-sm text-slate-500">{t('finance.expenses')}</div>
+                  <div className="text-xl font-semibold">{formatTzs(totalExpenses)}</div>
+                  <div className="text-xs text-slate-500 mt-1">{t('finance.expensesInPeriod')}</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => pushViewHistory('metric', 'gross', 'all', 1)}
+                  className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
+                >
+                  <div className="text-sm text-slate-500">{t('finance.grossSales')}</div>
+                  <div className="text-xl font-semibold">{formatTzs(overview.totals.grossSales)}</div>
+                  <div className="text-xs text-slate-500 mt-1">{t('finance.paymentsReceived')}</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => pushViewHistory('metric', 'net', 'all', 1)}
+                  className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
+                >
+                  <div className="text-sm text-slate-500">{t('finance.netRevenue')}</div>
+                  <div className="text-xl font-semibold">{formatTzs(netRevenueAfterExpenses)}</div>
+                  <div className="text-xs text-slate-500 mt-1">{vatEnabled ? t('finance.beforeVat') : t('finance.vatDisabled')}</div>
+                </button>
+              </div>
+
+              <div className="bg-white border rounded-lg p-4 max-w-2xl">
+                <div className="font-medium mb-3">{t('finance.revenueBreakdown')}</div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">{t('finance.roomsRevenue')}</span>
+                    <span className="font-medium">{formatTzs(overview.bySector.rooms.gross)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">{t('finance.posRevenue')}</span>
+                    <span className="font-medium">{formatTzs((overview.bySector.bar.gross || 0) + (overview.bySector.restaurant.gross || 0))}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">{t('finance.otherRevenue')}</span>
+                    <span className="font-medium">{formatTzs(overview.bySector.other.gross)}</span>
+                  </div>
+                  <div className="flex justify-between border-t pt-2 mt-2">
+                    <span className="text-slate-800 font-medium">{t('finance.totalRevenue')}</span>
+                    <span className="font-semibold">{formatTzs(overview.totals.grossSales)}</span>
+                  </div>
                 </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => pushViewHistory('expenses', 'expenses', 'all', 1)}
-                className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
-              >
-                <div className="text-sm text-slate-500">{t('finance.expenses')}</div>
-                <div className="text-xl font-semibold">{formatTzs(totalExpenses)}</div>
-                <div className="text-xs text-slate-500 mt-1">{t('finance.expensesInPeriod')}</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => pushViewHistory('metric', 'gross', 'all', 1)}
-                className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
-              >
-                <div className="text-sm text-slate-500">{t('finance.grossSales')}</div>
-                <div className="text-xl font-semibold">{formatTzs(overview.totals.grossSales)}</div>
-                <div className="text-xs text-slate-500 mt-1">{t('finance.paymentsReceived')}</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => pushViewHistory('metric', 'net', 'all', 1)}
-                className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
-              >
-                <div className="text-sm text-slate-500">{t('finance.netRevenue')}</div>
-                <div className="text-xl font-semibold">{formatTzs(netRevenueAfterExpenses)}</div>
-                <div className="text-xs text-slate-500 mt-1">{vatEnabled ? t('finance.beforeVat') : t('finance.vatDisabled')}</div>
-              </button>
+              </div>
             </div>
           )}
 
@@ -527,71 +644,160 @@ export default function FinancePage() {
           )}
 
           {canRecordExpense && level === 'overview' && (
-            <div className="bg-white border rounded-lg p-4 max-w-2xl">
-              <h2 className="font-medium mb-3">{t('finance.recordExpense')}</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm text-slate-600 mb-1">{t('finance.category')}</label>
-                  <select
-                    value={expenseCategory}
-                    onChange={(e) => setExpenseCategory(e.target.value as any)}
-                    className="w-full px-3 py-2 border rounded text-sm bg-white"
-                  >
-                    <option value="HOUSEKEEPING">{t('finance.housekeeping')}</option>
-                    <option value="MAINTENANCE">{t('finance.maintenance')}</option>
-                    <option value="UTILITIES">{t('finance.utilities')}</option>
-                    <option value="OTHERS">{t('finance.others')}</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm text-slate-600 mb-1">{t('finance.amount')}</label>
-                  <input
-                    value={expenseAmount}
-                    onChange={(e) => setExpenseAmount(e.target.value)}
-                    className="w-full px-3 py-2 border rounded text-sm"
-                    inputMode="decimal"
-                    placeholder="0"
-                  />
-                </div>
-                {expenseCategory === 'OTHERS' && (
-                  <div className="sm:col-span-2">
-                    <label className="block text-sm text-slate-600 mb-1">{t('finance.category')} ({t('finance.others')})</label>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 max-w-5xl">
+              <div className="bg-white border rounded-lg p-4">
+                <h2 className="font-medium mb-3">{t('finance.recordExpense')}</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm text-slate-600 mb-1">{t('finance.category')}</label>
+                    <select
+                      value={expenseCategory}
+                      onChange={(e) => setExpenseCategory(e.target.value as any)}
+                      className="w-full px-3 py-2 border rounded text-sm bg-white"
+                    >
+                      <option value="HOUSEKEEPING">{t('finance.housekeeping')}</option>
+                      <option value="MAINTENANCE">{t('finance.maintenance')}</option>
+                      <option value="UTILITIES">{t('finance.utilities')}</option>
+                      <option value="OTHERS">{t('finance.others')}</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-600 mb-1">{t('finance.amount')}</label>
                     <input
-                      value={expenseOtherCategory}
-                      onChange={(e) => setExpenseOtherCategory(e.target.value)}
+                      value={expenseAmount}
+                      onChange={(e) => setExpenseAmount(e.target.value)}
                       className="w-full px-3 py-2 border rounded text-sm"
-                      placeholder="e.g. Marketing"
+                      inputMode="decimal"
+                      placeholder="0"
                     />
                   </div>
-                )}
-                <div>
-                  <label className="block text-sm text-slate-600 mb-1">{t('finance.date')}</label>
-                  <input
-                    type="date"
-                    value={expenseDate}
-                    onChange={(e) => setExpenseDate(e.target.value)}
-                    className="w-full px-3 py-2 border rounded text-sm bg-white"
-                  />
+                  {expenseCategory === 'OTHERS' && (
+                    <div className="sm:col-span-2">
+                      <label className="block text-sm text-slate-600 mb-1">{t('finance.category')} ({t('finance.others')})</label>
+                      <input
+                        value={expenseOtherCategory}
+                        onChange={(e) => setExpenseOtherCategory(e.target.value)}
+                        className="w-full px-3 py-2 border rounded text-sm"
+                        placeholder="e.g. Marketing"
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-sm text-slate-600 mb-1">{t('finance.date')}</label>
+                    <input
+                      type="date"
+                      value={expenseDate}
+                      onChange={(e) => setExpenseDate(e.target.value)}
+                      className="w-full px-3 py-2 border rounded text-sm bg-white"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm text-slate-600 mb-1">{t('finance.notesOptional')}</label>
+                    <input
+                      value={expenseNotes}
+                      onChange={(e) => setExpenseNotes(e.target.value)}
+                      className="w-full px-3 py-2 border rounded text-sm"
+                      placeholder={t('finance.notesOptional')}
+                    />
+                  </div>
                 </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-sm text-slate-600 mb-1">{t('finance.notesOptional')}</label>
-                  <input
-                    value={expenseNotes}
-                    onChange={(e) => setExpenseNotes(e.target.value)}
-                    className="w-full px-3 py-2 border rounded text-sm"
-                    placeholder={t('finance.notesOptional')}
-                  />
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={recordExpense}
+                    disabled={savingExpense}
+                    className="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700 disabled:opacity-50 text-sm"
+                  >
+                    {savingExpense ? t('common.loading') : t('finance.record')}
+                  </button>
                 </div>
               </div>
-              <div className="mt-3">
-                <button
-                  type="button"
-                  onClick={recordExpense}
-                  disabled={savingExpense}
-                  className="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700 disabled:opacity-50 text-sm"
-                >
-                  {savingExpense ? t('common.loading') : t('finance.record')}
-                </button>
+
+              <div className="bg-white border rounded-lg p-4">
+                <h2 className="font-medium mb-3">{t('finance.recordOtherRevenue')}</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm text-slate-600 mb-1">{t('finance.category')}</label>
+                    <select
+                      value={revCategoryId}
+                      onChange={(e) => setRevCategoryId(e.target.value)}
+                      className="w-full px-3 py-2 border rounded text-sm bg-white"
+                    >
+                      {revenueCategories.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-600 mb-1">{t('finance.amount')}</label>
+                    <input
+                      value={revAmount}
+                      onChange={(e) => setRevAmount(e.target.value)}
+                      className="w-full px-3 py-2 border rounded text-sm"
+                      inputMode="decimal"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-600 mb-1">{t('finance.paymentMethod')}</label>
+                    <select
+                      value={revPaymentMethod}
+                      onChange={(e) => setRevPaymentMethod(e.target.value as any)}
+                      className="w-full px-3 py-2 border rounded text-sm bg-white"
+                    >
+                      <option value="CASH">{t('finance.cash')}</option>
+                      <option value="BANK">{t('finance.bank')}</option>
+                      <option value="CARD">{t('finance.card')}</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-600 mb-1">{t('finance.date')}</label>
+                    <input
+                      type="date"
+                      value={revDate}
+                      onChange={(e) => setRevDate(e.target.value)}
+                      className="w-full px-3 py-2 border rounded text-sm bg-white"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm text-slate-600 mb-1">{t('finance.attachToBookingOptional')}</label>
+                    <input
+                      value={revBookingQuery}
+                      onChange={(e) => setRevBookingQuery(e.target.value)}
+                      className="w-full px-3 py-2 border rounded text-sm"
+                      placeholder={t('finance.searchBookingPlaceholder')}
+                    />
+                    <select
+                      value={revBookingId}
+                      onChange={(e) => setRevBookingId(e.target.value)}
+                      className="mt-2 w-full px-3 py-2 border rounded text-sm bg-white"
+                    >
+                      <option value="">{t('finance.standaloneRevenue')}</option>
+                      {revBookingOptions.map((b) => (
+                        <option key={b.id} value={b.id}>{b.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm text-slate-600 mb-1">{t('finance.descriptionOptional')}</label>
+                    <input
+                      value={revDescription}
+                      onChange={(e) => setRevDescription(e.target.value)}
+                      className="w-full px-3 py-2 border rounded text-sm"
+                      placeholder={t('finance.descriptionOptional')}
+                    />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={recordOtherRevenue}
+                    disabled={savingRevenue}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 text-sm"
+                  >
+                    {savingRevenue ? t('common.loading') : t('finance.record')}
+                  </button>
+                </div>
               </div>
             </div>
           )}
