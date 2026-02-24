@@ -8,6 +8,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 type QbStatus = {
   connected: boolean;
   realmId: string | null;
+  companyName?: string | null;
   lastSyncAt: string | null;
 };
 
@@ -48,6 +49,53 @@ export function QuickBooksSection({ token, t }: { token: string; t: (k: string) 
   }, [token]);
 
   useEffect(() => {
+    function onMessage(ev: MessageEvent) {
+      const d: any = ev?.data;
+      if (!d) return;
+
+      // Popup asks opener for Intuit auth URL (we fetch with JWT here)
+      if (typeof d === 'object' && d.type === 'quickbooks_authorize_request' && typeof d.nonce === 'string') {
+        const src: any = ev.source;
+        if (!src || typeof src.postMessage !== 'function') return;
+        if (!token) {
+          try { src.postMessage({ type: 'quickbooks_authorize_response', nonce: d.nonce, url: null }, '*'); } catch {}
+          return;
+        }
+        fetch(`${API_URL}/api/quickbooks/connect`, {
+          headers: { Authorization: `Bearer ${token}` },
+          credentials: 'include',
+        })
+          .then((r) => r.json().catch(() => ({})).then((j) => ({ ok: r.ok, j })))
+          .then(({ ok, j }) => {
+            const url = ok ? String(j?.url ?? '').trim() : '';
+            try { src.postMessage({ type: 'quickbooks_authorize_response', nonce: d.nonce, url: url || null }, '*'); } catch {}
+          })
+          .catch(() => {
+            try { src.postMessage({ type: 'quickbooks_authorize_response', nonce: d.nonce, url: null }, '*'); } catch {}
+          });
+        return;
+      }
+
+      if (d === 'quickbooks_connected') {
+        notifySuccess(t('settings.quickbooksConnectedToast'));
+        setWorking(false);
+        load();
+        return;
+      }
+      if (d === 'quickbooks_error') {
+        notifyError(t('settings.quickbooksErrorToast'));
+        setWorking(false);
+        load();
+        return;
+      }
+    }
+
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, t]);
+
+  useEffect(() => {
     const onRefresh = () => load();
     window.addEventListener('quickbooks:refresh', onRefresh as any);
     return () => window.removeEventListener('quickbooks:refresh', onRefresh as any);
@@ -62,6 +110,8 @@ export function QuickBooksSection({ token, t }: { token: string; t: (k: string) 
         '_blank',
         'width=600,height=700',
       );
+      // Allow user to continue using the page while OAuth happens in the popup.
+      setWorking(false);
     } catch (e) {
       notifyError((e as Error).message);
       setWorking(false);
@@ -118,6 +168,14 @@ export function QuickBooksSection({ token, t }: { token: string; t: (k: string) 
                 {connected ? t('settings.connected') : t('settings.notConnected')}
               </span>
             </div>
+            {connected && (status?.companyName || status?.realmId) && (
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-slate-600">{t('settings.quickbooksCompany')}</span>
+                <span className="text-slate-800">
+                  {status?.companyName ? status.companyName : status?.realmId ? `Realm ${status.realmId}` : '-'}
+                </span>
+              </div>
+            )}
             <div className="flex items-center justify-between mt-1">
               <span className="text-slate-600">{t('settings.lastSync')}</span>
               <span className="text-slate-800">{fmt(status?.lastSyncAt ?? null)}</span>
@@ -135,14 +193,23 @@ export function QuickBooksSection({ token, t }: { token: string; t: (k: string) 
                 {working ? t('common.loading') : t('settings.connectQuickbooks')}
               </button>
             ) : (
-              <button
-                type="button"
-                onClick={() => setConfirmDisconnect(true)}
-                disabled={working}
-                className="px-3 py-2 rounded bg-red-600 text-white text-sm hover:bg-red-700 disabled:opacity-60"
-              >
-                {working ? t('common.loading') : t('settings.disconnectQuickbooks')}
-              </button>
+              <>
+                <button
+                  type="button"
+                  disabled
+                  className="px-3 py-2 rounded bg-slate-100 text-slate-600 text-sm cursor-not-allowed"
+                >
+                  {t('settings.connectQuickbooks')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDisconnect(true)}
+                  disabled={working}
+                  className="px-3 py-2 rounded bg-red-600 text-white text-sm hover:bg-red-700 disabled:opacity-60"
+                >
+                  {working ? t('common.loading') : t('settings.disconnectQuickbooks')}
+                </button>
+              </>
             )}
           </div>
 

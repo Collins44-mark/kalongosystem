@@ -42,51 +42,6 @@ export default function SettingsPage() {
   }, [searchParams]);
 
   useEffect(() => {
-    function onMessage(ev: MessageEvent) {
-      const d: any = ev?.data;
-      if (!d) return;
-
-      // Popup asks opener for Intuit auth URL (we fetch with JWT here)
-      if (typeof d === 'object' && d.type === 'quickbooks_authorize_request' && typeof d.nonce === 'string') {
-        const src: any = ev.source;
-        if (!src || typeof src.postMessage !== 'function') return;
-        if (!token) {
-          try { src.postMessage({ type: 'quickbooks_authorize_response', nonce: d.nonce, url: null }, '*'); } catch {}
-          return;
-        }
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/quickbooks/connect`, {
-          headers: { Authorization: `Bearer ${token}` },
-          credentials: 'include',
-        })
-          .then((r) => r.json().catch(() => ({})).then((j) => ({ ok: r.ok, j })))
-          .then(({ ok, j }) => {
-            const url = ok ? String(j?.url ?? '').trim() : '';
-            try { src.postMessage({ type: 'quickbooks_authorize_response', nonce: d.nonce, url: url || null }, '*'); } catch {}
-          })
-          .catch(() => {
-            try { src.postMessage({ type: 'quickbooks_authorize_response', nonce: d.nonce, url: null }, '*'); } catch {}
-          });
-        return;
-      }
-
-      // Final result from callback
-      if (d === 'quickbooks_connected') {
-        notifySuccess(t('settings.quickbooksConnectedToast'));
-        window.dispatchEvent(new Event('quickbooks:refresh'));
-        return;
-      }
-      if (d === 'quickbooks_error') {
-        notifyError(t('settings.quickbooksErrorToast'));
-        window.dispatchEvent(new Event('quickbooks:refresh'));
-        return;
-      }
-    }
-
-    window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, [token, t]);
-
-  useEffect(() => {
     if (!token) {
       setMeLoading(false);
       return;

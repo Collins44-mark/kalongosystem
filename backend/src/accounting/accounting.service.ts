@@ -36,6 +36,21 @@ export class AccountingService {
     }
   }
 
+  private async qbGet(companyId: string, path: string) {
+    const ctx = await this.getConnectedContext(companyId);
+    if (!ctx) return null;
+    const url = `${this.qbApiBase()}${path}`;
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const axios = require('axios');
+    return await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${ctx.accessToken}`,
+        Accept: 'application/json',
+      },
+      timeout: 20000,
+    });
+  }
+
   async getQuickBooksStatus(companyId: string) {
     const b = await this.prisma.business.findUnique({
       where: { id: companyId },
@@ -46,9 +61,23 @@ export class AccountingService {
       orderBy: { createdAt: 'desc' },
       select: { createdAt: true },
     });
+    let companyName: string | null = null;
+    try {
+      if (b?.quickbooksConnected === true && b.quickbooksRealmId) {
+        const realmId = String(b.quickbooksRealmId ?? '').trim();
+        if (realmId) {
+          const res = await this.qbGet(companyId, `/v3/company/${encodeURIComponent(realmId)}/companyinfo/${encodeURIComponent(realmId)}?minorversion=65`);
+          const name = String(res?.data?.CompanyInfo?.CompanyName ?? '').trim();
+          companyName = name || null;
+        }
+      }
+    } catch {
+      companyName = null;
+    }
     return {
       connected: b?.quickbooksConnected === true,
       realmId: b?.quickbooksRealmId ?? null,
+      companyName,
       lastSyncAt: last?.createdAt ?? null,
     };
   }

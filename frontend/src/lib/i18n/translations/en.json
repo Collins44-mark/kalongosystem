@@ -415,6 +415,7 @@
   "settings.logoHint": "Accepted: PNG/JPG. Max 2MB. Auto-resized for reports.",
   "settings.quickbooks": "QuickBooks Online",
   "settings.quickbooksStatus": "Status",
+  "settings.quickbooksCompany": "Company",
   "settings.connected": "Connected",
   "settings.notConnected": "Not connected",
   "settings.lastSync": "Last sync time",

@@ -40,7 +40,6 @@ function decodeState(state: string) {
 }
 
 function popupCloseHtml(message: 'quickbooks_connected' | 'quickbooks_error') {
-  const msg = message === 'quickbooks_connected' ? 'Connected successfully.' : 'Connection failed.';
   return `<!doctype html>
 <html>
   <head>
@@ -59,7 +58,7 @@ function popupCloseHtml(message: 'quickbooks_connected' | 'quickbooks_error') {
         try { window.close(); } catch (e) {}
       })();
     </script>
-    ${msg}
+    <noscript>Connection completed. You may close this window.</noscript>
   </body>
 </html>`;
 }
