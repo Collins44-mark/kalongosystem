@@ -92,16 +92,6 @@ export default function FinancePage() {
   const [revDate, setRevDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [savingRevenue, setSavingRevenue] = useState(false);
 
-  // Business expectation: "Net profit" = revenue after expenses.
-  const netProfit = useMemo(() => {
-    const gross =
-      sector === 'all'
-        ? (overview?.totals?.grossSales ?? 0)
-        : (overview?.bySector?.[sector]?.gross ?? 0);
-    const exp = totalExpenses ?? 0;
-    return gross - exp;
-  }, [overview?.totals?.grossSales, overview?.bySector, totalExpenses, sector]);
-
   if (!canAccess) {
     return (
       <div>
@@ -202,7 +192,6 @@ export default function FinancePage() {
       .then((rows) => {
         const list = Array.isArray(rows) ? rows : [];
         setRevenueCategories(list);
-        if (!revCategoryName && list.length) setRevCategoryName(list[0].name);
       })
       .catch(() => setRevenueCategories([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -259,6 +248,7 @@ export default function FinancePage() {
   }
 
   const revenueGross = sector === 'all' ? (overview?.totals?.grossSales ?? 0) : (overview?.bySector?.[sector]?.gross ?? 0);
+  const revenueNet = sector === 'all' ? (overview?.totals?.netRevenue ?? 0) : (overview?.bySector?.[sector]?.net ?? 0);
   const vatCollected = sector === 'all' ? (overview?.totals?.vatCollected ?? 0) : (overview?.bySector?.[sector]?.vat ?? 0);
 
   function labelSector(s: Sector) {
@@ -510,31 +500,6 @@ export default function FinancePage() {
           {level === 'overview' && (
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <button
-                  type="button"
-                  onClick={() => router.push('/dashboard/finance/revenue')}
-                  className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
-                >
-                  <div className="text-sm text-slate-500">{t('finance.totalRevenue')}</div>
-                  <div className="text-xl font-semibold">{formatTzs(revenueGross)}</div>
-                  <div className="text-xs text-slate-500 mt-1">
-                    {t('finance.showingFor')}: {labelSector(sector)}
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => pushViewHistory('expenses', 'expenses', 'all', 1)}
-                  className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
-                >
-                  <div className="text-sm text-slate-500">{t('finance.totalExpenses')}</div>
-                  <div className="text-xl font-semibold">{formatTzs(totalExpenses)}</div>
-                  <div className="text-xs text-slate-500 mt-1">{t('finance.expensesInPeriod')}</div>
-                </button>
-                <div className="bg-white border rounded-lg p-4 text-left">
-                  <div className="text-sm text-slate-500">{t('finance.netProfit')}</div>
-                  <div className="text-xl font-semibold">{formatTzs(netProfit)}</div>
-                  <div className="text-xs text-slate-500 mt-1">Revenue − Expenses</div>
-                </div>
                 <div className="bg-white border rounded-lg p-4 text-left">
                   <button
                     type="button"
@@ -547,6 +512,31 @@ export default function FinancePage() {
                       {vatEnabled ? `${Math.round((overview.vat.vat_rate || 0) * 100)}% • ${overview.vat.vat_type}` : t('finance.vatDisabled')}
                     </div>
                   </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => pushViewHistory('expenses', 'expenses', 'all', 1)}
+                  className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
+                >
+                  <div className="text-sm text-slate-500">{t('finance.totalExpenses')}</div>
+                  <div className="text-xl font-semibold">{formatTzs(totalExpenses)}</div>
+                  <div className="text-xs text-slate-500 mt-1">{t('finance.expensesInPeriod')}</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.push('/dashboard/finance/revenue')}
+                  className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
+                >
+                  <div className="text-sm text-slate-500">{t('finance.totalRevenue')}</div>
+                  <div className="text-xl font-semibold">{formatTzs(revenueGross)}</div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    {t('finance.showingFor')}: {labelSector(sector)}
+                  </div>
+                </button>
+                <div className="bg-white border rounded-lg p-4 text-left">
+                  <div className="text-sm text-slate-500">{t('finance.netRevenue')}</div>
+                  <div className="text-xl font-semibold">{formatTzs(revenueNet)}</div>
+                  <div className="text-xs text-slate-500 mt-1">{t('finance.showingFor')}: {labelSector(sector)}</div>
                 </div>
               </div>
             </div>
