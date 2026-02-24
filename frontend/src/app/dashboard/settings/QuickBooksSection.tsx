@@ -22,6 +22,7 @@ export function QuickBooksSection({ token, t }: { token: string; t: (k: string) 
   const [status, setStatus] = useState<QbStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -67,7 +68,7 @@ export function QuickBooksSection({ token, t }: { token: string; t: (k: string) 
     }
   }
 
-  async function disconnect() {
+  async function disconnectNow() {
     setWorking(true);
     try {
       const res = await fetch(`${API_URL}/api/quickbooks/disconnect`, {
@@ -79,6 +80,7 @@ export function QuickBooksSection({ token, t }: { token: string; t: (k: string) 
       if (!res.ok) throw new Error((data?.message as string) || 'QuickBooks disconnect failed');
       notifySuccess(t('settings.quickbooksDisconnected'));
       await load();
+      setConfirmDisconnect(false);
     } catch (e) {
       notifyError((e as Error).message);
     } finally {
@@ -135,16 +137,43 @@ export function QuickBooksSection({ token, t }: { token: string; t: (k: string) 
             ) : (
               <button
                 type="button"
-                onClick={disconnect}
+                onClick={() => setConfirmDisconnect(true)}
                 disabled={working}
                 className="px-3 py-2 rounded bg-red-600 text-white text-sm hover:bg-red-700 disabled:opacity-60"
               >
-                {working ? t('common.loading') : t('settings.disconnect')}
+                {working ? t('common.loading') : t('settings.disconnectQuickbooks')}
               </button>
             )}
           </div>
 
           <p className="text-xs text-slate-500">{t('settings.quickbooksHint')}</p>
+        </div>
+      )}
+
+      {confirmDisconnect && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-sm p-4 sm:p-5">
+            <div className="font-medium text-slate-900">{t('settings.disconnectQuickbooksConfirmTitle')}</div>
+            <div className="text-sm text-slate-600 mt-2">{t('settings.disconnectQuickbooksConfirmBody')}</div>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={disconnectNow}
+                disabled={working}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-60"
+              >
+                {working ? t('common.loading') : t('common.confirm')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmDisconnect(false)}
+                disabled={working}
+                className="px-4 py-2 bg-slate-200 rounded hover:bg-slate-300 disabled:opacity-60"
+              >
+                {t('common.cancel')}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
