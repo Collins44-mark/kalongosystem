@@ -182,7 +182,9 @@ export class QuickBooksController {
       return res.send(popupCloseHtml('quickbooks_error'));
     }
 
-    const authCode = String(code ?? '').trim();
+    // Some URL parsers convert '+' to space in query values.
+    // Intuit auth codes can include '+', so normalize spaces back to '+'.
+    const authCode = String(code ?? '').trim().replace(/ /g, '+');
     const realm = String(realmId ?? '').trim();
     if (!authCode) {
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
