@@ -7,6 +7,7 @@ import { useTranslation } from '@/lib/i18n/context';
 import { isManagerLevel } from '@/lib/roles';
 import { useSearch } from '@/store/search';
 import { notifyError, notifySuccess } from '@/store/notifications';
+import { useRouter } from 'next/navigation';
 
 function toLocalDateString(d: Date): string {
   const y = d.getFullYear();
@@ -43,6 +44,7 @@ type TxnRow = {
 };
 
 export default function FinancePage() {
+  const router = useRouter();
   const { token, user } = useAuth();
   const { t } = useTranslation();
   const searchQuery = useSearch((s) => s.query);
@@ -89,9 +91,6 @@ export default function FinancePage() {
   const [revPaymentMethod, setRevPaymentMethod] = useState<'CASH' | 'BANK' | 'CARD'>('CASH');
   const [revDate, setRevDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [savingRevenue, setSavingRevenue] = useState(false);
-
-  const [revenueExpanded, setRevenueExpanded] = useState(false);
-  const [taxExpanded, setTaxExpanded] = useState(false);
 
   // Business expectation: "Net profit" = revenue after expenses.
   const netProfit = useMemo(() => {
@@ -485,7 +484,7 @@ export default function FinancePage() {
           </select>
           <select
             value={sector}
-            onChange={(e) => { setSector(e.target.value as Sector); setPage(1); setRevenueExpanded(false); setTaxExpanded(false); }}
+            onChange={(e) => { setSector(e.target.value as Sector); setPage(1); }}
             className="px-3 py-2 border rounded text-sm bg-white"
           >
             <option value="all">{t('finance.allSectors')}</option>
@@ -511,54 +510,17 @@ export default function FinancePage() {
           {level === 'overview' && (
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white border rounded-lg p-4 text-left">
-                  <button
-                    type="button"
-                    onClick={() => setRevenueExpanded((v) => !v)}
-                    className="w-full text-left"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-sm text-slate-500">{t('finance.totalRevenue')}</div>
-                      <div className="text-xs text-slate-500">{revenueExpanded ? '−' : '+'}</div>
-                    </div>
-                    <div className="text-xl font-semibold">{formatTzs(revenueGross)}</div>
-                    <div className="text-xs text-slate-500 mt-1">
-                      {t('finance.showingFor')}: {labelSector(sector)}
-                    </div>
-                  </button>
-                  {revenueExpanded && (
-                    <div className="mt-3 space-y-1">
-                      {([
-                        { key: 'rooms' as const, label: t('finance.roomsRevenue'), amount: overview.bySector.rooms.gross },
-                        { key: 'bar' as const, label: t('bar.title'), amount: overview.bySector.bar.gross },
-                        { key: 'restaurant' as const, label: t('restaurant.title'), amount: overview.bySector.restaurant.gross },
-                        { key: 'other' as const, label: t('finance.otherRevenue'), amount: overview.bySector.other.gross },
-                      ] as const)
-                        .filter((x) => sector === 'all' || x.key === sector)
-                        .map((x) => (
-                          <button
-                            key={x.key}
-                            type="button"
-                            onClick={() => pushViewHistory('transactions', 'gross', x.key, 1)}
-                            className="w-full flex items-center justify-between gap-3 px-2 py-2 rounded hover:bg-slate-50"
-                          >
-                            <div className="text-sm text-slate-700">{x.label}</div>
-                            <div className="text-sm font-medium text-slate-900">{formatTzs(x.amount)}</div>
-                          </button>
-                        ))}
-                      {sector === 'all' ? (
-                        <button
-                          type="button"
-                          onClick={() => pushViewHistory('transactions', 'gross', 'all', 1)}
-                          className="w-full flex items-center justify-between gap-3 px-2 py-2 rounded hover:bg-slate-50"
-                        >
-                          <div className="text-sm text-slate-700">{t('finance.allSectors')}</div>
-                          <div className="text-sm font-medium text-slate-900">{formatTzs(overview.totals.grossSales)}</div>
-                        </button>
-                      ) : null}
-                    </div>
-                  )}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => router.push('/dashboard/finance/revenue')}
+                  className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
+                >
+                  <div className="text-sm text-slate-500">{t('finance.totalRevenue')}</div>
+                  <div className="text-xl font-semibold">{formatTzs(revenueGross)}</div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    {t('finance.showingFor')}: {labelSector(sector)}
+                  </div>
+                </button>
                 <button
                   type="button"
                   onClick={() => pushViewHistory('expenses', 'expenses', 'all', 1)}
@@ -576,41 +538,15 @@ export default function FinancePage() {
                 <div className="bg-white border rounded-lg p-4 text-left">
                   <button
                     type="button"
-                    onClick={() => setTaxExpanded((v) => !v)}
+                    onClick={() => router.push('/dashboard/finance/tax')}
                     className="w-full text-left"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-sm text-slate-500">{t('finance.taxSummary')}</div>
-                      <div className="text-xs text-slate-500">{taxExpanded ? '−' : '+'}</div>
-                    </div>
+                    <div className="text-sm text-slate-500">{t('finance.taxSummary')}</div>
                     <div className="text-xl font-semibold">{formatTzs(vatCollected)}</div>
                     <div className="text-xs text-slate-500 mt-1">
                       {vatEnabled ? `${Math.round((overview.vat.vat_rate || 0) * 100)}% • ${overview.vat.vat_type}` : t('finance.vatDisabled')}
                     </div>
                   </button>
-                  {taxExpanded && (
-                    <div className="mt-3 space-y-1">
-                      {([
-                        { key: 'rooms' as const, label: t('finance.roomsRevenue'), amount: overview.bySector.rooms.vat },
-                        { key: 'bar' as const, label: t('bar.title'), amount: overview.bySector.bar.vat },
-                        { key: 'restaurant' as const, label: t('restaurant.title'), amount: overview.bySector.restaurant.vat },
-                        { key: 'other' as const, label: t('finance.otherRevenue'), amount: overview.bySector.other.vat },
-                      ] as const)
-                        .filter((x) => sector === 'all' || x.key === sector)
-                        .map((x) => (
-                          <div key={x.key} className="w-full flex items-center justify-between gap-3 px-2 py-2 rounded bg-slate-50">
-                            <div className="text-sm text-slate-700">{x.label}</div>
-                            <div className="text-sm font-medium text-slate-900">{formatTzs(x.amount)}</div>
-                          </div>
-                        ))}
-                      {sector === 'all' ? (
-                        <div className="w-full flex items-center justify-between gap-3 px-2 py-2 rounded bg-slate-50">
-                          <div className="text-sm text-slate-700">{t('finance.allSectors')}</div>
-                          <div className="text-sm font-medium text-slate-900">{formatTzs(overview.totals.vatCollected)}</div>
-                        </div>
-                      ) : null}
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
