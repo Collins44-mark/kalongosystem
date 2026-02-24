@@ -46,18 +46,21 @@ export function QuickBooksSection({ token, t }: { token: string; t: (k: string) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  async function connect() {
-    setWorking(true);
+  useEffect(() => {
+    const onRefresh = () => load();
+    window.addEventListener('quickbooks:refresh', onRefresh as any);
+    return () => window.removeEventListener('quickbooks:refresh', onRefresh as any);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function connect() {
     try {
-      const res = await fetch(`${API_URL}/api/quickbooks/connect`, {
-        headers: { Authorization: `Bearer ${token}` },
-        credentials: 'include',
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data?.message as string) || 'QuickBooks connect failed');
-      const url = String(data?.url ?? '').trim();
-      if (!url) throw new Error('QuickBooks authorization URL missing');
-      window.location.href = url;
+      setWorking(true);
+      window.open(
+        `${API_URL}/api/quickbooks/authorize`,
+        '_blank',
+        'width=600,height=700',
+      );
     } catch (e) {
       notifyError((e as Error).message);
       setWorking(false);

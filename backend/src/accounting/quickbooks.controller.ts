@@ -39,12 +39,29 @@ function decodeState(state: string) {
   }
 }
 
-function frontendSettingsUrl(q: 'connected' | 'error') {
-  const base =
-    String(process.env.FRONTEND_URL ?? '').trim() ||
-    'https://kalongosystem.onrender.com';
-  const safeBase = base.replace(/\/$/, '');
-  return `${safeBase}/settings?quickbooks=${q}`;
+function popupCloseHtml(message: 'quickbooks_connected' | 'quickbooks_error') {
+  const msg = message === 'quickbooks_connected' ? 'Connected successfully.' : 'Connection failed.';
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>QuickBooks</title>
+  </head>
+  <body style="font-family: Arial, sans-serif; padding: 16px;">
+    <script>
+      (function() {
+        try {
+          if (window.opener && typeof window.opener.postMessage === 'function') {
+            window.opener.postMessage(${JSON.stringify(message)}, "*");
+          }
+        } catch (e) {}
+        try { window.close(); } catch (e) {}
+      })();
+    </script>
+    ${msg}
+  </body>
+</html>`;
 }
 
 @Controller('api/quickbooks')
@@ -79,6 +96,67 @@ export class QuickBooksController {
     return { url };
   }
 
+  // Popup bootstrap page. It requests the auth URL from the opener via postMessage.
+  @Get('authorize')
+  async authorize(@Res() res: any) {
+    const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Connect QuickBooks</title>
+  </head>
+  <body style="font-family: Arial, sans-serif; padding: 16px;">
+    <h3 style="margin: 0 0 8px 0;">Connecting to QuickBooks…</h3>
+    <p style="margin: 0; color: #6b7280; font-size: 13px;">Please wait. This window will close automatically.</p>
+    <script>
+      (function() {
+        var nonce = String(Date.now()) + "-" + Math.random().toString(16).slice(2);
+        function onMessage(ev) {
+          try {
+            var d = ev && ev.data;
+            if (!d || typeof d !== "object") return;
+            if (d.type !== "quickbooks_authorize_response") return;
+            if (d.nonce !== nonce) return;
+            window.removeEventListener("message", onMessage);
+            if (d.url && typeof d.url === "string") {
+              window.location.href = d.url;
+              return;
+            }
+            if (window.opener && typeof window.opener.postMessage === "function") {
+              window.opener.postMessage("quickbooks_error", "*");
+            }
+            window.close();
+          } catch (e) {
+            try { window.close(); } catch (e2) {}
+          }
+        }
+        window.addEventListener("message", onMessage);
+        try {
+          if (window.opener && typeof window.opener.postMessage === "function") {
+            window.opener.postMessage({ type: "quickbooks_authorize_request", nonce: nonce }, "*");
+          } else {
+            document.body.innerHTML = "<p>Unable to start QuickBooks connection. Please close this window and try again.</p>";
+          }
+        } catch (e) {
+          document.body.innerHTML = "<p>Unable to start QuickBooks connection. Please close this window and try again.</p>";
+        }
+        setTimeout(function() {
+          try {
+            if (window.opener && typeof window.opener.postMessage === "function") {
+              window.opener.postMessage("quickbooks_error", "*");
+            }
+          } catch (e) {}
+          try { window.close(); } catch (e2) {}
+        }, 120000);
+      })();
+    </script>
+  </body>
+</html>`;
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(html);
+  }
+
   // Intuit redirects here: must be public; uses signed state to map to company
   @Get('callback')
   async callback(
@@ -93,23 +171,27 @@ export class QuickBooksController {
     const errorDescription = String(errDesc ?? '').trim();
     if (error) {
       console.error('QuickBooks OAuth error:', { error, errorDescription });
-      return res.redirect(frontendSettingsUrl('error'));
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.send(popupCloseHtml('quickbooks_error'));
     }
 
     const st = decodeState(String(state ?? ''));
     const companyId = String(st?.companyId ?? '').trim();
     const ts = Number(st?.ts ?? 0);
     if (!companyId || !Number.isFinite(ts) || Date.now() - ts > 15 * 60_000) {
-      return res.redirect(frontendSettingsUrl('error'));
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.send(popupCloseHtml('quickbooks_error'));
     }
 
     const authCode = String(code ?? '').trim();
     const realm = String(realmId ?? '').trim();
     if (!authCode) {
-      return res.redirect(frontendSettingsUrl('error'));
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.send(popupCloseHtml('quickbooks_error'));
     }
     if (!realm) {
-      return res.redirect(frontendSettingsUrl('error'));
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.send(popupCloseHtml('quickbooks_error'));
     }
 
     try {
@@ -162,7 +244,8 @@ export class QuickBooksController {
       });
 
       // No token console logging (security rule)
-      return res.redirect(frontendSettingsUrl('connected'));
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.send(popupCloseHtml('quickbooks_connected'));
     } catch (e: any) {
       const status = e?.response?.status;
       const data = e?.response?.data;
@@ -171,7 +254,8 @@ export class QuickBooksController {
       if (data?.error) {
         console.error('QuickBooks OAuth error:', { error: data?.error, error_description: data?.error_description });
       }
-      return res.redirect(frontendSettingsUrl('error'));
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.send(popupCloseHtml('quickbooks_error'));
     }
   }
 
