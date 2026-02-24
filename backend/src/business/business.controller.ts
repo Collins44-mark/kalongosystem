@@ -166,6 +166,34 @@ export class BusinessController {
     return { logoUrl: publicUrl, logo_url: publicUrl };
   }
 
+  @Post('remove-logo')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('MANAGER', 'ADMIN')
+  async removeLogo(
+    @CurrentUser('businessId') businessId: string,
+    @Req() req: any,
+  ) {
+    const current: any = await this.business.getById(businessId);
+    const currentUrl = String(current?.logoUrl ?? '').trim();
+
+    if (currentUrl.startsWith('/uploads/business-logos/')) {
+      const dir = join(process.cwd(), 'uploads', 'business-logos');
+      const oldName = currentUrl.replace('/uploads/business-logos/', '').trim();
+      if (oldName) {
+        const oldPath = join(dir, oldName);
+        await unlink(oldPath).catch(() => {});
+      }
+    }
+
+    await this.business.updateLogoUrl(businessId, null);
+
+    try {
+      (req.res as any)?.setHeader?.('Cache-Control', 'no-store');
+    } catch {}
+
+    return { success: true, logoUrl: null, logo_url: null };
+  }
+
   @Get('check/:businessId')
   async checkBusiness(@Param('businessId') businessId: string) {
     return this.business.getByCode(businessId);
@@ -251,5 +279,33 @@ export class BusinessApiController {
     } catch {}
 
     return { logoUrl: publicUrl, logo_url: publicUrl };
+  }
+
+  @Post('remove-logo')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('MANAGER', 'ADMIN')
+  async removeLogo(
+    @CurrentUser('businessId') businessId: string,
+    @Req() req: any,
+  ) {
+    const current: any = await this.business.getById(businessId);
+    const currentUrl = String(current?.logoUrl ?? '').trim();
+
+    if (currentUrl.startsWith('/uploads/business-logos/')) {
+      const dir = join(process.cwd(), 'uploads', 'business-logos');
+      const oldName = currentUrl.replace('/uploads/business-logos/', '').trim();
+      if (oldName) {
+        const oldPath = join(dir, oldName);
+        await unlink(oldPath).catch(() => {});
+      }
+    }
+
+    await this.business.updateLogoUrl(businessId, null);
+
+    try {
+      (req.res as any)?.setHeader?.('Cache-Control', 'no-store');
+    } catch {}
+
+    return { success: true, logoUrl: null, logo_url: null };
   }
 }

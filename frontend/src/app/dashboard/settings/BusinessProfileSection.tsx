@@ -27,8 +27,10 @@ export function BusinessProfileSection({ token, t }: { token: string; t: (k: str
   const [profile, setProfile] = useState<BusinessProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [cacheBust, setCacheBust] = useState(0);
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const logoPath = (profile?.logo_url ?? profile?.logoUrl ?? null) ? String(profile?.logo_url ?? profile?.logoUrl) : null;
@@ -96,6 +98,28 @@ export function BusinessProfileSection({ token, t }: { token: string; t: (k: str
     }
   }
 
+  async function removeLogo() {
+    if (!token) return;
+    setRemoving(true);
+    try {
+      const res = await fetch(`${API_URL}/api/business/remove-logo`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(errorMessageFromJson(data, 'Failed to remove logo'));
+      setProfile((p) => (p ? { ...p, logoUrl: null, logo_url: null } : p));
+      setCacheBust(Date.now());
+      notifySuccess(t('settings.logoRemovedSuccess'));
+      setConfirmRemove(false);
+    } catch (e) {
+      notifyError((e as Error).message);
+    } finally {
+      setRemoving(false);
+    }
+  }
+
   function onDrop(e: DragEvent<HTMLDivElement>) {
     e.preventDefault();
     setDragging(false);
@@ -105,12 +129,12 @@ export function BusinessProfileSection({ token, t }: { token: string; t: (k: str
   }
 
   return (
-    <div className="bg-white border rounded p-4 max-w-md">
+    <div className="bg-white border rounded-lg p-4 max-w-md">
       <div className="flex items-center justify-between">
         <h2 className="font-medium">{t('settings.businessProfile')}</h2>
         <button
           onClick={() => loadProfile()}
-          disabled={loading || uploading}
+          disabled={loading || uploading || removing}
           className="text-xs px-2 py-1 rounded border hover:bg-slate-50 disabled:opacity-60"
           type="button"
         >
@@ -127,7 +151,7 @@ export function BusinessProfileSection({ token, t }: { token: string; t: (k: str
         <div className="mt-3 space-y-3">
           <div
             className={[
-              'border rounded h-36 bg-slate-50 flex items-center justify-center overflow-hidden',
+              'border rounded-lg h-40 bg-slate-50 flex items-center justify-center overflow-hidden',
               dragging ? 'ring-2 ring-teal-500 border-teal-500' : '',
             ].join(' ')}
             onDragOver={(e) => {
@@ -156,22 +180,50 @@ export function BusinessProfileSection({ token, t }: { token: string; t: (k: str
             )}
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => inputRef.current?.click()}
-              disabled={uploading}
-              className="px-3 py-2 rounded bg-teal-600 text-white text-sm hover:bg-teal-700 disabled:opacity-60 flex items-center gap-2"
-            >
-              {uploading ? (
-                <>
-                  <span className="inline-block w-4 h-4 border-2 border-white/70 border-t-transparent rounded-full animate-spin" />
-                  <span>{t('settings.uploading')}</span>
-                </>
-              ) : (
-                <span>{t('settings.uploadLogo')}</span>
-              )}
-            </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {logoSrc ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => inputRef.current?.click()}
+                  disabled={uploading || removing}
+                  className="px-3 py-2 rounded bg-teal-600 text-white text-sm hover:bg-teal-700 disabled:opacity-60 flex items-center gap-2"
+                >
+                  {uploading ? (
+                    <>
+                      <span className="inline-block w-4 h-4 border-2 border-white/70 border-t-transparent rounded-full animate-spin" />
+                      <span>{t('settings.uploading')}</span>
+                    </>
+                  ) : (
+                    <span>{t('settings.replaceLogo')}</span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmRemove(true)}
+                  disabled={uploading || removing}
+                  className="px-3 py-2 rounded border border-red-400 text-red-700 text-sm hover:bg-red-50 disabled:opacity-60"
+                >
+                  {removing ? t('common.loading') : t('settings.removeLogo')}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => inputRef.current?.click()}
+                disabled={uploading || removing}
+                className="px-3 py-2 rounded bg-teal-600 text-white text-sm hover:bg-teal-700 disabled:opacity-60 flex items-center gap-2"
+              >
+                {uploading ? (
+                  <>
+                    <span className="inline-block w-4 h-4 border-2 border-white/70 border-t-transparent rounded-full animate-spin" />
+                    <span>{t('settings.uploading')}</span>
+                  </>
+                ) : (
+                  <span>{t('settings.uploadLogo')}</span>
+                )}
+              </button>
+            )}
             <span className="text-xs text-slate-500">{t('settings.dragDropLogo')}</span>
           </div>
 
@@ -187,6 +239,33 @@ export function BusinessProfileSection({ token, t }: { token: string; t: (k: str
           />
 
           <p className="text-xs text-slate-500">{t('settings.logoHint')}</p>
+        </div>
+      )}
+
+      {confirmRemove && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-sm p-4 sm:p-5">
+            <div className="font-medium text-slate-900">{t('settings.removeLogoConfirmTitle')}</div>
+            <div className="text-sm text-slate-600 mt-2">{t('settings.removeLogoConfirmBody')}</div>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={removeLogo}
+                disabled={removing}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-60"
+              >
+                {removing ? t('common.loading') : t('common.confirm')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmRemove(false)}
+                disabled={removing}
+                className="px-4 py-2 bg-slate-200 rounded hover:bg-slate-300 disabled:opacity-60"
+              >
+                {t('common.cancel')}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
