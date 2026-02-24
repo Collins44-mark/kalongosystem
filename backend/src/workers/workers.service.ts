@@ -39,6 +39,44 @@ export class WorkersService {
     });
   }
 
+  async updateWorker(
+    businessId: string,
+    branchId: string,
+    workerId: string,
+    data: { name?: string; sector?: string; role?: string; monthlySalary?: number },
+  ) {
+    const w = await this.prisma.worker.findFirst({
+      where: { id: workerId, businessId, branchId },
+    });
+    if (!w) throw new NotFoundException('Worker not found');
+
+    const update: Record<string, unknown> = {};
+    if (data.name !== undefined) update.name = String(data.name ?? '').trim();
+    if (data.sector !== undefined) update.sector = String(data.sector ?? '').trim();
+    if (data.role !== undefined) update.role = String(data.role ?? '').trim();
+    if (data.monthlySalary !== undefined) update.monthlySalary = new Decimal(Number(data.monthlySalary) || 0);
+
+    return this.prisma.worker.update({
+      where: { id: workerId },
+      data: update,
+    });
+  }
+
+  async deleteWorker(
+    businessId: string,
+    branchId: string,
+    workerId: string,
+  ) {
+    const w = await this.prisma.worker.findFirst({
+      where: { id: workerId, businessId, branchId },
+      select: { id: true },
+    });
+    if (!w) throw new NotFoundException('Worker not found');
+
+    await this.prisma.worker.delete({ where: { id: workerId } });
+    return { success: true };
+  }
+
   async getPayroll(businessId: string, month: number, year: number) {
     const workers = await this.prisma.worker.findMany({
       where: { businessId },
