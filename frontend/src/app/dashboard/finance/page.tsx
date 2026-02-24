@@ -80,10 +80,7 @@ export default function FinancePage() {
   const [selectedExpenseCategory, setSelectedExpenseCategory] = useState<string | null>(null);
 
   const [revenueCategories, setRevenueCategories] = useState<{ id: string; name: string }[]>([]);
-  const [revCategoryId, setRevCategoryId] = useState('');
-  const [revNewCategoryMode, setRevNewCategoryMode] = useState(false);
-  const [revNewCategoryName, setRevNewCategoryName] = useState('');
-  const [savingNewCategory, setSavingNewCategory] = useState(false);
+  const [revCategoryName, setRevCategoryName] = useState('');
   const [revBookingId, setRevBookingId] = useState<string>('');
   const [revBookingQuery, setRevBookingQuery] = useState('');
   const [revBookingOptions, setRevBookingOptions] = useState<{ id: string; label: string }[]>([]);
@@ -93,12 +90,18 @@ export default function FinancePage() {
   const [revDate, setRevDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [savingRevenue, setSavingRevenue] = useState(false);
 
+  const [revenueExpanded, setRevenueExpanded] = useState(false);
+  const [taxExpanded, setTaxExpanded] = useState(false);
+
   // Business expectation: "Net profit" = revenue after expenses.
   const netProfit = useMemo(() => {
-    const gross = overview?.totals?.grossSales ?? 0;
+    const gross =
+      sector === 'all'
+        ? (overview?.totals?.grossSales ?? 0)
+        : (overview?.bySector?.[sector]?.gross ?? 0);
     const exp = totalExpenses ?? 0;
     return gross - exp;
-  }, [overview?.totals?.grossSales, totalExpenses]);
+  }, [overview?.totals?.grossSales, overview?.bySector, totalExpenses, sector]);
 
   if (!canAccess) {
     return (
@@ -200,40 +203,11 @@ export default function FinancePage() {
       .then((rows) => {
         const list = Array.isArray(rows) ? rows : [];
         setRevenueCategories(list);
-        if (!revCategoryId && list.length) setRevCategoryId(list[0].id);
+        if (!revCategoryName && list.length) setRevCategoryName(list[0].name);
       })
       .catch(() => setRevenueCategories([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
-
-  async function createRevenueCategoryInline() {
-    if (!token) return;
-    const name = revNewCategoryName.trim();
-    if (!name) {
-      notifyError(t('common.fillAllFields'));
-      return;
-    }
-    setSavingNewCategory(true);
-    try {
-      const created = await api<{ id: string; name: string }>(`/finance/revenue-categories`, {
-        token,
-        method: 'POST',
-        body: JSON.stringify({ name }),
-      });
-      if (created?.id) {
-        const next = [...revenueCategories, { id: created.id, name: created.name }].sort((a, b) => a.name.localeCompare(b.name));
-        setRevenueCategories(next);
-        setRevCategoryId(created.id);
-        setRevNewCategoryName('');
-        setRevNewCategoryMode(false);
-        notifySuccess(t('settings.categoryAdded'));
-      }
-    } catch (e: any) {
-      notifyError(e?.message || 'Request failed');
-    } finally {
-      setSavingNewCategory(false);
-    }
-  }
 
   useEffect(() => {
     if (!token) return;
@@ -284,6 +258,9 @@ export default function FinancePage() {
   function formatTzs(n: number) {
     return new Intl.NumberFormat('en-TZ', { style: 'currency', currency: 'TZS', maximumFractionDigits: 0 }).format(n || 0);
   }
+
+  const revenueGross = sector === 'all' ? (overview?.totals?.grossSales ?? 0) : (overview?.bySector?.[sector]?.gross ?? 0);
+  const vatCollected = sector === 'all' ? (overview?.totals?.vatCollected ?? 0) : (overview?.bySector?.[sector]?.vat ?? 0);
 
   function labelSector(s: Sector) {
     if (s === 'rooms') return t('finance.roomsRevenue');
@@ -389,7 +366,8 @@ export default function FinancePage() {
   async function recordOtherRevenue() {
     if (!token) return;
     const amount = parseTzsInput(revAmount);
-    if (!Number.isFinite(amount) || amount <= 0 || !revDate || !revCategoryId) {
+    const catName = revCategoryName.trim();
+    if (!Number.isFinite(amount) || amount <= 0 || !revDate || !catName) {
       notifyError(t('common.fillAllFields'));
       return;
     }
@@ -400,7 +378,7 @@ export default function FinancePage() {
         method: 'POST',
         body: JSON.stringify({
           bookingId: revBookingId || undefined,
-          categoryId: revCategoryId,
+          categoryName: catName,
           description: revDescription.trim() || undefined,
           amount,
           paymentMethod: revPaymentMethod,
@@ -415,6 +393,15 @@ export default function FinancePage() {
       setRevAmount('');
       setRevPaymentMethod('CASH');
       setRevDate(new Date().toISOString().slice(0, 10));
+      setRevCategoryName('');
+
+      // Refresh category suggestions (in case this was a new category)
+      api<{ id: string; name: string }[]>(`/finance/revenue-categories`, { token })
+        .then((rows) => {
+          const list = Array.isArray(rows) ? rows : [];
+          setRevenueCategories(list);
+        })
+        .catch(() => {});
 
       const params = new URLSearchParams();
       params.set('period', period);
@@ -496,6 +483,17 @@ export default function FinancePage() {
             <option value="month">{t('overview.thisMonth')}</option>
             <option value="bydate">{t('overview.byDate')}</option>
           </select>
+          <select
+            value={sector}
+            onChange={(e) => { setSector(e.target.value as Sector); setPage(1); setRevenueExpanded(false); setTaxExpanded(false); }}
+            className="px-3 py-2 border rounded text-sm bg-white"
+          >
+            <option value="all">{t('finance.allSectors')}</option>
+            <option value="rooms">{t('finance.roomsRevenue')}</option>
+            <option value="bar">{t('bar.title')}</option>
+            <option value="restaurant">{t('restaurant.title')}</option>
+            <option value="other">{t('finance.otherRevenue')}</option>
+          </select>
           {period === 'bydate' && (
             <div className="flex items-center gap-2">
               <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="px-3 py-2 border rounded text-sm bg-white" />
@@ -513,54 +511,54 @@ export default function FinancePage() {
           {level === 'overview' && (
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <button
-                  type="button"
-                  onClick={() => pushViewHistory('transactions', 'gross', 'rooms', 1)}
-                  className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
-                >
-                  <div className="text-sm text-slate-500">{t('finance.roomsRevenue')}</div>
-                  <div className="text-xl font-semibold">{formatTzs(overview.bySector.rooms.gross)}</div>
-                  <div className="text-xs text-slate-500 mt-1">{t('finance.paymentsReceived')}</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => pushViewHistory('transactions', 'gross', 'bar', 1)}
-                  className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
-                >
-                  <div className="text-sm text-slate-500">{t('bar.title')}</div>
-                  <div className="text-xl font-semibold">{formatTzs(overview.bySector.bar.gross)}</div>
-                  <div className="text-xs text-slate-500 mt-1">{t('finance.paymentsReceived')}</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => pushViewHistory('transactions', 'gross', 'restaurant', 1)}
-                  className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
-                >
-                  <div className="text-sm text-slate-500">{t('restaurant.title')}</div>
-                  <div className="text-xl font-semibold">{formatTzs(overview.bySector.restaurant.gross)}</div>
-                  <div className="text-xs text-slate-500 mt-1">{t('finance.paymentsReceived')}</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => pushViewHistory('transactions', 'gross', 'other', 1)}
-                  className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
-                >
-                  <div className="text-sm text-slate-500">{t('finance.otherRevenue')}</div>
-                  <div className="text-xl font-semibold">{formatTzs(overview.bySector.other.gross)}</div>
-                  <div className="text-xs text-slate-500 mt-1">{t('finance.paymentsReceived')}</div>
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <button
-                  type="button"
-                  onClick={() => pushViewHistory('transactions', 'gross', 'all', 1)}
-                  className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
-                >
-                  <div className="text-sm text-slate-500">{t('finance.totalRevenue')}</div>
-                  <div className="text-xl font-semibold">{formatTzs(overview.totals.grossSales)}</div>
-                  <div className="text-xs text-slate-500 mt-1">{t('finance.paymentsReceived')}</div>
-                </button>
+                <div className="bg-white border rounded-lg p-4 text-left">
+                  <button
+                    type="button"
+                    onClick={() => setRevenueExpanded((v) => !v)}
+                    className="w-full text-left"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm text-slate-500">{t('finance.totalRevenue')}</div>
+                      <div className="text-xs text-slate-500">{revenueExpanded ? '−' : '+'}</div>
+                    </div>
+                    <div className="text-xl font-semibold">{formatTzs(revenueGross)}</div>
+                    <div className="text-xs text-slate-500 mt-1">
+                      {t('finance.showingFor')}: {labelSector(sector)}
+                    </div>
+                  </button>
+                  {revenueExpanded && (
+                    <div className="mt-3 space-y-1">
+                      {([
+                        { key: 'rooms' as const, label: t('finance.roomsRevenue'), amount: overview.bySector.rooms.gross },
+                        { key: 'bar' as const, label: t('bar.title'), amount: overview.bySector.bar.gross },
+                        { key: 'restaurant' as const, label: t('restaurant.title'), amount: overview.bySector.restaurant.gross },
+                        { key: 'other' as const, label: t('finance.otherRevenue'), amount: overview.bySector.other.gross },
+                      ] as const)
+                        .filter((x) => sector === 'all' || x.key === sector)
+                        .map((x) => (
+                          <button
+                            key={x.key}
+                            type="button"
+                            onClick={() => pushViewHistory('transactions', 'gross', x.key, 1)}
+                            className="w-full flex items-center justify-between gap-3 px-2 py-2 rounded hover:bg-slate-50"
+                          >
+                            <div className="text-sm text-slate-700">{x.label}</div>
+                            <div className="text-sm font-medium text-slate-900">{formatTzs(x.amount)}</div>
+                          </button>
+                        ))}
+                      {sector === 'all' ? (
+                        <button
+                          type="button"
+                          onClick={() => pushViewHistory('transactions', 'gross', 'all', 1)}
+                          className="w-full flex items-center justify-between gap-3 px-2 py-2 rounded hover:bg-slate-50"
+                        >
+                          <div className="text-sm text-slate-700">{t('finance.allSectors')}</div>
+                          <div className="text-sm font-medium text-slate-900">{formatTzs(overview.totals.grossSales)}</div>
+                        </button>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => pushViewHistory('expenses', 'expenses', 'all', 1)}
@@ -576,11 +574,43 @@ export default function FinancePage() {
                   <div className="text-xs text-slate-500 mt-1">Revenue − Expenses</div>
                 </div>
                 <div className="bg-white border rounded-lg p-4 text-left">
-                  <div className="text-sm text-slate-500">{t('finance.taxSummary')}</div>
-                  <div className="text-xl font-semibold">{formatTzs(overview.totals.vatCollected)}</div>
-                  <div className="text-xs text-slate-500 mt-1">
-                    {vatEnabled ? `${Math.round((overview.vat.vat_rate || 0) * 100)}% • ${overview.vat.vat_type}` : t('finance.vatDisabled')}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTaxExpanded((v) => !v)}
+                    className="w-full text-left"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm text-slate-500">{t('finance.taxSummary')}</div>
+                      <div className="text-xs text-slate-500">{taxExpanded ? '−' : '+'}</div>
+                    </div>
+                    <div className="text-xl font-semibold">{formatTzs(vatCollected)}</div>
+                    <div className="text-xs text-slate-500 mt-1">
+                      {vatEnabled ? `${Math.round((overview.vat.vat_rate || 0) * 100)}% • ${overview.vat.vat_type}` : t('finance.vatDisabled')}
+                    </div>
+                  </button>
+                  {taxExpanded && (
+                    <div className="mt-3 space-y-1">
+                      {([
+                        { key: 'rooms' as const, label: t('finance.roomsRevenue'), amount: overview.bySector.rooms.vat },
+                        { key: 'bar' as const, label: t('bar.title'), amount: overview.bySector.bar.vat },
+                        { key: 'restaurant' as const, label: t('restaurant.title'), amount: overview.bySector.restaurant.vat },
+                        { key: 'other' as const, label: t('finance.otherRevenue'), amount: overview.bySector.other.vat },
+                      ] as const)
+                        .filter((x) => sector === 'all' || x.key === sector)
+                        .map((x) => (
+                          <div key={x.key} className="w-full flex items-center justify-between gap-3 px-2 py-2 rounded bg-slate-50">
+                            <div className="text-sm text-slate-700">{x.label}</div>
+                            <div className="text-sm font-medium text-slate-900">{formatTzs(x.amount)}</div>
+                          </div>
+                        ))}
+                      {sector === 'all' ? (
+                        <div className="w-full flex items-center justify-between gap-3 px-2 py-2 rounded bg-slate-50">
+                          <div className="text-sm text-slate-700">{t('finance.allSectors')}</div>
+                          <div className="text-sm font-medium text-slate-900">{formatTzs(overview.totals.vatCollected)}</div>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -760,53 +790,18 @@ export default function FinancePage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm text-slate-600 mb-1">{t('finance.category')}</label>
-                    {!revNewCategoryMode ? (
-                      <>
-                        <select
-                          value={revCategoryId}
-                          onChange={(e) => setRevCategoryId(e.target.value)}
-                          className="w-full px-3 py-2 border rounded text-sm bg-white"
-                        >
-                          {revenueCategories.map((c) => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => setRevNewCategoryMode(true)}
-                          className="mt-2 text-xs text-teal-700 hover:underline"
-                        >
-                          + {t('settings.revenueCategories')}
-                        </button>
-                      </>
-                    ) : (
-                      <div className="space-y-2">
-                        <input
-                          value={revNewCategoryName}
-                          onChange={(e) => setRevNewCategoryName(e.target.value)}
-                          className="w-full px-3 py-2 border rounded text-sm"
-                          placeholder={t('settings.addCategoryPlaceholder')}
-                        />
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={createRevenueCategoryInline}
-                            disabled={savingNewCategory}
-                            className="px-3 py-2 rounded bg-teal-600 text-white text-sm hover:bg-teal-700 disabled:opacity-60"
-                          >
-                            {savingNewCategory ? t('common.loading') : t('common.add')}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { setRevNewCategoryMode(false); setRevNewCategoryName(''); }}
-                            disabled={savingNewCategory}
-                            className="px-3 py-2 rounded bg-slate-200 text-sm hover:bg-slate-300 disabled:opacity-60"
-                          >
-                            {t('common.cancel')}
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                    <input
+                      list="other-revenue-category-suggestions"
+                      value={revCategoryName}
+                      onChange={(e) => setRevCategoryName(e.target.value)}
+                      className="w-full px-3 py-2 border rounded text-sm"
+                      placeholder={t('settings.addCategoryPlaceholder')}
+                    />
+                    <datalist id="other-revenue-category-suggestions">
+                      {revenueCategories.map((c) => (
+                        <option key={c.id} value={c.name} />
+                      ))}
+                    </datalist>
                   </div>
                   <div>
                     <label className="block text-sm text-slate-600 mb-1">{t('finance.amount')}</label>

@@ -33,8 +33,13 @@ class CreateOtherRevenueDto {
   @IsString()
   bookingId?: string;
 
+  @IsOptional()
   @IsString()
-  categoryId: string;
+  categoryId?: string;
+
+  @IsOptional()
+  @IsString()
+  categoryName?: string;
 
   @IsOptional()
   @IsString()
@@ -114,6 +119,7 @@ export class OtherRevenueController {
     return this.other.addOtherRevenue(user.businessId, {
       bookingId: dto.bookingId ?? null,
       categoryId: dto.categoryId,
+      categoryName: dto.categoryName,
       description: dto.description,
       amount: dto.amount,
       paymentMethod: dto.paymentMethod,

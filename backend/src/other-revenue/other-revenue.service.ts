@@ -141,15 +141,17 @@ export class OtherRevenueService {
 
   async addOtherRevenue(companyId: string, data: {
     bookingId?: string | null;
-    categoryId: string;
+    categoryId?: string;
+    categoryName?: string;
     description?: string;
     amount: number;
     paymentMethod: string;
     date: Date;
     createdBy?: string | null;
   }) {
-    const categoryId = String(data.categoryId ?? '').trim();
-    if (!categoryId) throw new BadRequestException('Category is required');
+    const categoryIdRaw = String(data.categoryId ?? '').trim();
+    const categoryNameRaw = String(data.categoryName ?? '').trim();
+    if (!categoryIdRaw && !categoryNameRaw) throw new BadRequestException('Category is required');
 
     const amount = Number(data.amount ?? 0);
     if (!Number.isFinite(amount) || amount <= 0) throw new BadRequestException('Amount must be greater than 0');
@@ -162,12 +164,51 @@ export class OtherRevenueService {
     const date = data.date instanceof Date && Number.isFinite(data.date.getTime()) ? data.date : new Date();
     const bookingId = String(data.bookingId ?? '').trim() || null;
 
-    // Validate category exists
-    const cat = await this.prisma.revenueCategory.findFirst({
-      where: { id: categoryId, companyId },
-      select: { id: true },
-    });
-    if (!cat) throw new NotFoundException('Revenue category not found');
+    // Resolve category:
+    // - If `categoryId` provided -> validate it belongs to the business
+    // - Else -> find/create by `categoryName` (business-specific)
+    let categoryId = categoryIdRaw;
+    if (categoryId) {
+      const cat = await this.prisma.revenueCategory.findFirst({
+        where: { id: categoryId, companyId },
+        select: { id: true },
+      });
+      if (!cat) throw new NotFoundException('Revenue category not found');
+    } else {
+      const nm = categoryNameRaw.replace(/\s+/g, ' ');
+      if (!nm) throw new BadRequestException('Category is required');
+      if (nm.length > 80) throw new BadRequestException('Category name is too long');
+
+      const existing = await this.prisma.revenueCategory.findFirst({
+        where: {
+          companyId,
+          name: { equals: nm, mode: 'insensitive' },
+        },
+        select: { id: true },
+      });
+      if (existing?.id) {
+        categoryId = existing.id;
+      } else {
+        try {
+          const createdCat = await this.prisma.revenueCategory.create({
+            data: { companyId, name: nm },
+            select: { id: true },
+          });
+          categoryId = createdCat.id;
+        } catch (e: any) {
+          // If another request created it concurrently, read it back.
+          const after = await this.prisma.revenueCategory.findFirst({
+            where: {
+              companyId,
+              name: { equals: nm, mode: 'insensitive' },
+            },
+            select: { id: true },
+          });
+          if (after?.id) categoryId = after.id;
+          else throw e;
+        }
+      }
+    }
 
     const description = String(data.description ?? '').trim() || null;
 
