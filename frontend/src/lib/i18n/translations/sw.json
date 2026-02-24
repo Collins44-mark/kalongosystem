@@ -279,6 +279,7 @@
   "finance.onlyManagers": "Wasimamizi na fedha tu wanaweza kufikia fedha.",
   "finance.createExpensesRole": "Unaweza kuandika matumizi ikiwa una jukumu la Fedha.",
   "finance.netRevenue": "Mapato Halisi",
+  "finance.netProfit": "Faida Halisi",
   "finance.grossSales": "Mapato Jumla",
   "finance.vatCollected": "Kodi Iliyokusanywa",
   "finance.beforeVat": "Kabla ya VAT",

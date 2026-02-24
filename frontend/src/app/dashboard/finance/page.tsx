@@ -90,8 +90,8 @@ export default function FinancePage() {
   const [revDate, setRevDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [savingRevenue, setSavingRevenue] = useState(false);
 
-  // Business expectation: "Net revenue" = revenue after expenses (not VAT-only net).
-  const netRevenueAfterExpenses = useMemo(() => {
+  // Business expectation: "Net profit" = revenue after expenses.
+  const netProfit = useMemo(() => {
     const gross = overview?.totals?.grossSales ?? 0;
     const exp = totalExpenses ?? 0;
     return gross - exp;
@@ -478,68 +478,31 @@ export default function FinancePage() {
       ) : overview ? (
         <>
           {level === 'overview' && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <button
-                  type="button"
-                  onClick={() => pushViewHistory('metric', 'vat', 'all', 1)}
-                  className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
-                >
-                  <div className="text-sm text-slate-500">{t('finance.vatCollected')}</div>
-                  <div className="text-xl font-semibold">{formatTzs(overview.totals.vatCollected)}</div>
-                  <div className="text-xs text-slate-500 mt-1">
-                    {vatEnabled ? `${Math.round((overview.vat.vat_rate || 0) * 100)}% · ${overview.vat.vat_type}` : t('finance.vatDisabled')}
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => pushViewHistory('expenses', 'expenses', 'all', 1)}
-                  className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
-                >
-                  <div className="text-sm text-slate-500">{t('finance.expenses')}</div>
-                  <div className="text-xl font-semibold">{formatTzs(totalExpenses)}</div>
-                  <div className="text-xs text-slate-500 mt-1">{t('finance.expensesInPeriod')}</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => pushViewHistory('metric', 'gross', 'all', 1)}
-                  className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
-                >
-                  <div className="text-sm text-slate-500">{t('finance.grossSales')}</div>
-                  <div className="text-xl font-semibold">{formatTzs(overview.totals.grossSales)}</div>
-                  <div className="text-xs text-slate-500 mt-1">{t('finance.paymentsReceived')}</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => pushViewHistory('metric', 'net', 'all', 1)}
-                  className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
-                >
-                  <div className="text-sm text-slate-500">{t('finance.netRevenue')}</div>
-                  <div className="text-xl font-semibold">{formatTzs(netRevenueAfterExpenses)}</div>
-                  <div className="text-xs text-slate-500 mt-1">{vatEnabled ? t('finance.beforeVat') : t('finance.vatDisabled')}</div>
-                </button>
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <button
+                type="button"
+                onClick={() => pushViewHistory('transactions', 'gross', 'all', 1)}
+                className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
+              >
+                <div className="text-sm text-slate-500">{t('finance.grossSales')}</div>
+                <div className="text-xl font-semibold">{formatTzs(overview.totals.grossSales)}</div>
+                <div className="text-xs text-slate-500 mt-1">{t('finance.paymentsReceived')}</div>
+              </button>
 
-              <div className="bg-white border rounded-lg p-4 max-w-2xl">
-                <div className="font-medium mb-3">{t('finance.revenueBreakdown')}</div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">{t('finance.roomsRevenue')}</span>
-                    <span className="font-medium">{formatTzs(overview.bySector.rooms.gross)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">{t('finance.posRevenue')}</span>
-                    <span className="font-medium">{formatTzs((overview.bySector.bar.gross || 0) + (overview.bySector.restaurant.gross || 0))}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">{t('finance.otherRevenue')}</span>
-                    <span className="font-medium">{formatTzs(overview.bySector.other.gross)}</span>
-                  </div>
-                  <div className="flex justify-between border-t pt-2 mt-2">
-                    <span className="text-slate-800 font-medium">{t('finance.totalRevenue')}</span>
-                    <span className="font-semibold">{formatTzs(overview.totals.grossSales)}</span>
-                  </div>
-                </div>
+              <button
+                type="button"
+                onClick={() => pushViewHistory('expenses', 'expenses', 'all', 1)}
+                className="bg-white border rounded-lg p-4 text-left hover:border-teal-500 hover:shadow-sm transition"
+              >
+                <div className="text-sm text-slate-500">{t('finance.expenses')}</div>
+                <div className="text-xl font-semibold">{formatTzs(totalExpenses)}</div>
+                <div className="text-xs text-slate-500 mt-1">{t('finance.expensesInPeriod')}</div>
+              </button>
+
+              <div className="bg-white border rounded-lg p-4 text-left">
+                <div className="text-sm text-slate-500">{t('finance.netProfit')}</div>
+                <div className="text-xl font-semibold">{formatTzs(netProfit)}</div>
+                <div className="text-xs text-slate-500 mt-1">Revenue − Expenses</div>
               </div>
             </div>
           )}

@@ -279,6 +279,7 @@
   "finance.onlyManagers": "Only managers and finance can access finance.",
   "finance.createExpensesRole": "You can create expenses if you have Finance role.",
   "finance.netRevenue": "Net Revenue",
+  "finance.netProfit": "Net Profit",
   "finance.grossSales": "Total Revenue",
   "finance.vatCollected": "Tax Collected",
   "finance.beforeVat": "Before VAT",
