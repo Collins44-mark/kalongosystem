@@ -7,11 +7,12 @@ import { RequireModule } from '../common/decorators/require-module.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { AllowManagerGuard } from '../common/guards/allow-manager.guard';
 import { IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
 
 class UpdateRoomDto {
   @IsString()
-  @IsIn(['VACANT', 'OCCUPIED', 'RESERVED', 'UNDER_MAINTENANCE'])
+  @IsIn(['VACANT', 'UNDER_MAINTENANCE'])
   status: string;
 }
 
@@ -39,12 +40,34 @@ export class HousekeepingController {
   @UseGuards(RolesGuard)
   @Roles('MANAGER', 'HOUSEKEEPING', 'FRONT_OFFICE')
   async getRooms(@CurrentUser() user: any) {
-    return this.housekeeping.getRooms(user.businessId, user.branchId);
+    const isManager = ['MANAGER', 'ADMIN', 'OWNER'].includes(user.role || '');
+    if (isManager) {
+      return this.housekeeping.getRooms(user.businessId, user.branchId);
+    }
+    return this.housekeeping.getRoomsForStaff(user.businessId, user.branchId);
+  }
+
+  @Post('rooms/:id/mark-cleaned')
+  @UseGuards(RolesGuard)
+  @Roles('MANAGER', 'HOUSEKEEPING')
+  async markAsCleaned(@CurrentUser() user: any, @Param('id') roomId: string) {
+    return this.housekeeping.markAsCleaned(user.businessId, user.branchId, roomId, {
+      userId: user.sub,
+      workerId: user.workerId ?? null,
+      workerName: user.workerName ?? null,
+    });
+  }
+
+  @Get('cleaning-logs')
+  @UseGuards(RolesGuard)
+  @Roles('MANAGER', 'HOUSEKEEPING', 'FRONT_OFFICE')
+  async getCleaningLogs(@CurrentUser() user: any) {
+    return this.housekeeping.getCleaningLogs(user.businessId, user.branchId);
   }
 
   @Put('rooms/:id/status')
-  @UseGuards(RolesGuard)
-  @Roles('MANAGER', 'HOUSEKEEPING')
+  @UseGuards(RolesGuard, AllowManagerGuard)
+  @Roles('MANAGER', 'ADMIN', 'OWNER')
   async updateRoomStatus(
     @CurrentUser() user: any,
     @Param('id') roomId: string,

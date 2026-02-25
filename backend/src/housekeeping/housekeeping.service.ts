@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
 
@@ -6,22 +6,96 @@ import { Decimal } from '@prisma/client/runtime/library';
 export class HousekeepingService {
   constructor(private prisma: PrismaService) {}
 
-  /** Get rooms for housekeeping - room status updates */
+  /** Get rooms for housekeeping staff: recently checked-out (UNDER_MAINTENANCE) OR vacant not cleaned today */
+  async getRoomsForStaff(businessId: string, branchId: string) {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(todayStart);
+    todayEnd.setHours(23, 59, 59, 999);
+
+    const rooms = await this.prisma.room.findMany({
+      where: { businessId, branchId },
+      include: {
+        category: true,
+        cleaningLogs: {
+          where: { createdAt: { gte: todayStart, lte: todayEnd } },
+          take: 1,
+        },
+      },
+      orderBy: { roomNumber: 'asc' },
+    });
+
+    const filtered = rooms.filter((r) => {
+      if (r.status === 'UNDER_MAINTENANCE') return true;
+      if (r.status === 'VACANT' && r.cleaningLogs.length === 0) return true;
+      return false;
+    });
+    return filtered.map(({ cleaningLogs, ...r }) => r);
+  }
+
+  /** Get all rooms for admin */
   async getRooms(businessId: string, branchId: string) {
     return this.prisma.room.findMany({
       where: { businessId, branchId },
-      include: { category: true },
+      include: {
+        category: true,
+        cleaningLogs: { orderBy: { createdAt: 'desc' }, take: 10 },
+      },
       orderBy: { roomNumber: 'asc' },
     });
   }
 
-  /** Update room cleaning status - e.g. mark as cleaned */
+  /** Mark room as cleaned - creates log only, does NOT change room status */
+  async markAsCleaned(
+    businessId: string,
+    branchId: string,
+    roomId: string,
+    actor: { userId: string; workerId?: string | null; workerName?: string | null },
+  ) {
+    const room = await this.prisma.room.findFirst({
+      where: { id: roomId, businessId, branchId },
+    });
+    if (!room) throw new ForbiddenException('Room not found');
+    if (room.status !== 'VACANT' && room.status !== 'UNDER_MAINTENANCE') {
+      throw new ForbiddenException('Only vacant or under-maintenance rooms can be marked as cleaned');
+    }
+    return this.prisma.roomCleaningLog.create({
+      data: {
+        businessId,
+        branchId,
+        roomId,
+        cleanedByWorkerId: actor.workerId ?? null,
+        cleanedByWorkerName: actor.workerName ?? null,
+      },
+    });
+  }
+
+  /** Get cleaning logs - newest first */
+  async getCleaningLogs(businessId: string, branchId: string, limit = 100) {
+    return this.prisma.roomCleaningLog.findMany({
+      where: { businessId, branchId },
+      include: { room: { select: { roomNumber: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+  }
+
+  /** Update room status - MANAGER only. Only VACANT <-> UNDER_MAINTENANCE allowed (maintenance toggle). */
   async updateRoomStatus(
     businessId: string,
     roomId: string,
     status: string,
     actor?: { userId: string; role: string; workerId?: string | null; workerName?: string | null },
   ) {
+    const valid = ['VACANT', 'UNDER_MAINTENANCE'];
+    if (!valid.includes(status)) {
+      throw new ForbiddenException('Admin can only toggle maintenance (VACANT/UNDER_MAINTENANCE). Occupied/Reserved follow system logic.');
+    }
+    const room = await this.prisma.room.findFirst({ where: { id: roomId, businessId } });
+    if (!room) throw new ForbiddenException('Room not found');
+    if (!valid.includes(room.status)) {
+      throw new ForbiddenException('Cannot change status of occupied or reserved rooms');
+    }
     const res = await this.prisma.room.update({
       where: { id: roomId, businessId },
       data: { status },

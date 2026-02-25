@@ -102,6 +102,7 @@ model Business {
   inventoryItems    InventoryItem[]
   inventoryRestocks InventoryRestock[]
   maintenanceRequests MaintenanceRequest[]
+  roomCleaningLogs   RoomCleaningLog[]
   expenses          Expense[]
   workers           Worker[]
   staffWorkers      StaffWorker[]
@@ -176,9 +177,27 @@ model Room {
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   category RoomCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   bookings Booking[]
+  cleaningLogs RoomCleaningLog[]
 
   @@unique([businessId, branchId, roomNumber])
   @@map("rooms")
+}
+
+model RoomCleaningLog {
+  id                 String   @id @default(cuid())
+  businessId         String
+  branchId           String   @default("main")
+  roomId             String
+  cleanedByWorkerId  String?
+  cleanedByWorkerName String?
+  createdAt          DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  room     Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, roomId])
+  @@index([businessId, createdAt])
+  @@map("room_cleaning_logs")
 }
 
 model Booking {
