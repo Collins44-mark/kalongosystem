@@ -1,6 +1,25 @@
 /**
  * Shared HMS PDF branding utilities for all report PDFs.
+ * Global design: consistent margins (30), typography, table styles.
  */
+
+export const PDF_MARGIN = 30;
+export const TABLE_HEADER_BG = '#e5e7eb';
+export const TABLE_ROW_STRIPE = '#f8fafc';
+export const TABLE_BORDER = '#9ca3af';
+export const TABLE_BORDER_LIGHT = '#d1d5db';
+
+export function formatMoney(n: number): string {
+  const v = Number(n ?? 0);
+  const safe = Number.isFinite(v) ? v : 0;
+  return new Intl.NumberFormat('en-TZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(safe);
+}
+
+export function toTitleCase(s: string): string {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 function formatDateTime(d: Date): string {
   const dd = String(d.getDate()).padStart(2, '0');
