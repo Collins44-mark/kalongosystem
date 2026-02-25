@@ -141,13 +141,6 @@ export default function RestaurantPage() {
         return txt.includes(q);
       });
 
-  const grouped = displayedItems.reduce<Record<string, RestaurantItem[]>>((acc, it) => {
-    const cat = (it.category || t('restaurant.uncategorized')).trim();
-    acc[cat] = acc[cat] || [];
-    acc[cat].push(it);
-    return acc;
-  }, {});
-  const categories = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
   const displayedHistory = !q
     ? history
     : history.filter((o) => {
@@ -204,24 +197,41 @@ export default function RestaurantPage() {
               </table>
             </div>
           ) : (
-            <div className="space-y-4">
-              {categories.map((cat) => (
-                <div key={cat}>
-                  <div className="text-xs font-medium text-slate-500 mb-2">{cat}</div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {grouped[cat].map((item) => (
-                      <button
-                        key={item.id}
-                        onClick={() => addToCart(item)}
-                        className="p-4 bg-white border rounded text-left hover:border-teal-500"
-                      >
-                        <div className="font-medium truncate">{item.name}</div>
-                        <div className="text-sm text-slate-600">{formatTzs(parseFloat(item.price))}</div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
+            <div className="overflow-x-auto bg-white border rounded">
+              <table className="w-full text-sm min-w-[280px]">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="text-left p-3">{t('restaurant.foodName')}</th>
+                    <th className="text-right p-3">{t('restaurant.price')}</th>
+                    <th className="p-3 w-20">{t('common.add')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayedItems.map((it) => (
+                    <tr
+                      key={it.id}
+                      className={`border-t ${it.isEnabled === false ? 'opacity-50' : 'cursor-pointer hover:bg-slate-50'}`}
+                      onClick={() => it.isEnabled !== false && addToCart(it)}
+                    >
+                      <td className="p-3 font-medium">{it.name}</td>
+                      <td className="p-3 text-right text-slate-600">{formatTzs(parseFloat(it.price))}</td>
+                      <td className="p-3">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); addToCart(it); }}
+                          disabled={it.isEnabled === false}
+                          className="text-teal-600 hover:underline text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {t('common.add')}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {displayedItems.length === 0 && (
+                    <tr><td className="p-3 text-slate-500" colSpan={3}>{t('common.noItems')}</td></tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
