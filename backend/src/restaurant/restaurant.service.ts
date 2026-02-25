@@ -194,20 +194,29 @@ export class RestaurantService {
       to?: Date;
       workerId?: string;
       paymentMethod?: string;
+      since?: Date;
+      limit?: number;
+      offset?: number;
     } = {},
   ) {
     const where: any = { businessId, branchId };
-    if (opts.from || opts.to) {
+    if (opts.since) {
+      where.createdAt = { gt: opts.since };
+    } else if (opts.from || opts.to) {
       where.createdAt = {};
       if (opts.from) where.createdAt.gte = opts.from;
       if (opts.to) where.createdAt.lte = opts.to;
     }
     if (opts.workerId) where.createdByWorkerId = opts.workerId;
     if (opts.paymentMethod) where.paymentMethod = opts.paymentMethod;
+    const take = Math.min(opts.limit ?? 50, 100);
+    const skip = opts.offset ?? 0;
     return this.prisma.restaurantOrder.findMany({
       where,
       include: { items: { include: { restaurantItem: true } } },
       orderBy: { createdAt: 'desc' },
+      take,
+      skip,
     });
   }
 

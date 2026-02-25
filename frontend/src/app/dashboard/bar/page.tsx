@@ -75,6 +75,20 @@ export default function BarPage() {
   const [ordersPeriod, setOrdersPeriod] = useState<'today' | 'week' | 'month' | 'bydate'>('today');
   const [ordersFrom, setOrdersFrom] = useState('');
   const [ordersTo, setOrdersTo] = useState('');
+  const [ordersWorkerId, setOrdersWorkerId] = useState('');
+  const [appliedOrdersPeriod, setAppliedOrdersPeriod] = useState<'today' | 'week' | 'month' | 'bydate'>('today');
+  const [appliedOrdersFrom, setAppliedOrdersFrom] = useState('');
+  const [appliedOrdersTo, setAppliedOrdersTo] = useState('');
+  const [appliedOrdersWorkerId, setAppliedOrdersWorkerId] = useState('');
+  const [barWorkers, setBarWorkers] = useState<{ id: string; fullName: string }[]>([]);
+  const [restockPeriod, setRestockPeriod] = useState<'today' | 'week' | 'month' | 'bydate'>('today');
+  const [restockFrom, setRestockFrom] = useState('');
+  const [restockTo, setRestockTo] = useState('');
+  const [restockWorkerId, setRestockWorkerId] = useState('');
+  const [appliedRestockPeriod, setAppliedRestockPeriod] = useState<'today' | 'week' | 'month' | 'bydate'>('today');
+  const [appliedRestockFrom, setAppliedRestockFrom] = useState('');
+  const [appliedRestockTo, setAppliedRestockTo] = useState('');
+  const [appliedRestockWorkerId, setAppliedRestockWorkerId] = useState('');
   const [autoTick, setAutoTick] = useState(0);
 
   // Lock body scroll when a true modal is open (restock / add item)
@@ -99,7 +113,7 @@ export default function BarPage() {
     }
   }, [showRestock, showAddItem]);
 
-  // Auto-update: refresh when tab visible, storage event, or polling (every 15s when visible).
+  // Auto-update: refresh when tab visible or storage event (no full page reload, no setInterval).
   useEffect(() => {
     if (!token) return;
     const refresh = () => setAutoTick((t) => t + 1);
@@ -111,13 +125,9 @@ export default function BarPage() {
     };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('storage', onStorage);
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') refresh();
-    }, 15000);
     return () => {
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('storage', onStorage);
-      clearInterval(interval);
     };
   }, [token]);
 
@@ -145,25 +155,42 @@ export default function BarPage() {
 
   useEffect(() => {
     if (!token || !isAdmin) return;
-    api<Restock[]>('/bar/restocks', { token })
-      .then(setRestocks)
-      .catch(() => setRestocks([]));
-  }, [token, isAdmin, autoTick]);
+    api<{ id: string; fullName: string }[]>(`/api/staff-workers?role=BAR`, { token })
+      .then((w) => setBarWorkers(w || []))
+      .catch(() => setBarWorkers([]));
+  }, [token, isAdmin]);
 
   useEffect(() => {
     if (!token || !isAdmin) return;
     setAdminOrdersLoading(true);
     const params = new URLSearchParams();
-    params.set('period', ordersPeriod);
-    if (ordersPeriod === 'bydate' && ordersFrom && ordersTo) {
-      params.set('from', ordersFrom);
-      params.set('to', ordersTo);
+    params.set('period', appliedOrdersPeriod);
+    if (appliedOrdersPeriod === 'bydate' && appliedOrdersFrom && appliedOrdersTo) {
+      params.set('from', appliedOrdersFrom);
+      params.set('to', appliedOrdersTo);
     }
+    if (appliedOrdersWorkerId) params.set('workerId', appliedOrdersWorkerId);
+    params.set('limit', '30');
     api<AdminOrder[]>(`/bar/orders?${params}`, { token })
       .then(setAdminOrders)
       .catch(() => setAdminOrders([]))
       .finally(() => setAdminOrdersLoading(false));
-  }, [token, isAdmin, ordersPeriod, ordersFrom, ordersTo, autoTick]);
+  }, [token, isAdmin, appliedOrdersPeriod, appliedOrdersFrom, appliedOrdersTo, appliedOrdersWorkerId, autoTick]);
+
+  useEffect(() => {
+    if (!token || !isAdmin) return;
+    const params = new URLSearchParams();
+    params.set('period', appliedRestockPeriod);
+    if (appliedRestockPeriod === 'bydate' && appliedRestockFrom && appliedRestockTo) {
+      params.set('from', appliedRestockFrom);
+      params.set('to', appliedRestockTo);
+    }
+    if (appliedRestockWorkerId) params.set('workerId', appliedRestockWorkerId);
+    params.set('limit', '50');
+    api<Restock[]>(`/bar/restocks?${params}`, { token })
+      .then(setRestocks)
+      .catch(() => setRestocks([]));
+  }, [token, isAdmin, appliedRestockPeriod, appliedRestockFrom, appliedRestockTo, appliedRestockWorkerId, autoTick]);
 
   async function togglePermission(next: boolean) {
     if (!token) return;
@@ -329,7 +356,15 @@ export default function BarPage() {
       const refreshed = await api<BarItem[]>('/bar/items', { token });
       setItems(refreshed);
       if (isAdmin) {
-        const rs = await api<Restock[]>('/bar/restocks', { token });
+        const params = new URLSearchParams();
+        params.set('period', appliedRestockPeriod);
+        if (appliedRestockPeriod === 'bydate' && appliedRestockFrom && appliedRestockTo) {
+          params.set('from', appliedRestockFrom);
+          params.set('to', appliedRestockTo);
+        }
+        if (appliedRestockWorkerId) params.set('workerId', appliedRestockWorkerId);
+        params.set('limit', '50');
+        const rs = await api<Restock[]>(`/bar/restocks?${params}`, { token });
         setRestocks(rs);
       }
     } catch (e) {
@@ -670,14 +705,14 @@ export default function BarPage() {
       </div>
 
       {isAdmin && (
-        <div className="mt-8 bg-white border rounded p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <h2 className="font-medium">{t('bar.orderHistory')}</h2>
-            <div className="flex items-center gap-2">
+        <div className="mt-8 bg-white border rounded overflow-hidden">
+          <div className="sticky top-0 z-10 bg-white border-b p-4">
+            <h2 className="font-medium mb-3">{t('bar.orderHistory')}</h2>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
               <select
                 value={ordersPeriod}
                 onChange={(e) => setOrdersPeriod(e.target.value as any)}
-                className="px-2 py-1 border rounded text-xs sm:text-sm"
+                className="px-2 py-1.5 border rounded text-sm"
               >
                 <option value="today">{t('overview.today')}</option>
                 <option value="week">{t('overview.thisWeek')}</option>
@@ -690,17 +725,53 @@ export default function BarPage() {
                     type="date"
                     value={ordersFrom}
                     onChange={(e) => setOrdersFrom(e.target.value)}
-                    className="px-2 py-1 border rounded text-xs sm:text-sm"
+                    className="px-2 py-1.5 border rounded text-sm"
                   />
-                  <span className="text-slate-400 text-xs sm:text-sm">{t('common.to')}</span>
+                  <span className="text-slate-400 text-sm">{t('common.to')}</span>
                   <input
                     type="date"
                     value={ordersTo}
                     onChange={(e) => setOrdersTo(e.target.value)}
-                    className="px-2 py-1 border rounded text-xs sm:text-sm"
+                    className="px-2 py-1.5 border rounded text-sm"
                   />
                 </div>
               )}
+              <select
+                value={ordersWorkerId}
+                onChange={(e) => setOrdersWorkerId(e.target.value)}
+                className="px-2 py-1.5 border rounded text-sm"
+              >
+                <option value="">{t('restaurant.allWorkers')}</option>
+                {barWorkers.map((w) => (
+                  <option key={w.id} value={w.id}>{w.fullName}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => {
+                  setAppliedOrdersPeriod(ordersPeriod);
+                  setAppliedOrdersFrom(ordersFrom);
+                  setAppliedOrdersTo(ordersTo);
+                  setAppliedOrdersWorkerId(ordersWorkerId);
+                }}
+                className="px-3 py-1.5 bg-teal-600 text-white rounded text-sm hover:bg-teal-700"
+              >
+                {t('common.apply')}
+              </button>
+              <button
+                onClick={() => {
+                  setOrdersPeriod('today');
+                  setOrdersFrom('');
+                  setOrdersTo('');
+                  setOrdersWorkerId('');
+                  setAppliedOrdersPeriod('today');
+                  setAppliedOrdersFrom('');
+                  setAppliedOrdersTo('');
+                  setAppliedOrdersWorkerId('');
+                }}
+                className="px-3 py-1.5 border border-slate-300 rounded text-sm hover:bg-slate-50"
+              >
+                {t('common.reset')}
+              </button>
             </div>
           </div>
 
@@ -726,8 +797,8 @@ export default function BarPage() {
                   </tr>
                 ) : adminOrdersFiltered.length === 0 ? (
                   <tr>
-                    <td className="p-3 text-slate-500" colSpan={6}>
-                      {t('common.noItems')}
+                    <td className="p-8 text-center text-slate-500" colSpan={6}>
+                      {t('common.noResultsFound')}
                     </td>
                   </tr>
                 ) : (
@@ -779,10 +850,78 @@ export default function BarPage() {
       )}
 
       {isAdmin && (
-        <div className="mt-8 bg-white border rounded p-4">
-          <h2 className="font-medium mb-3">{t('bar.restockHistory')}</h2>
+        <div className="mt-8 bg-white border rounded overflow-hidden">
+          <div className="sticky top-0 z-10 bg-white border-b p-4">
+            <h2 className="font-medium mb-3">{t('bar.restockHistory')}</h2>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <select
+                value={restockPeriod}
+                onChange={(e) => setRestockPeriod(e.target.value as any)}
+                className="px-2 py-1.5 border rounded text-sm"
+              >
+                <option value="today">{t('overview.today')}</option>
+                <option value="week">{t('overview.thisWeek')}</option>
+                <option value="month">{t('overview.thisMonth')}</option>
+                <option value="bydate">{t('overview.byDate')}</option>
+              </select>
+              {restockPeriod === 'bydate' && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={restockFrom}
+                    onChange={(e) => setRestockFrom(e.target.value)}
+                    className="px-2 py-1.5 border rounded text-sm"
+                  />
+                  <span className="text-slate-400 text-sm">{t('common.to')}</span>
+                  <input
+                    type="date"
+                    value={restockTo}
+                    onChange={(e) => setRestockTo(e.target.value)}
+                    className="px-2 py-1.5 border rounded text-sm"
+                  />
+                </div>
+              )}
+              <select
+                value={restockWorkerId}
+                onChange={(e) => setRestockWorkerId(e.target.value)}
+                className="px-2 py-1.5 border rounded text-sm"
+              >
+                <option value="">{t('restaurant.allWorkers')}</option>
+                {barWorkers.map((w) => (
+                  <option key={w.id} value={w.id}>{w.fullName}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => {
+                  setAppliedRestockPeriod(restockPeriod);
+                  setAppliedRestockFrom(restockFrom);
+                  setAppliedRestockTo(restockTo);
+                  setAppliedRestockWorkerId(restockWorkerId);
+                }}
+                className="px-3 py-1.5 bg-teal-600 text-white rounded text-sm hover:bg-teal-700"
+              >
+                {t('common.apply')}
+              </button>
+              <button
+                onClick={() => {
+                  setRestockPeriod('today');
+                  setRestockFrom('');
+                  setRestockTo('');
+                  setRestockWorkerId('');
+                  setAppliedRestockPeriod('today');
+                  setAppliedRestockFrom('');
+                  setAppliedRestockTo('');
+                  setAppliedRestockWorkerId('');
+                }}
+                className="px-3 py-1.5 border border-slate-300 rounded text-sm hover:bg-slate-50"
+              >
+                {t('common.reset')}
+              </button>
+            </div>
+          </div>
+          <div className="p-4">
           {restocks.length === 0 ? (
-            <p className="text-sm text-slate-500">{t('bar.noRestocks')}</p>
+            <p className="text-sm text-slate-500">{t('common.noResultsFound')}</p>
           ) : (
             <div className="space-y-4">
               {restockDays.map((day) => (
@@ -854,6 +993,7 @@ export default function BarPage() {
               ))}
             </div>
           )}
+          </div>
         </div>
       )}
 

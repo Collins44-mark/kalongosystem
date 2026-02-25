@@ -93,6 +93,9 @@ export class RestaurantController {
     @Query('to') to?: string,
     @Query('workerId') workerId?: string,
     @Query('paymentMethod') paymentMethod?: string,
+    @Query('since') since?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
   ) {
     const p = (period || 'today') as string;
     const now = new Date();
@@ -119,11 +122,17 @@ export class RestaurantController {
       return { from: start, to: end };
     })();
 
-    // Manager can filter by worker/payment; staff cannot.
-    const opts =
-      user.role === 'MANAGER'
-        ? { from: range.from, to: range.to, workerId, paymentMethod }
-        : { from: range.from, to: range.to };
+    const isManager = ['MANAGER', 'ADMIN', 'OWNER'].includes(user.role || '');
+    const opts: any = { from: range.from, to: range.to };
+    if (isManager) {
+      if (workerId) opts.workerId = workerId;
+      if (paymentMethod) opts.paymentMethod = paymentMethod;
+    }
+    if (since) opts.since = new Date(since);
+    const lim = limit ? parseInt(limit, 10) : 30;
+    const off = offset ? parseInt(offset, 10) : 0;
+    if (!isNaN(lim) && lim > 0) opts.limit = lim;
+    if (!isNaN(off) && off >= 0) opts.offset = off;
 
     const orders = await this.restaurant.getOrders(user.businessId, user.branchId, opts);
     return orders.map((o: any) => ({

@@ -230,17 +230,41 @@ export class BarController {
     @Query('period') period?: 'today' | 'week' | 'month' | 'bydate',
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query('workerId') workerId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
   ) {
     const range = this.getRangeFromQuery(period, from, to);
-    return this.bar.getOrders(user.businessId, user.branchId, range.from, range.to);
+    const opts: any = { from: range.from, to: range.to };
+    if (workerId) opts.workerId = workerId;
+    const lim = limit ? parseInt(limit, 10) : 50;
+    const off = offset ? parseInt(offset, 10) : 0;
+    if (!isNaN(lim) && lim > 0) opts.limit = lim;
+    if (!isNaN(off) && off >= 0) opts.offset = off;
+    return this.bar.getOrders(user.businessId, user.branchId, opts);
   }
 
   /** MANAGER: restock history */
   @Get('restocks')
   @UseGuards(RolesGuard, AllowManagerGuard)
   @Roles('MANAGER', 'ADMIN', 'OWNER')
-  async listRestocks(@CurrentUser() user: any) {
-    return this.bar.listRestocks(user.businessId, user.branchId);
+  async listRestocks(
+    @CurrentUser() user: any,
+    @Query('period') period?: 'today' | 'week' | 'month' | 'bydate',
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('workerId') workerId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const range = this.getRangeFromQuery(period, from, to);
+    const opts: any = { from: range.from, to: range.to };
+    if (workerId) opts.workerId = workerId;
+    const lim = limit ? parseInt(limit, 10) : 50;
+    const off = offset ? parseInt(offset, 10) : 0;
+    if (!isNaN(lim) && lim > 0) opts.limit = lim;
+    if (!isNaN(off) && off >= 0) opts.offset = off;
+    return this.bar.listRestocks(user.businessId, user.branchId, opts);
   }
 
   /** MANAGER: restock detail */

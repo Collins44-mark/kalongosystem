@@ -493,12 +493,26 @@ export class BarService {
     });
   }
 
-  async listRestocks(businessId: string, branchId: string) {
+  async listRestocks(
+    businessId: string,
+    branchId: string,
+    opts?: { from?: Date; to?: Date; workerId?: string; limit?: number; offset?: number },
+  ) {
+    const where: any = { businessId, branchId };
+    if (opts?.from || opts?.to) {
+      where.createdAt = {};
+      if (opts.from) where.createdAt.gte = opts.from;
+      if (opts.to) where.createdAt.lte = opts.to;
+    }
+    if (opts?.workerId) where.createdByWorkerId = opts.workerId;
+    const take = Math.min(opts?.limit ?? 50, 100);
+    const skip = opts?.offset ?? 0;
     return this.prisma.barRestock.findMany({
-      where: { businessId, branchId },
+      where,
       include: { items: { include: { barItem: true } } },
       orderBy: { createdAt: 'desc' },
-      take: 200,
+      take,
+      skip,
     });
   }
 
@@ -512,17 +526,26 @@ export class BarService {
   }
 
   /** Admin only - get sales */
-  async getOrders(businessId: string, branchId: string, from?: Date, to?: Date) {
+  async getOrders(
+    businessId: string,
+    branchId: string,
+    opts?: { from?: Date; to?: Date; workerId?: string; limit?: number; offset?: number },
+  ) {
     const where: any = { businessId, branchId };
-    if (from || to) {
+    if (opts?.from || opts?.to) {
       where.createdAt = {};
-      if (from) where.createdAt.gte = from;
-      if (to) where.createdAt.lte = to;
+      if (opts.from) where.createdAt.gte = opts.from;
+      if (opts.to) where.createdAt.lte = opts.to;
     }
+    if (opts?.workerId) where.createdByWorkerId = opts.workerId;
+    const take = Math.min(opts?.limit ?? 50, 100);
+    const skip = opts?.offset ?? 0;
     return this.prisma.barOrder.findMany({
       where,
       include: { items: { include: { barItem: true } } },
       orderBy: { createdAt: 'desc' },
+      take,
+      skip,
     });
   }
 

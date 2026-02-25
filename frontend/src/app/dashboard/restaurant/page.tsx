@@ -35,11 +35,18 @@ export default function RestaurantPage() {
 
   const [history, setHistory] = useState<OrderRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyLoadingMore, setHistoryLoadingMore] = useState(false);
+  const [historyHasMore, setHistoryHasMore] = useState(true);
   const [historyPeriod, setHistoryPeriod] = useState<'today' | 'week' | 'month' | 'bydate'>('today');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [filterWorkerId, setFilterWorkerId] = useState('');
   const [filterPayment, setFilterPayment] = useState('');
+  const [appliedPeriod, setAppliedPeriod] = useState<'today' | 'week' | 'month' | 'bydate'>('today');
+  const [appliedFrom, setAppliedFrom] = useState('');
+  const [appliedTo, setAppliedTo] = useState('');
+  const [appliedWorkerId, setAppliedWorkerId] = useState('');
+  const [appliedPayment, setAppliedPayment] = useState('');
   const [workers, setWorkers] = useState<StaffWorker[]>([]);
   const [showAddItem, setShowAddItem] = useState(false);
   const [addingItem, setAddingItem] = useState(false);
@@ -104,27 +111,136 @@ export default function RestaurantPage() {
     }
   }
 
-  function loadHistory() {
-    if (!token) return;
-    setHistoryLoading(true);
+  const HISTORY_LIMIT = 30;
+
+  function buildHistoryParams(opts: {
+    period: string;
+    from?: string;
+    to?: string;
+    workerId?: string;
+    paymentMethod?: string;
+    since?: string;
+    limit?: number;
+    offset?: number;
+  }) {
     const params = new URLSearchParams();
-    params.set('period', historyPeriod);
-    if (historyPeriod === 'bydate' && dateFrom && dateTo) {
-      params.set('from', dateFrom);
-      params.set('to', dateTo);
+    params.set('period', opts.period);
+    if (opts.period === 'bydate' && opts.from && opts.to) {
+      params.set('from', opts.from);
+      params.set('to', opts.to);
     }
-    if (isAdmin && filterWorkerId) params.set('workerId', filterWorkerId);
-    if (isAdmin && filterPayment) params.set('paymentMethod', filterPayment);
+    if (opts.since) params.set('since', opts.since);
+    if (opts.limit) params.set('limit', String(opts.limit));
+    if (opts.offset) params.set('offset', String(opts.offset));
+    if (isAdmin && opts.workerId) params.set('workerId', opts.workerId);
+    if (isAdmin && opts.paymentMethod) params.set('paymentMethod', opts.paymentMethod);
+    return params;
+  }
+
+  function loadHistory(append = false, since?: string) {
+    if (!token) return;
+    if (!append) setHistoryLoading(true);
+    const params = buildHistoryParams({
+      period: appliedPeriod,
+      from: appliedFrom,
+      to: appliedTo,
+      workerId: appliedWorkerId,
+      paymentMethod: appliedPayment,
+      since,
+      limit: HISTORY_LIMIT,
+      offset: 0,
+    });
     api<OrderRow[]>(`/restaurant/orders/history?${params}`, { token })
-      .then((res) => setHistory(res || []))
-      .catch(() => setHistory([]))
-      .finally(() => setHistoryLoading(false));
+      .then((res) => {
+        const data = res || [];
+        if (since && append) {
+          setHistory((prev) => {
+            const ids = new Set(prev.map((o) => o.id));
+            const newOnes = data.filter((o) => !ids.has(o.id));
+            return [...newOnes, ...prev];
+          });
+        } else if (append) {
+          setHistory((prev) => [...prev, ...data]);
+        } else {
+          setHistory(data);
+        }
+        setHistoryHasMore(data.length >= HISTORY_LIMIT);
+      })
+      .catch(() => {
+        if (!append) setHistory([]);
+      })
+      .finally(() => {
+        setHistoryLoading(false);
+        setHistoryLoadingMore(false);
+      });
+  }
+
+  function applyFilters() {
+    setAppliedPeriod(historyPeriod);
+    setAppliedFrom(dateFrom);
+    setAppliedTo(dateTo);
+    setAppliedWorkerId(filterWorkerId);
+    setAppliedPayment(filterPayment);
+    setHistory([]);
+    setHistoryHasMore(true);
+  }
+
+  function resetFilters() {
+    setHistoryPeriod('today');
+    setDateFrom('');
+    setDateTo('');
+    setFilterWorkerId('');
+    setFilterPayment('');
+    setAppliedPeriod('today');
+    setAppliedFrom('');
+    setAppliedTo('');
+    setAppliedWorkerId('');
+    setAppliedPayment('');
+    setHistory([]);
+    setHistoryHasMore(true);
+  }
+
+  function loadMore() {
+    if (!token || historyLoadingMore || !historyHasMore) return;
+    setHistoryLoadingMore(true);
+    const params = buildHistoryParams({
+      period: appliedPeriod,
+      from: appliedFrom,
+      to: appliedTo,
+      workerId: appliedWorkerId,
+      paymentMethod: appliedPayment,
+      limit: HISTORY_LIMIT,
+      offset: history.length,
+    });
+    api<OrderRow[]>(`/restaurant/orders/history?${params}`, { token })
+      .then((res) => {
+        const data = res || [];
+        setHistory((prev) => [...prev, ...data]);
+        setHistoryHasMore(data.length >= HISTORY_LIMIT);
+      })
+      .catch(() => {})
+      .finally(() => setHistoryLoadingMore(false));
   }
 
   useEffect(() => {
-    loadHistory();
+    if (!token) return;
+    loadHistory(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, historyPeriod, dateFrom, dateTo, filterWorkerId, filterPayment, autoTick]);
+  }, [token, appliedPeriod, appliedFrom, appliedTo, appliedWorkerId, appliedPayment]);
+
+  // Smart polling: every 20s, fetch new orders only (when viewing Today)
+  useEffect(() => {
+    if (!token || history.length === 0) return;
+    const canPoll = appliedPeriod === 'today' && !appliedFrom && !appliedTo;
+    if (!canPoll) return;
+    const interval = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      const last = history[0];
+      if (last?.createdAt) loadHistory(true, last.createdAt);
+    }, 20000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, appliedPeriod, appliedFrom, appliedTo, history.length]);
 
   useEffect(() => {
     if (!token || !isAdmin) return;
@@ -172,8 +288,7 @@ export default function RestaurantPage() {
       setMessage(t('restaurant.orderConfirmed'));
       notifySuccess(t('restaurant.orderConfirmed'));
       setCart([]);
-      loadHistory();
-      setAutoTick((x) => x + 1);
+      loadHistory(false);
     } catch (e) {
       notifyError((e as Error).message);
     } finally {
@@ -357,11 +472,11 @@ export default function RestaurantPage() {
         </div>
       )}
 
-      <div className="mt-8 bg-white border rounded p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <h2 className="font-medium">{t('restaurant.orderHistory')}</h2>
-          <div className="flex flex-wrap items-center gap-2">
-            <select value={historyPeriod} onChange={(e) => setHistoryPeriod(e.target.value as any)} className="px-2 py-1 border rounded text-xs sm:text-sm">
+      <div className="mt-8 bg-white border rounded overflow-hidden">
+        <div className="sticky top-0 z-10 bg-white border-b p-4">
+          <h2 className="font-medium mb-3">{t('restaurant.orderHistory')}</h2>
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <select value={historyPeriod} onChange={(e) => setHistoryPeriod(e.target.value as any)} className="px-2 py-1.5 border rounded text-sm">
               <option value="today">{t('overview.today')}</option>
               <option value="week">{t('overview.thisWeek')}</option>
               <option value="month">{t('overview.thisMonth')}</option>
@@ -369,20 +484,20 @@ export default function RestaurantPage() {
             </select>
             {historyPeriod === 'bydate' && (
               <div className="flex items-center gap-2">
-                <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="px-2 py-1 border rounded text-xs sm:text-sm" />
-                <span className="text-slate-400 text-xs sm:text-sm">{t('common.to')}</span>
-                <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="px-2 py-1 border rounded text-xs sm:text-sm" />
+                <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="px-2 py-1.5 border rounded text-sm" />
+                <span className="text-slate-400 text-sm">{t('common.to')}</span>
+                <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="px-2 py-1.5 border rounded text-sm" />
               </div>
             )}
             {isAdmin && (
               <>
-                <select value={filterWorkerId} onChange={(e) => setFilterWorkerId(e.target.value)} className="px-2 py-1 border rounded text-xs sm:text-sm">
+                <select value={filterWorkerId} onChange={(e) => setFilterWorkerId(e.target.value)} className="px-2 py-1.5 border rounded text-sm">
                   <option value="">{t('restaurant.allWorkers')}</option>
                   {workers.filter((w) => w.status !== 'BLOCKED').map((w) => (
                     <option key={w.id} value={w.id}>{w.fullName}</option>
                   ))}
                 </select>
-                <select value={filterPayment} onChange={(e) => setFilterPayment(e.target.value)} className="px-2 py-1 border rounded text-xs sm:text-sm">
+                <select value={filterPayment} onChange={(e) => setFilterPayment(e.target.value)} className="px-2 py-1.5 border rounded text-sm">
                   <option value="">{t('restaurant.allPayments')}</option>
                   <option value="CASH">{t('restaurant.payCash')}</option>
                   <option value="BANK">{t('restaurant.payBank')}</option>
@@ -392,7 +507,32 @@ export default function RestaurantPage() {
                 </select>
               </>
             )}
+            <button onClick={applyFilters} className="px-3 py-1.5 bg-teal-600 text-white rounded text-sm hover:bg-teal-700">
+              {t('common.apply')}
+            </button>
+            <button onClick={resetFilters} className="px-3 py-1.5 border border-slate-300 rounded text-sm hover:bg-slate-50">
+              {t('common.reset')}
+            </button>
           </div>
+          {(appliedPeriod !== 'today' || appliedFrom || appliedTo || appliedWorkerId || appliedPayment) && (
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              <span className="text-slate-500">{t('common.search')}:</span>
+              {appliedPeriod === 'today' && <span className="px-2 py-0.5 bg-teal-50 text-teal-800 rounded">{t('overview.today')}</span>}
+              {appliedPeriod === 'week' && <span className="px-2 py-0.5 bg-teal-50 text-teal-800 rounded">{t('overview.thisWeek')}</span>}
+              {appliedPeriod === 'month' && <span className="px-2 py-0.5 bg-teal-50 text-teal-800 rounded">{t('overview.thisMonth')}</span>}
+              {appliedPeriod === 'bydate' && appliedFrom && appliedTo && (
+                <span className="px-2 py-0.5 bg-teal-50 text-teal-800 rounded">{appliedFrom} → {appliedTo}</span>
+              )}
+              {appliedWorkerId && (
+                <span className="px-2 py-0.5 bg-teal-50 text-teal-800 rounded">
+                  {workers.find((w) => w.id === appliedWorkerId)?.fullName || appliedWorkerId}
+                </span>
+              )}
+              {appliedPayment && (
+                <span className="px-2 py-0.5 bg-teal-50 text-teal-800 rounded">{formatPayment(appliedPayment, t)}</span>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="overflow-x-auto">
@@ -409,11 +549,11 @@ export default function RestaurantPage() {
             <tbody>
               {historyLoading ? (
                 <tr>
-                  <td className="p-3 text-slate-500" colSpan={5}>{t('common.loading')}</td>
+                  <td className="p-8 text-center text-slate-500" colSpan={5}>{t('common.loading')}</td>
                 </tr>
               ) : displayedHistory.length === 0 ? (
                 <tr>
-                  <td className="p-3 text-slate-500" colSpan={5}>{t('common.noItems')}</td>
+                  <td className="p-8 text-center text-slate-500" colSpan={5}>{t('common.noResultsFound')}</td>
                 </tr>
               ) : (
                 displayedHistory.map((o) => (
@@ -431,6 +571,17 @@ export default function RestaurantPage() {
             </tbody>
           </table>
         </div>
+        {!historyLoading && displayedHistory.length > 0 && historyHasMore && (
+          <div className="p-3 border-t text-center">
+            <button
+              onClick={loadMore}
+              disabled={historyLoadingMore}
+              className="px-4 py-2 text-sm text-teal-600 hover:bg-teal-50 rounded disabled:opacity-50"
+            >
+              {historyLoadingMore ? t('common.loading') : t('common.loadMore')}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
