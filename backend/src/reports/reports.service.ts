@@ -1064,29 +1064,37 @@ function drawPnlFirstPage(
     return summaryTop + summaryH + 24;
   }
 
-  const summaryH = 160;
+  const summaryH = 180;
   doc.save();
   doc.roundedRect(x, summaryTop, pageWidth, summaryH, 6).fillColor('#f9fafb').fill();
   doc.roundedRect(x, summaryTop, pageWidth, summaryH, 6).lineWidth(0.5).strokeColor(TABLE_BORDER).stroke();
   doc.restore();
 
   let sy = summaryTop + pad;
-  const lineH = 18;
+  const lineH = 20;
+  const itemGap = 4;
+
   doc.font('Helvetica').fontSize(10).fillColor('#374151').text('Total Gross Revenue', x + pad, sy, { width: pageWidth - pad * 2 });
   doc.font('Helvetica').fontSize(10).fillColor('#000').text(formatNumberTz(input.totals.gross), x + pad, sy, { width: pageWidth - pad * 2, align: 'right' });
-  sy += lineH;
-  doc.font('Helvetica').fontSize(10).fillColor('#374151').text('(-) VAT', x + pad, sy, { width: pageWidth - pad * 2 });
+  sy += lineH + itemGap;
+
+  doc.font('Helvetica').fontSize(10).fillColor('#374151').text('Total VAT', x + pad, sy, { width: pageWidth - pad * 2 });
   doc.font('Helvetica').fontSize(10).fillColor('#000').text(formatNumberTz(input.totals.vat), x + pad, sy, { width: pageWidth - pad * 2, align: 'right' });
-  sy += lineH;
-  doc.font('Helvetica-Bold').fontSize(10).fillColor('#000').text('= Net Revenue', x + pad, sy, { width: pageWidth - pad * 2 });
-  doc.font('Helvetica-Bold').fontSize(10).fillColor('#000').text(formatNumberTz(input.totals.net), x + pad, sy, { width: pageWidth - pad * 2, align: 'right' });
-  sy += lineH + 4;
-  doc.font('Helvetica').fontSize(10).fillColor('#374151').text('(-) Total Expenses', x + pad, sy, { width: pageWidth - pad * 2 });
+  sy += lineH + itemGap;
+
+  doc.font('Helvetica').fontSize(10).fillColor('#374151').text('Net Revenue', x + pad, sy, { width: pageWidth - pad * 2 });
+  doc.font('Helvetica').fontSize(10).fillColor('#000').text(formatNumberTz(input.totals.net), x + pad, sy, { width: pageWidth - pad * 2, align: 'right' });
+  sy += lineH + itemGap;
+
+  doc.font('Helvetica').fontSize(10).fillColor('#374151').text('Total Expenses', x + pad, sy, { width: pageWidth - pad * 2 });
   doc.font('Helvetica').fontSize(10).fillColor('#000').text(formatNumberTz(input.totals.expenses), x + pad, sy, { width: pageWidth - pad * 2, align: 'right' });
-  sy += lineH + 4;
-  doc.font('Helvetica-Bold').fontSize(14).fillColor(input.totals.netProfit >= 0 ? '#059669' : '#000').text('= Net Profit', x + pad, sy, { width: pageWidth - pad * 2 });
-  doc.font('Helvetica-Bold').fontSize(14).fillColor(input.totals.netProfit >= 0 ? '#059669' : '#000').text(formatNumberTz(input.totals.netProfit), x + pad, sy, { width: pageWidth - pad * 2, align: 'right' });
-  sy += lineH + 4;
+  sy += lineH + itemGap + 8;
+
+  const profitColor = input.totals.netProfit >= 0 ? '#059669' : '#DC2626';
+  doc.font('Helvetica-Bold').fontSize(14).fillColor(profitColor).text('Net Profit', x + pad, sy, { width: pageWidth - pad * 2 });
+  doc.font('Helvetica-Bold').fontSize(14).fillColor(profitColor).text(formatNumberTz(input.totals.netProfit), x + pad, sy, { width: pageWidth - pad * 2, align: 'right' });
+  sy += lineH + itemGap;
+
   const marginPct = input.totals.gross > 0 ? (input.totals.netProfit / input.totals.gross) * 100 : 0;
   doc.font('Helvetica').fontSize(10).fillColor('#374151').text('Profit Margin (%)', x + pad, sy, { width: pageWidth - pad * 2 });
   doc.font('Helvetica').fontSize(10).fillColor('#000').text(`${marginPct.toFixed(1)}%`, x + pad, sy, { width: pageWidth - pad * 2, align: 'right' });
