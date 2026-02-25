@@ -4,17 +4,6 @@ import * as bcrypt from 'bcryptjs';
 
 const ROLES = ['MANAGER', 'FRONT_OFFICE', 'FINANCE', 'HOUSEKEEPING', 'BAR', 'RESTAURANT', 'KITCHEN'] as const;
 
-/** Role short codes for email generation: <role_short>.<business_name>@gmail.com */
-const ROLE_SHORT_CODES: Record<string, string> = {
-  FRONT_OFFICE: 'fo',
-  FINANCE: 'fin',
-  BAR: 'bar',
-  RESTAURANT: 'res',
-  HOUSEKEEPING: 'hk',
-  MANAGER: 'mgr',
-  KITCHEN: 'kit',
-};
-
 /** RBAC permissions by role (module access) */
 export const ROLE_PERMISSIONS: Record<string, string[]> = {
   MANAGER: ['*'],
@@ -56,13 +45,6 @@ export class UsersService {
     }
   }
 
-  /** Generate role email: <role_short>.<business_name>@gmail.com. No random strings, no .local. */
-  private generateRoleEmail(role: string, businessName: string): string {
-    const short = ROLE_SHORT_CODES[role] ?? role.toLowerCase().replace(/_/g, '').slice(0, 3);
-    const slug = businessName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'biz';
-    return `${short}.${slug}@gmail.com`;
-  }
-
   private validatePassword(password: string) {
     const p = (password || '').trim();
     if (p.length < 6) throw new ForbiddenException('Password must be at least 6 characters');
@@ -93,33 +75,32 @@ export class UsersService {
     }));
   }
 
-  async createUser(
+  async createRole(
     businessId: string,
     createdBy: string,
     createdByRole: string,
-    data: { fullName: string; role: string; password: string },
+    data: { name: string; role: string; email: string; password: string },
   ) {
     if (!ROLES.includes(data.role as any)) throw new ForbiddenException('Invalid role');
-    if (createdByRole !== 'MANAGER') throw new ForbiddenException('Only MANAGER can create users');
+    if (createdByRole !== 'MANAGER') throw new ForbiddenException('Only MANAGER can create roles');
 
     const business = await this.prisma.business.findUnique({ where: { id: businessId } });
     if (!business) throw new NotFoundException('Business not found');
 
-    // One user per role per business - role email is deterministic
+    // One role per business - prevent duplicates
     const existingRoleUser = await this.prisma.businessUser.findFirst({
       where: { businessId, role: data.role },
     });
     if (existingRoleUser) {
-      throw new ForbiddenException('Role email already exists for this business');
+      throw new ForbiddenException('Role already exists for this business');
     }
 
-    const email = this.generateRoleEmail(data.role, business.name);
+    const email = (data.email || '').toLowerCase().trim();
+    if (!email) throw new ForbiddenException('Email is required');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ForbiddenException('Invalid email format');
 
-    // Check global uniqueness (email may exist from another business with same name)
     const existingUser = await this.prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
-      throw new ConflictException('Role email already exists for this business');
-    }
+    if (existingUser) throw new ConflictException('Email already in use');
 
     const password = this.validatePassword(data.password);
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -129,7 +110,7 @@ export class UsersService {
         data: {
           email,
           password: hashedPassword,
-          name: data.fullName,
+          name: data.name || data.role,
           language: 'en',
         },
       });
@@ -146,7 +127,7 @@ export class UsersService {
       return [u, b];
     });
 
-    await this.logAudit(createdBy, createdByRole, businessId, 'user_created', 'user', user.id, {
+    await this.logAudit(createdBy, createdByRole, businessId, 'role_created', 'user', user.id, {
       role: data.role,
       email,
     });
@@ -157,7 +138,6 @@ export class UsersService {
       name: user.name,
       role: bu.role,
       email: user.email,
-      password,
       isDisabled: false,
     };
   }
@@ -169,7 +149,7 @@ export class UsersService {
       where: { id: businessUserId, businessId },
       include: { user: true },
     });
-    if (!bu) throw new NotFoundException('User not found');
+    if (!bu) throw new NotFoundException('Role not found');
 
     const nextPassword = this.validatePassword(password);
     const hashedPassword = await bcrypt.hash(nextPassword, 10);
@@ -181,24 +161,34 @@ export class UsersService {
 
     await this.logAudit(managerId, managerRole, businessId, 'password_reset', 'user', bu.userId);
 
-    return { password: nextPassword };
+    return { success: true };
   }
 
-  async updateUser(
+  async updateRole(
     businessId: string,
     businessUserId: string,
     managerId: string,
     managerRole: string,
-    data: { fullName?: string; role?: string },
+    data: { name?: string; role?: string; email?: string },
   ) {
-    if (managerRole !== 'MANAGER') throw new ForbiddenException('Only MANAGER can edit users');
+    if (managerRole !== 'MANAGER') throw new ForbiddenException('Only MANAGER can edit roles');
     const bu = await this.prisma.businessUser.findFirst({
       where: { id: businessUserId, businessId },
       include: { user: true },
     });
-    if (!bu) throw new NotFoundException('User not found');
-    const updates: { name?: string } = {};
-    if (data.fullName !== undefined) updates.name = data.fullName.trim();
+    if (!bu) throw new NotFoundException('Role not found');
+    const updates: { name?: string; email?: string } = {};
+    if (data.name !== undefined) updates.name = data.name.trim();
+    if (data.email !== undefined) {
+      const email = data.email.toLowerCase().trim();
+      if (!email) throw new ForbiddenException('Email is required');
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ForbiddenException('Invalid email format');
+      const existing = await this.prisma.user.findFirst({
+        where: { email, id: { not: bu.userId } },
+      });
+      if (existing) throw new ConflictException('Email already in use');
+      updates.email = email;
+    }
     if (Object.keys(updates).length > 0) {
       await this.prisma.user.update({ where: { id: bu.userId }, data: updates });
     }
@@ -208,16 +198,16 @@ export class UsersService {
         data: { role: data.role },
       });
     }
-    await this.logAudit(managerId, managerRole, businessId, 'user_updated', 'user', bu.userId, data);
+    await this.logAudit(managerId, managerRole, businessId, 'role_updated', 'user', bu.userId, data);
     return this.listUsers(businessId, managerId).then((list) => list.find((u) => u.id === businessUserId));
   }
 
-  async deleteUser(businessId: string, businessUserId: string, managerId: string, managerRole: string) {
-    if (managerRole !== 'MANAGER') throw new ForbiddenException('Only MANAGER can delete users');
+  async deleteRole(businessId: string, businessUserId: string, managerId: string, managerRole: string) {
+    if (managerRole !== 'MANAGER') throw new ForbiddenException('Only MANAGER can delete roles');
     const bu = await this.prisma.businessUser.findFirst({
       where: { id: businessUserId, businessId },
     });
-    if (!bu) throw new NotFoundException('User not found');
+    if (!bu) throw new NotFoundException('Role not found');
     if (bu.userId === managerId) throw new ForbiddenException('Cannot delete yourself');
     await this.prisma.businessUser.delete({ where: { id: businessUserId } });
     await this.logAudit(managerId, managerRole, businessId, 'user_deleted', 'user', bu.userId);
@@ -225,12 +215,12 @@ export class UsersService {
   }
 
   async setDisabled(businessId: string, businessUserId: string, disabled: boolean, managerId: string, managerRole: string) {
-    if (managerRole !== 'MANAGER') throw new ForbiddenException('Only MANAGER can disable users');
+    if (managerRole !== 'MANAGER') throw new ForbiddenException('Only MANAGER can activate/deactivate roles');
 
     const bu = await this.prisma.businessUser.findFirst({
       where: { id: businessUserId, businessId },
     });
-    if (!bu) throw new NotFoundException('User not found');
+    if (!bu) throw new NotFoundException('Role not found');
     if (bu.userId === managerId) throw new ForbiddenException('Cannot disable yourself');
 
     await this.prisma.businessUser.update({

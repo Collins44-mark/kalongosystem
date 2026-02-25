@@ -999,12 +999,12 @@ async function renderFinanceTransactionsPdf(input: {
       const x = doc.page.margins.left;
       let y = drawHmsReportHeader(doc, {
         title: input.reportTitle || 'Finance Report',
-        subtitle: 'Hospitality Management System',
         businessName: input.businessName,
         branchId: input.branchId,
         dateRange: input.dateRange,
         generatedAt: input.generatedAt,
         generatedBy: input.generatedByRole || 'User',
+        logoBuffer: input.logoBuffer,
       });
 
       const bottomLimit = () => doc.page.height - doc.page.margins.bottom - 30;

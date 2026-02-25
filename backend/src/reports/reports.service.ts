@@ -1045,12 +1045,12 @@ function drawPnlFirstPage(
 
   let y = drawHmsReportHeader(doc, {
     title: input.title,
-    subtitle: 'Hospitality Management System',
     businessName: input.businessName,
     branchId: input.branchId,
     dateRange: input.dateRange,
     generatedAt: input.generatedAt,
     generatedBy: input.generatedBy,
+    logoBuffer: input.logoBuffer,
   });
 
   const pad = 14;
@@ -1264,12 +1264,12 @@ async function renderSalesPdf(input: {
       const drawSalesFirstHeader = () =>
         drawHmsReportHeader(doc, {
           title: 'Sales Report',
-          subtitle: 'Hospitality Management System',
           businessName: input.businessName,
           branchId: input.branchId,
           dateRange: input.dateRange,
           generatedAt: input.generatedAt,
           generatedBy: input.generatedBy,
+          logoBuffer: input.logoBuffer,
         });
 
       const normalizePaymentLabel = (s: any) => {
@@ -1522,12 +1522,12 @@ async function renderTaxPdf(input: {
       const x = doc.page.margins.left;
       let y = drawHmsReportHeader(doc, {
         title: 'VAT Report',
-        subtitle: 'Hospitality Management System',
         businessName: input.businessName,
         branchId: input.branchId,
         dateRange: input.dateRange,
         generatedAt: input.generatedAt,
         generatedBy: input.generatedBy,
+        logoBuffer: input.logoBuffer,
       });
 
       // VAT Summary box
@@ -1685,12 +1685,12 @@ async function renderExpensesPdf(input: {
 
       let y = drawHmsReportHeader(doc, {
         title: 'Expense Report',
-        subtitle: 'Hospitality Management System',
         businessName: input.businessName,
         branchId: input.branchId,
         dateRange: input.dateRange,
         generatedAt: input.generatedAt,
         generatedBy: input.generatedBy,
+        logoBuffer: input.logoBuffer,
       });
 
       const numTxns = input.rows.length;

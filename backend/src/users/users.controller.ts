@@ -18,9 +18,9 @@ export class UsersController {
   @Post()
   async create(
     @CurrentUser() user: any,
-    @Body() dto: { fullName: string; role: string; password: string },
+    @Body() dto: { name: string; role: string; email: string; password: string },
   ) {
-    return this.users.createUser(user.businessId, user.sub, user.role || 'MANAGER', dto);
+    return this.users.createRole(user.businessId, user.sub, user.role || 'MANAGER', dto);
   }
 
   @Post(':id/reset-password')
@@ -32,9 +32,9 @@ export class UsersController {
   async update(
     @CurrentUser() user: any,
     @Param('id') id: string,
-    @Body() dto: { fullName?: string; role?: string },
+    @Body() dto: { name?: string; role?: string; email?: string },
   ) {
-    return this.users.updateUser(user.businessId, id, user.sub as string, user.role || 'MANAGER', dto);
+    return this.users.updateRole(user.businessId, id, user.sub as string, user.role || 'MANAGER', dto);
   }
 
   @Patch(':id/disable')
@@ -44,6 +44,6 @@ export class UsersController {
 
   @Delete(':id')
   async delete(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.users.deleteUser(user.businessId, id, user.sub as string, user.role || 'MANAGER');
+    return this.users.deleteRole(user.businessId, id, user.sub as string, user.role || 'MANAGER');
   }
 }

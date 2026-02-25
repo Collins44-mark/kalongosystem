@@ -30,37 +30,52 @@ function formatDateTime(d: Date): string {
   return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
 }
 
+const LOGO_MAX_HEIGHT = 60;
+const LOGO_MAX_WIDTH = 140;
+const HEADER_LEFT_W = 150;
+
 export function drawHmsReportHeader(
   doc: any,
   input: {
     title: string;
-    subtitle?: string;
     businessName: string;
     branchId: string;
     dateRange: { from?: Date | string; to?: Date | string };
     generatedAt: Date;
     generatedBy: string;
+    logoBuffer?: Buffer | null;
   },
 ): number {
   const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const x = doc.page.margins.left;
   const top = doc.page.margins.top;
-  const leftW = 100;
+  const leftW = HEADER_LEFT_W;
   const rightW = 180;
   const centerW = pageWidth - leftW - rightW - 24;
   const leftX = x;
   const centerX = x + leftW + 12;
   const rightX = centerX + centerW + 12;
 
-  doc.font('Helvetica-Bold').fontSize(14).fillColor('#000');
-  doc.text('HMS', leftX, top, { width: leftW, lineBreak: false });
-  if (input.subtitle) {
-    doc.font('Helvetica').fontSize(8).fillColor('#6b7280');
-    doc.text(input.subtitle, leftX, top + 16, { width: leftW, lineBreak: false });
+  const hasLogo = input.logoBuffer && Buffer.isBuffer(input.logoBuffer) && input.logoBuffer.length > 0;
+
+  if (hasLogo) {
+    try {
+      doc.image(input.logoBuffer!, leftX, top, {
+        fit: [LOGO_MAX_WIDTH, LOGO_MAX_HEIGHT],
+        align: 'left',
+        valign: 'top',
+      });
+    } catch {
+      doc.font('Helvetica-Bold').fontSize(24).fillColor('#000');
+      doc.text('HMS', leftX, top, { width: leftW, lineBreak: false, characterSpacing: 2 });
+    }
+  } else {
+    doc.font('Helvetica-Bold').fontSize(24).fillColor('#000');
+    doc.text('HMS', leftX, top, { width: leftW, lineBreak: false, characterSpacing: 2 });
   }
 
   doc.font('Helvetica-Bold').fontSize(12).fillColor('#000');
-  doc.text(input.title, centerX, top + 4, { width: centerW, align: 'center', lineBreak: false });
+  doc.text(input.title, centerX, top + (hasLogo ? 12 : 4), { width: centerW, align: 'center', lineBreak: false });
 
   doc.font('Helvetica').fontSize(9).fillColor('#374151');
   const f = input.dateRange?.from ? (typeof input.dateRange.from === 'string' ? input.dateRange.from : input.dateRange.from.toISOString().slice(0, 10)) : '-';
@@ -70,7 +85,7 @@ export function drawHmsReportHeader(
   doc.text(`Period: ${f} to ${t}`, rightX, top + 24, { width: rightW, align: 'right', lineBreak: false });
   doc.text(`Generated: ${formatDateTime(input.generatedAt)}`, rightX, top + 36, { width: rightW, align: 'right', lineBreak: false });
 
-  const headerBottom = top + (input.subtitle ? 48 : 44);
+  const headerBottom = top + Math.max(LOGO_MAX_HEIGHT, 44);
   doc.moveTo(x, headerBottom).lineTo(x + pageWidth, headerBottom).lineWidth(0.5).strokeColor('#9ca3af').stroke();
   doc.strokeColor('#000');
   return headerBottom + 12;
