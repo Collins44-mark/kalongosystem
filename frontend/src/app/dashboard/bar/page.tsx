@@ -99,20 +99,25 @@ export default function BarPage() {
     }
   }, [showRestock, showAddItem]);
 
-  // Refresh data when user returns to tab or when another tab/action signals an update (e.g. order created).
+  // Auto-update: refresh when tab visible, storage event, or polling (every 15s when visible).
   useEffect(() => {
     if (!token) return;
+    const refresh = () => setAutoTick((t) => t + 1);
     const onVisible = () => {
-      if (document.visibilityState === 'visible') setAutoTick((t) => t + 1);
+      if (document.visibilityState === 'visible') refresh();
     };
     const onStorage = (e: StorageEvent) => {
-      if (e.key === 'hms-data-updated') setAutoTick((t) => t + 1);
+      if (e.key === 'hms-data-updated') refresh();
     };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('storage', onStorage);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') refresh();
+    }, 15000);
     return () => {
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('storage', onStorage);
+      clearInterval(interval);
     };
   }, [token]);
 
@@ -504,8 +509,8 @@ export default function BarPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
+      <div className="flex flex-col gap-6">
+        <div className="w-full">
           <div className="flex items-center justify-between mb-2">
             <h2 className="font-medium">{t('bar.items')}</h2>
             {isAdmin ? (
@@ -533,7 +538,7 @@ export default function BarPage() {
 
           <div className="bg-white border rounded overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[520px]">
+              <table className="w-full text-sm min-w-[280px]">
               <thead className="bg-slate-50">
                 <tr>
                   <th className="text-left p-3">{t('bar.itemName')}</th>
@@ -577,10 +582,12 @@ export default function BarPage() {
             {filteredItems.length === 0 && <div className="p-3 text-sm text-slate-500">{t('common.noItems')}</div>}
           </div>
         </div>
-        <div>
+
+        <div className="w-full">
           <h2 className="font-medium mb-2">{t('bar.order')}</h2>
           <div className="bg-white border rounded overflow-hidden">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[320px]">
               <thead className="bg-slate-50 border-b">
                 <tr>
                   <th className="text-left p-3 font-medium">{t('bar.itemName')}</th>
@@ -631,6 +638,7 @@ export default function BarPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
           {cart.length > 0 && (
             <>
@@ -697,7 +705,8 @@ export default function BarPage() {
           </div>
 
           <div className="bg-white border rounded overflow-hidden">
-            <table className="w-full text-sm">
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full text-sm min-w-[480px]">
               <thead className="bg-slate-50">
                 <tr>
                   <th className="text-left p-3">{t('common.date')}</th>
@@ -742,6 +751,29 @@ export default function BarPage() {
                 )}
               </tbody>
             </table>
+            </div>
+            <div className="sm:hidden divide-y divide-slate-200">
+              {adminOrdersLoading ? (
+                <div className="p-4 text-slate-500 text-center text-sm">{t('common.loading')}</div>
+              ) : adminOrdersFiltered.length === 0 ? (
+                <div className="p-4 text-slate-500 text-center text-sm">{t('common.noItems')}</div>
+              ) : (
+                adminOrdersFiltered.map((o) => (
+                  <div key={o.id} className="p-4 space-y-1">
+                    <div className="flex justify-between items-start">
+                      <span className="font-medium text-sm">{o.orderNumber}</span>
+                      <span className="text-sm text-slate-600">{formatTzs(parseFloat(o.totalAmount as any))}</span>
+                    </div>
+                    <div className="text-xs text-slate-500">{new Date(o.createdAt).toLocaleString()}</div>
+                    <div className="text-xs text-slate-600">{o.createdByWorkerName || '-'}</div>
+                    <div className="text-xs text-slate-700">
+                      {(o.items || []).map((it) => `${it.barItem?.name ?? ''} x${it.quantity}`).filter(Boolean).join(', ') || '-'}
+                    </div>
+                    <div className="text-xs text-slate-500">{o.paymentMethod}</div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -981,8 +1013,8 @@ function MyOrders({ token, autoTick }: { token: string; autoTick: number }) {
         </div>
       </div>
       <div className="bg-white border rounded overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[680px]">
+        <div className="hidden sm:block overflow-x-auto">
+          <table className="w-full text-sm min-w-[400px]">
           <thead className="bg-slate-50">
             <tr>
               <th className="text-left p-3">{t('common.date')}</th>
@@ -1021,6 +1053,26 @@ function MyOrders({ token, autoTick }: { token: string; autoTick: number }) {
             )}
           </tbody>
           </table>
+        </div>
+        <div className="sm:hidden divide-y divide-slate-200">
+          {loading ? (
+            <div className="p-4 text-slate-500 text-center text-sm">{t('common.loading')}</div>
+          ) : displayed.length === 0 ? (
+            <div className="p-4 text-slate-500 text-center text-sm">{t('common.noItems')}</div>
+          ) : (
+            displayed.map((o) => (
+              <div key={o.id} className="p-4 space-y-1">
+                <div className="flex justify-between items-start">
+                  <span className="font-medium text-sm">{o.orderNumber}</span>
+                  <span className="text-xs text-slate-500">{o.paymentMethod}</span>
+                </div>
+                <div className="text-xs text-slate-500">{new Date(o.createdAt).toLocaleString()}</div>
+                <div className="text-xs text-slate-700">
+                  {(o.items || []).map((it) => `${it.name} x${it.quantity}`).filter(Boolean).join(', ') || '-'}
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>
