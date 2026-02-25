@@ -2,9 +2,9 @@
 
 /**
  * Roles section - MANAGER only.
- * Create role (name, email, password). Table: Role, Email, Status, Actions.
+ * Create role (role + password). Email auto-generated. Table: Role, Email, Status, Actions (⋮).
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { notifyError, notifySuccess } from '@/store/notifications';
 import { useSearch } from '@/store/search';
@@ -27,9 +27,10 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [role, setRole] = useState<string>('FRONT_OFFICE');
-  const [email, setEmail] = useState('');
   const [creating, setCreating] = useState(false);
   const [password, setPassword] = useState('');
+  const [menuOpen, setMenuOpen] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [resetPwdFor, setResetPwdFor] = useState<UserRow | null>(null);
   const [resetPwdValue, setResetPwdValue] = useState('');
   const [resetting, setResetting] = useState(false);
@@ -70,14 +71,21 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [token]);
 
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(null);
+      }
+    };
+    document.addEventListener('click', onClick);
+    return () => document.removeEventListener('click', onClick);
+  }, [menuOpen]);
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!password.trim() || password.trim().length < 6) {
       notifyError(t('settings.passwordMin'));
-      return;
-    }
-    if (!email.trim()) {
-      notifyError('Email is required');
       return;
     }
     setCreating(true);
@@ -85,16 +93,10 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
       await api('/users', {
         method: 'POST',
         token,
-        body: JSON.stringify({
-          name: roleLabel(role),
-          role,
-          email: email.trim().toLowerCase(),
-          password: password.trim(),
-        }),
+        body: JSON.stringify({ role, password: password.trim() }),
       });
       notifySuccess(t('settings.roleCreated'));
       setRole('FRONT_OFFICE');
-      setEmail('');
       setPassword('');
       setShowCreate(false);
       load();
@@ -121,6 +123,7 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
       notifySuccess(t('settings.passwordResetSuccess'));
       setResetPwdFor(null);
       setResetPwdValue('');
+      setMenuOpen(null);
     } catch (e) {
       notifyError((e as Error).message);
     } finally {
@@ -144,6 +147,7 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
       notifySuccess(t('settings.emailUpdated'));
       setEditEmailFor(null);
       setEditEmailValue('');
+      setMenuOpen(null);
       load();
     } catch (e) {
       notifyError((e as Error).message);
@@ -153,6 +157,7 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
   }
 
   async function handleToggleDisabled(u: UserRow) {
+    setMenuOpen(null);
     try {
       await api(`/users/${u.id}/disable`, {
         method: 'PATCH',
@@ -160,6 +165,7 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
         body: JSON.stringify({ disabled: !u.isDisabled }),
       });
       notifySuccess(u.isDisabled ? t('settings.roleActivated') : t('settings.roleDeactivated'));
+      setMenuOpen(null);
       load();
     } catch (e) {
       notifyError((e as Error).message);
@@ -167,88 +173,118 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
   }
 
   return (
-    <div className="bg-white border rounded p-4 max-w-4xl">
-      <h2 className="font-medium mb-2">{t('settings.roles')}</h2>
-      <div className="mb-3">
+    <div className="bg-white border border-slate-200 rounded-lg p-5 max-w-4xl shadow-sm">
+      <h2 className="font-semibold text-slate-800 mb-4">{t('settings.roles')}</h2>
+      <div className="mb-4">
         <button
           type="button"
           onClick={() => setShowCreate(true)}
           disabled={availableRoles.length === 0}
-          className="px-4 py-2 bg-teal-600 text-white rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {t('settings.createRole')}
         </button>
       </div>
 
       {loading ? (
-        <div className="animate-pulse h-24 bg-slate-100 rounded" />
+        <div className="animate-pulse h-24 bg-slate-100 rounded-lg" />
       ) : (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto rounded-lg border border-slate-200">
           <table className="w-full text-sm border-collapse">
             <thead>
-              <tr className="border-b">
-                <th className="text-left p-2">{t('settings.role')}</th>
-                <th className="text-left p-2">Email</th>
-                <th className="text-left p-2">{t('settings.status')}</th>
-                <th className="text-left p-2">{t('settings.actions')}</th>
+              <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="text-left p-3 font-medium text-slate-700">{t('settings.role')}</th>
+                <th className="text-left p-3 font-medium text-slate-700">Email</th>
+                <th className="text-left p-3 font-medium text-slate-700">{t('settings.status')}</th>
+                <th className="text-right p-3 font-medium text-slate-700 w-14"></th>
               </tr>
             </thead>
             <tbody>
               {displayedUsers.map((u) => (
-                <tr key={u.id} className="border-b border-slate-100">
-                  <td className="p-2 uppercase">{roleLabel(u.role)}</td>
-                  <td className="p-2 text-slate-600 font-mono text-xs">{u.email}</td>
-                  <td className="p-2">{u.isDisabled ? t('settings.disabled') : t('settings.active')}</td>
-                  <td className="p-2">
-                    <div className="flex flex-wrap gap-1">
+                <tr key={u.id} className="border-b border-slate-100 hover:bg-slate-50/50">
+                  <td className="p-3 font-medium text-slate-800 uppercase tracking-wide">{roleLabel(u.role)}</td>
+                  <td className="p-3 text-slate-600 font-mono text-xs">{u.email}</td>
+                  <td className="p-3">
+                    <span
+                      className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
+                        u.isDisabled ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                      }`}
+                    >
+                      {u.isDisabled ? t('settings.disabled') : t('settings.active')}
+                    </span>
+                  </td>
+                  <td className="p-3 text-right" ref={menuOpen === u.id ? menuRef : undefined}>
+                    <div className="relative inline-block">
                       <button
                         type="button"
-                        onClick={() => handleToggleDisabled(u)}
-                        className="px-2 py-1 text-xs rounded border border-slate-300 hover:bg-slate-50"
+                        onClick={() => setMenuOpen(menuOpen === u.id ? null : u.id)}
+                        className="p-1.5 rounded-md text-slate-500 hover:bg-slate-200 hover:text-slate-700 transition-colors"
+                        aria-label="Actions"
                       >
-                        {u.isDisabled ? t('settings.enableUser') : t('settings.disableUser')}
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                          <circle cx="12" cy="5" r="1.5" />
+                          <circle cx="12" cy="12" r="1.5" />
+                          <circle cx="12" cy="19" r="1.5" />
+                        </svg>
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setResetPwdFor(u);
-                          setResetPwdValue('');
-                        }}
-                        className="px-2 py-1 text-xs rounded border border-slate-300 hover:bg-slate-50"
-                      >
-                        {t('settings.resetPassword')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditEmailFor(u);
-                          setEditEmailValue(u.email);
-                        }}
-                        className="px-2 py-1 text-xs rounded border border-slate-300 hover:bg-slate-50"
-                      >
-                        {t('settings.editEmail')}
-                      </button>
+                      {menuOpen === u.id && (
+                        <div className="absolute right-0 top-full mt-1 py-1 w-44 bg-white rounded-lg shadow-lg border border-slate-200 z-10">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleToggleDisabled(u);
+                            }}
+                            className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 first:rounded-t-lg"
+                          >
+                            {u.isDisabled ? t('settings.enableUser') : t('settings.disableUser')}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setResetPwdFor(u);
+                              setResetPwdValue('');
+                              setMenuOpen(null);
+                            }}
+                            className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                          >
+                            {t('settings.resetPassword')}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditEmailFor(u);
+                              setEditEmailValue(u.email);
+                              setMenuOpen(null);
+                            }}
+                            className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 last:rounded-b-lg"
+                          >
+                            {t('settings.editEmail')}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {displayedUsers.length === 0 && <p className="text-slate-500 py-4">{t('settings.noRoles')}</p>}
+          {displayedUsers.length === 0 && (
+            <p className="text-slate-500 py-8 text-center text-sm">{t('settings.noRoles')}</p>
+          )}
         </div>
       )}
 
       {showCreate && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white p-4 rounded max-w-sm w-full mx-4">
-            <h3 className="font-medium mb-3">{t('settings.createRole')}</h3>
-            <form onSubmit={handleCreate} className="space-y-3">
+          <div className="bg-white p-5 rounded-xl max-w-sm w-full mx-4 shadow-xl">
+            <h3 className="font-semibold text-slate-800 mb-4">{t('settings.createRole')}</h3>
+            <form onSubmit={handleCreate} className="space-y-4">
               <div>
-                <label className="block text-sm mb-1">{t('settings.role')}</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">{t('settings.role')}</label>
                 <select
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
-                  className="w-full px-3 py-2 border rounded"
+                  className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
                 >
                   {availableRoles.map((r) => (
                     <option key={r} value={r}>
@@ -258,32 +294,30 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
                 </select>
               </div>
               <div>
-                <label className="block text-sm mb-1">Email</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-3 py-2 border rounded"
-                  placeholder="role@example.com"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm mb-1">{t('settings.password')}</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">{t('settings.password')}</label>
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-3 py-2 border rounded"
+                  className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
                   placeholder={t('settings.passwordMin')}
                   required
+                  minLength={6}
                 />
               </div>
-              <div className="flex gap-2">
-                <button type="submit" disabled={creating} className="flex-1 py-2 bg-teal-600 text-white rounded">
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="submit"
+                  disabled={creating}
+                  className="flex-1 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-medium disabled:opacity-50"
+                >
                   {creating ? '...' : t('common.create')}
                 </button>
-                <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 bg-slate-200 rounded">
+                <button
+                  type="button"
+                  onClick={() => setShowCreate(false)}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium"
+                >
                   {t('common.cancel')}
                 </button>
               </div>
@@ -294,22 +328,29 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
 
       {resetPwdFor && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white p-4 rounded max-w-sm w-full mx-4">
-            <h3 className="font-medium mb-3">{t('settings.resetPassword')} – {roleLabel(resetPwdFor.role)}</h3>
-            <form onSubmit={handleResetPassword} className="space-y-3">
+          <div className="bg-white p-5 rounded-xl max-w-sm w-full mx-4 shadow-xl">
+            <h3 className="font-semibold text-slate-800 mb-4">
+              {t('settings.resetPassword')} – {roleLabel(resetPwdFor.role)}
+            </h3>
+            <form onSubmit={handleResetPassword} className="space-y-4">
               <div>
-                <label className="block text-sm mb-1">{t('settings.password')}</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">{t('settings.password')}</label>
                 <input
                   type="password"
                   value={resetPwdValue}
                   onChange={(e) => setResetPwdValue(e.target.value)}
-                  className="w-full px-3 py-2 border rounded"
+                  className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
                   placeholder={t('settings.passwordMin')}
                   required
+                  minLength={6}
                 />
               </div>
               <div className="flex gap-2">
-                <button type="submit" disabled={resetting} className="flex-1 py-2 bg-teal-600 text-white rounded">
+                <button
+                  type="submit"
+                  disabled={resetting}
+                  className="flex-1 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-medium disabled:opacity-50"
+                >
                   {resetting ? '...' : t('settings.resetPassword')}
                 </button>
                 <button
@@ -318,7 +359,7 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
                     setResetPwdFor(null);
                     setResetPwdValue('');
                   }}
-                  className="px-4 py-2 bg-slate-200 rounded"
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium"
                 >
                   {t('common.cancel')}
                 </button>
@@ -330,22 +371,28 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
 
       {editEmailFor && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white p-4 rounded max-w-sm w-full mx-4">
-            <h3 className="font-medium mb-3">{t('settings.editEmail')} – {roleLabel(editEmailFor.role)}</h3>
-            <form onSubmit={handleEditEmail} className="space-y-3">
+          <div className="bg-white p-5 rounded-xl max-w-sm w-full mx-4 shadow-xl">
+            <h3 className="font-semibold text-slate-800 mb-4">
+              {t('settings.editEmail')} – {roleLabel(editEmailFor.role)}
+            </h3>
+            <form onSubmit={handleEditEmail} className="space-y-4">
               <div>
-                <label className="block text-sm mb-1">Email</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
                 <input
                   type="email"
                   value={editEmailValue}
                   onChange={(e) => setEditEmailValue(e.target.value)}
-                  className="w-full px-3 py-2 border rounded"
-                  placeholder="role@example.com"
+                  className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                  placeholder="role@hms.local"
                   required
                 />
               </div>
               <div className="flex gap-2">
-                <button type="submit" disabled={savingEmail} className="flex-1 py-2 bg-teal-600 text-white rounded">
+                <button
+                  type="submit"
+                  disabled={savingEmail}
+                  className="flex-1 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-medium disabled:opacity-50"
+                >
                   {savingEmail ? '...' : t('common.save')}
                 </button>
                 <button
@@ -354,7 +401,7 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
                     setEditEmailFor(null);
                     setEditEmailValue('');
                   }}
-                  className="px-4 py-2 bg-slate-200 rounded"
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium"
                 >
                   {t('common.cancel')}
                 </button>

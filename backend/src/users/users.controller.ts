@@ -18,7 +18,7 @@ export class UsersController {
   @Post()
   async create(
     @CurrentUser() user: any,
-    @Body() dto: { name: string; role: string; email: string; password: string },
+    @Body() dto: { role: string; password: string },
   ) {
     return this.users.createRole(user.businessId, user.sub, user.role || 'MANAGER', dto);
   }

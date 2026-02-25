@@ -4,6 +4,25 @@ import * as bcrypt from 'bcryptjs';
 
 const ROLES = ['MANAGER', 'FRONT_OFFICE', 'FINANCE', 'HOUSEKEEPING', 'BAR', 'RESTAURANT', 'KITCHEN'] as const;
 
+/** Role to email prefix mapping */
+const ROLE_EMAIL_PREFIX: Record<string, string> = {
+  RESTAURANT: 'res',
+  BAR: 'bar',
+  FRONT_OFFICE: 'fo',
+  MANAGER: 'manager',
+  FINANCE: 'finance',
+  HOUSEKEEPING: 'hk',
+  KITCHEN: 'kit',
+};
+
+/** Generate role email: {prefix}.{businessSlug}@hms.local */
+export function generateRoleEmail(role: string, businessSlug: string): string {
+  const normalized = (role || '').trim().toUpperCase().replace(/\s+/g, '_');
+  const prefix = ROLE_EMAIL_PREFIX[normalized] ?? normalized.toLowerCase().replace(/_/g, '').slice(0, 4);
+  const slug = (businessSlug || 'biz').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return `${prefix}.${slug}@hms.local`;
+}
+
 /** RBAC permissions by role (module access) */
 export const ROLE_PERMISSIONS: Record<string, string[]> = {
   MANAGER: ['*'],
@@ -79,7 +98,7 @@ export class UsersService {
     businessId: string,
     createdBy: string,
     createdByRole: string,
-    data: { name: string; role: string; email: string; password: string },
+    data: { role: string; password: string },
   ) {
     if (!ROLES.includes(data.role as any)) throw new ForbiddenException('Invalid role');
     if (createdByRole !== 'MANAGER') throw new ForbiddenException('Only MANAGER can create roles');
@@ -95,12 +114,11 @@ export class UsersService {
       throw new ForbiddenException('Role already exists for this business');
     }
 
-    const email = (data.email || '').toLowerCase().trim();
-    if (!email) throw new ForbiddenException('Email is required');
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ForbiddenException('Invalid email format');
+    const businessSlug = (business.name || 'biz').replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'biz';
+    const email = generateRoleEmail(data.role, businessSlug);
 
     const existingUser = await this.prisma.user.findUnique({ where: { email } });
-    if (existingUser) throw new ConflictException('Email already in use');
+    if (existingUser) throw new ConflictException('Role already exists for this business');
 
     const password = this.validatePassword(data.password);
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -110,7 +128,7 @@ export class UsersService {
         data: {
           email,
           password: hashedPassword,
-          name: data.name || data.role,
+          name: data.role,
           language: 'en',
         },
       });
