@@ -26,6 +26,9 @@ model User {
 
   // User can belong to multiple businesses
   businessUsers BusinessUser[]
+  tasksCreated   Task[]     @relation("TaskCreatedBy")
+  tasksCompleted Task[]     @relation("TaskCompletedByUser")
+  taskReads      TaskRead[]
 
   @@map("users")
 }
@@ -60,6 +63,9 @@ model StaffWorker {
   updatedAt  DateTime @updatedAt
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  tasksAssigned  Task[]     @relation("TaskTargetWorker")
+  tasksCompleted Task[]     @relation("TaskCompletedByWorker")
+  taskReads      TaskRead[]
 
   @@map("staff_workers")
 }
@@ -102,6 +108,8 @@ model Business {
   payrollRecords    PayrollRecord[]
   settings          BusinessSetting[]
   roleMessages      RoleMessage[]
+  tasks             Task[]
+  taskReads         TaskRead[]
 
   @@map("businesses")
 }
@@ -579,4 +587,69 @@ model RoleMessage {
   @@index([businessId, createdAt])
   @@index([businessId, recipientRole])
   @@map("role_messages")
+}
+
+// ==================== TASKS (OPERATIONS) ====================
+
+model Task {
+  id             String   @id @default(cuid())
+  businessId     String
+  branchId       String   @default("main")
+  type           String   // ANNOUNCEMENT | ASSIGNED
+  title          String
+  description    String?  @db.Text
+  priority       String?  // LOW | MEDIUM | HIGH (assigned tasks)
+  dueDate        DateTime?
+
+  // Recipients
+  isAllStaff     Boolean  @default(false)
+  targetRole     String?
+  targetWorkerId String?
+
+  // Audit
+  createdByUserId String
+  createdByRole   String   @default("MANAGER")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Completion (assigned tasks)
+  completedAt       DateTime?
+  completedByUserId String?
+  completedByWorkerId String?
+  completionNote    String? @db.Text
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  targetWorker StaffWorker? @relation("TaskTargetWorker", fields: [targetWorkerId], references: [id], onDelete: SetNull)
+  createdByUser User @relation("TaskCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  completedByUser User? @relation("TaskCompletedByUser", fields: [completedByUserId], references: [id], onDelete: SetNull)
+  completedByWorker StaffWorker? @relation("TaskCompletedByWorker", fields: [completedByWorkerId], references: [id], onDelete: SetNull)
+
+  reads TaskRead[]
+
+  @@index([businessId, createdAt])
+  @@index([businessId, type, createdAt])
+  @@index([businessId, targetRole])
+  @@index([businessId, targetWorkerId])
+  @@index([businessId, dueDate])
+  @@index([businessId, completedAt])
+  @@map("tasks")
+}
+
+model TaskRead {
+  id         String   @id @default(cuid())
+  businessId String
+  taskId     String
+  workerId   String
+  userId     String
+  readAt     DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  task     Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  worker   StaffWorker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, workerId])
+  @@index([businessId, readAt])
+  @@index([businessId, workerId])
+  @@map("task_reads")
 }

@@ -18,9 +18,9 @@ import { ReportsModule } from './reports/reports.module';
 import { OverviewModule } from './overview/overview.module';
 import { HealthModule } from './health/health.module';
 import { SuperAdminModule } from './super-admin/super-admin.module';
-import { MessagesModule } from './messages/messages.module';
 import { AccountingModule } from './accounting/accounting.module';
 import { OtherRevenueModule } from './other-revenue/other-revenue.module';
+import { TasksModule } from './tasks/tasks.module';
 
 @Module({
   imports: [
@@ -43,9 +43,9 @@ import { OtherRevenueModule } from './other-revenue/other-revenue.module';
     OverviewModule,
     HealthModule,
     SuperAdminModule,
-    MessagesModule,
     AccountingModule,
     OtherRevenueModule,
+    TasksModule,
   ],
 })
 export class AppModule {}

@@ -17,7 +17,7 @@ export type DashboardModule =
   | 'inventory'
   | 'reports'
   | 'settings'
-  | 'messages';
+  | 'tasks';
 
 export const BUSINESS_MODULE_ACCESS: Record<BusinessType, readonly DashboardModule[]> = {
   HOTEL: [
@@ -31,11 +31,11 @@ export const BUSINESS_MODULE_ACCESS: Record<BusinessType, readonly DashboardModu
     'inventory',
     'reports',
     'settings',
-    'messages',
+    'tasks',
   ],
-  LODGE: ['overview', 'front-office', 'finance', 'workers', 'reports', 'settings', 'messages'],
-  BAR: ['overview', 'bar', 'finance', 'inventory', 'reports', 'settings', 'messages'],
-  RESTAURANT: ['overview', 'restaurant', 'finance', 'inventory', 'reports', 'settings', 'messages'],
+  LODGE: ['overview', 'front-office', 'finance', 'workers', 'reports', 'settings', 'tasks'],
+  BAR: ['overview', 'bar', 'finance', 'inventory', 'reports', 'settings', 'tasks'],
+  RESTAURANT: ['overview', 'restaurant', 'finance', 'inventory', 'reports', 'settings', 'tasks'],
 };
 
 export function isModuleAllowedForBusinessType(

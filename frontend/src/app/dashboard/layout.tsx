@@ -71,7 +71,7 @@ const SIDEBAR_LINKS: { href: string; labelKey: string; roles: string[]; module: 
   { href: '/dashboard/workers', labelKey: 'nav.workers', roles: ['MANAGER', 'ADMIN', 'OWNER'], module: 'workers' },
   { href: '/dashboard/reports', labelKey: 'nav.reports', roles: ['MANAGER', 'ADMIN', 'OWNER'], module: 'reports' },
   { href: '/dashboard/settings', labelKey: 'nav.settings', roles: ['MANAGER', 'ADMIN', 'OWNER'], module: 'settings' },
-  { href: '/dashboard/messages', labelKey: 'nav.messages', roles: ['MANAGER', 'ADMIN', 'OWNER', 'FRONT_OFFICE', 'BAR', 'RESTAURANT', 'KITCHEN', 'HOUSEKEEPING', 'FINANCE'], module: 'messages' },
+  { href: '/dashboard/tasks', labelKey: 'nav.tasks', roles: ['MANAGER', 'ADMIN', 'OWNER', 'FRONT_OFFICE', 'BAR', 'RESTAURANT', 'KITCHEN', 'HOUSEKEEPING', 'FINANCE'], module: 'tasks' },
 ];
 
 export default function DashboardLayout({
@@ -91,6 +91,7 @@ export default function DashboardLayout({
   const [subscription, setSubscription] = useState<SubscriptionResponse>(null);
   const [subscriptionLoading, setSubscriptionLoading] = useState(true);
   const [accessBlocked, setAccessBlocked] = useState(false);
+  const [tasksUnread, setTasksUnread] = useState(0);
 
   async function fetchMe(opts?: { silent?: boolean }) {
     if (!token) {
@@ -127,6 +128,24 @@ export default function DashboardLayout({
       .finally(() => setSubscriptionLoading(false));
   }
 
+  async function fetchTasksUnread(opts?: { silent?: boolean }) {
+    if (!token || !user) return;
+    if (isManagerLevel(user.role)) {
+      setTasksUnread(0);
+      return;
+    }
+    if (!user.activeWorkerId) {
+      setTasksUnread(0);
+      return;
+    }
+    try {
+      const res = await api<{ unread: number }>('/tasks/unread-count', { token });
+      setTasksUnread(Number.isFinite(res.unread) ? res.unread : 0);
+    } catch {
+      if (!opts?.silent) setTasksUnread(0);
+    }
+  }
+
   function handleBlockRetry() {
     setAccessBlocked(false);
     fetchSubscription();
@@ -157,12 +176,27 @@ export default function DashboardLayout({
   useEffect(() => {
     if (!token) return;
     const onVisible = () => {
-      if (document.visibilityState === 'visible') fetchMe({ silent: true });
+      if (document.visibilityState === 'visible') {
+        fetchMe({ silent: true });
+        fetchTasksUnread({ silent: true });
+      }
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  useEffect(() => {
+    fetchTasksUnread({ silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, user?.role, user?.activeWorkerId, pathname]);
+
+  useEffect(() => {
+    const onTasksUpdated = () => fetchTasksUnread({ silent: true });
+    window.addEventListener('tasks-updated', onTasksUpdated);
+    return () => window.removeEventListener('tasks-updated', onTasksUpdated);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, user?.role, user?.activeWorkerId]);
 
   const hasSyncedLocaleFromMe = useRef(false);
   useEffect(() => {
@@ -296,7 +330,14 @@ export default function DashboardLayout({
                       : 'text-slate-300 hover:bg-slate-700'
                   }`}
                 >
-                  {t(link.labelKey)}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate">{t(link.labelKey)}</span>
+                    {link.module === 'tasks' && !isAdmin && tasksUnread > 0 && (
+                      <span className="min-w-[1.25rem] h-5 px-1.5 rounded-full bg-rose-500 text-white text-[11px] font-semibold flex items-center justify-center">
+                        {tasksUnread > 99 ? '99+' : tasksUnread}
+                      </span>
+                    )}
+                  </div>
                 </Link>
               ))}
             </nav>
