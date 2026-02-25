@@ -1,4 +1,5 @@
 import { BadRequestException, forwardRef, Inject, Injectable } from '@nestjs/common';
+import { addHmsReportHeader, applyHeaderRowStyle, autoSizeColumns, BORDER_THIN, CURRENCY_FMT } from '../common/excel-utils';
 import { applyHmsPageFooter, drawHmsReportHeader } from '../common/pdf-utils';
 import { PrismaService } from '../prisma/prisma.service';
 import { FinanceService } from '../finance/finance.service';
@@ -179,29 +180,34 @@ export class ReportsService {
         const ExcelJS = require('exceljs');
         const wb = new ExcelJS.Workbook();
         const exportDate = formatIsoDate(new Date());
-        const generatedAt = new Date();
-        const branchLabel = normalizeBranchIdExport(branchId);
         const rangeFromLabel = from ? formatIsoDate(from) : 'ALL';
         const rangeToLabel = to ? formatIsoDate(to) : 'ALL';
-        const generatedOnLabel = `${formatIsoDate(generatedAt)} ${String(generatedAt.getHours()).padStart(2, '0')}:${String(generatedAt.getMinutes()).padStart(2, '0')}`;
+        const periodLabel = `${rangeFromLabel} to ${rangeToLabel}`;
 
         // =========================
-        // Sheet 1: Sales_Data (RAW)
+        // Sheet 1: Sales_Data
         // =========================
         const wsData = wb.addWorksheet('Sales_Data');
-        wsData.views = [{ state: 'frozen', ySplit: 1 }];
+        const headerEndRow = addHmsReportHeader(wsData, {
+          title: 'Sales Report',
+          businessName,
+          period: periodLabel,
+        });
+        wsData.getRow(headerEndRow).height = 8;
 
         const dataHeaders = [
           'Date',
-          'Transaction_Type',
+          'Transaction Type',
           'Sector',
-          'Customer_Name',
-          'Net_Amount',
-          'VAT_Amount',
-          'Gross_Amount',
-          'Payment_Method',
+          'Customer Name',
+          'Net Amount',
+          'VAT Amount',
+          'Gross Amount',
+          'Payment Method',
           'Reference',
         ];
+        const tableStartRow = headerEndRow + 1;
+        wsData.views = [{ state: 'frozen', ySplit: tableStartRow - 1 }];
 
         const ordered = [...txns].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
         const dataRows: any[][] = ordered.map((t: any) => {
@@ -234,10 +240,10 @@ export class ReportsService {
           ];
         });
 
-        // Excel table: raw data only, no totals row, no blank rows, filters enabled
+        const tableRef = `A${tableStartRow}`;
         wsData.addTable({
           name: 'SalesData',
-          ref: 'A1',
+          ref: tableRef,
           headerRow: true,
           totalsRow: false,
           style: { theme: 'TableStyleLight9', showRowStripes: true },
@@ -245,59 +251,28 @@ export class ReportsService {
           rows: dataRows,
         });
 
-        // Header styling (bold, centered, light grey)
-        const hdr = wsData.getRow(1);
-        hdr.height = 18;
-        hdr.eachCell((cell: any) => {
-          cell.font = { bold: true };
-          cell.alignment = { vertical: 'middle', horizontal: 'center' };
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
-        });
+        const hdrRow = wsData.getRow(tableStartRow);
+        applyHeaderRowStyle(hdrRow, dataHeaders.length);
 
-        // Formatting rules
-        // Monetary columns: Accounting format, 2 decimals
         for (const colIdx of [5, 6, 7]) {
           const col = wsData.getColumn(colIdx);
-          col.numFmt = '#,##0.00';
+          col.numFmt = CURRENCY_FMT;
           col.alignment = { horizontal: 'right', vertical: 'middle' };
         }
-        // Text columns left aligned
         for (const colIdx of [1, 2, 3, 4, 8, 9]) {
           wsData.getColumn(colIdx).alignment = { horizontal: 'left', vertical: 'middle' };
         }
 
-        // Thin borders on all table cells (header + data)
-        const borderThin = {
-          top: { style: 'thin', color: { argb: 'FFE5E7EB' } },
-          left: { style: 'thin', color: { argb: 'FFE5E7EB' } },
-          bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } },
-          right: { style: 'thin', color: { argb: 'FFE5E7EB' } },
-        };
-        const lastRow = dataRows.length + 1;
+        const lastRow = tableStartRow + dataRows.length;
         const lastCol = dataHeaders.length;
-        for (let r = 1; r <= lastRow; r++) {
+        for (let r = tableStartRow; r <= lastRow; r++) {
           const row = wsData.getRow(r);
           for (let c = 1; c <= lastCol; c++) {
-            const cell = row.getCell(c);
-            cell.border = borderThin;
+            row.getCell(c).border = BORDER_THIN;
           }
         }
 
-        // Auto-fit columns
-        wsData.columns.forEach((col: any) => {
-          const header = String(col.values?.[1] ?? '');
-          let max = header.length;
-          col.eachCell({ includeEmpty: false }, (cell: any) => {
-            const v = cell.value;
-            let len = 0;
-            if (v == null) len = 0;
-            else if (typeof v === 'string') len = v.length;
-            else if (typeof v === 'number') len = String(v.toFixed(2)).length;
-            else len = String(v).length;
-            if (len > max) max = len;
-          });
-          col.width = Math.min(42, Math.max(10, max + 2));
-        });
+        autoSizeColumns(wsData);
 
         // Page setup: fit to 1 page width, centered, correct print area (no extra blank pages)
         wsData.pageSetup = {
@@ -310,103 +285,80 @@ export class ReportsService {
         };
 
         // =========================
-        // Sheet 2: Sales_Summary
+        // Sheet 2: Summary
         // =========================
-        const wsSum = wb.addWorksheet('Sales_Summary');
+        const wsSum = wb.addWorksheet('Summary');
+        addHmsReportHeader(wsSum, { title: 'Sales Report', businessName, period: periodLabel });
+        wsSum.getRow(5).height = 8;
 
-        // Layout widths (clean ERP look)
-        wsSum.getColumn(1).width = 4;  // A
-        wsSum.getColumn(2).width = 26; // B labels
-        wsSum.getColumn(3).width = 26; // C values
-        wsSum.getColumn(4).width = 4;  // D
+        wsSum.getColumn(1).width = 4;
+        wsSum.getColumn(2).width = 28;
+        wsSum.getColumn(3).width = 22;
+        wsSum.getColumn(4).width = 4;
 
-        // Title (centered)
-        wsSum.mergeCells('B2:C2');
-        const titleCell = wsSum.getCell('B2');
-        titleCell.value = 'SALES SUMMARY REPORT';
-        titleCell.font = { bold: true, size: 16 };
-        titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        const fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } };
 
-        // Header info
-        wsSum.getCell('B4').value = 'Business Name:';
-        wsSum.getCell('C4').value = businessName;
-        wsSum.getCell('B5').value = 'Branch:';
-        wsSum.getCell('C5').value = branchLabel;
-        wsSum.getCell('B6').value = 'Date Range:';
-        wsSum.getCell('C6').value = `${rangeFromLabel} to ${rangeToLabel}`;
-        wsSum.getCell('B7').value = 'Generated On:';
-        wsSum.getCell('C7').value = generatedOnLabel;
+        wsSum.getCell('B7').value = 'Total Net Revenue';
+        wsSum.getCell('C7').value = { formula: 'SUM(Sales_Data!E:E)' };
+        wsSum.getCell('B8').value = 'Total VAT';
+        wsSum.getCell('C8').value = { formula: 'SUM(Sales_Data!F:F)' };
+        wsSum.getCell('B9').value = 'Total Gross Revenue';
+        wsSum.getCell('C9').value = { formula: 'SUM(Sales_Data!G:G)' };
 
-        ['B4', 'B5', 'B6', 'B7'].forEach((addr) => {
-          wsSum.getCell(addr).font = { bold: true };
-          wsSum.getCell(addr).alignment = { horizontal: 'left', vertical: 'middle' };
-        });
-        ['C4', 'C5', 'C6', 'C7'].forEach((addr) => {
-          wsSum.getCell(addr).alignment = { horizontal: 'left', vertical: 'middle' };
-        });
+        wsSum.getRow(10).height = 8;
+        wsSum.getCell('B11').value = 'Revenue by Sector';
+        wsSum.getCell('B11').font = { bold: true };
+        wsSum.getCell('B12').value = 'Rooms';
+        wsSum.getCell('C12').value = { formula: 'SUMIF(Sales_Data!C:C,"ROOMS",Sales_Data!G:G)' };
+        wsSum.getCell('B13').value = 'Bar';
+        wsSum.getCell('C13').value = { formula: 'SUMIF(Sales_Data!C:C,"BAR",Sales_Data!G:G)' };
+        wsSum.getCell('B14').value = 'Restaurant';
+        wsSum.getCell('C14').value = { formula: 'SUMIF(Sales_Data!C:C,"RESTAURANT",Sales_Data!G:G)' };
+        wsSum.getCell('B15').value = 'Other';
+        wsSum.getCell('C15').value = { formula: 'SUMIF(Sales_Data!C:C,"OTHER",Sales_Data!G:G)' };
 
-        // Spacing
-        wsSum.getRow(8).height = 8;
+        wsSum.getRow(16).height = 8;
+        wsSum.getCell('B17').value = 'Revenue by Payment Method';
+        wsSum.getCell('B17').font = { bold: true };
+        wsSum.getCell('B18').value = 'Cash';
+        wsSum.getCell('C18').value = { formula: 'SUMIF(Sales_Data!H:H,"CASH",Sales_Data!G:G)' };
+        wsSum.getCell('B19').value = 'Bank';
+        wsSum.getCell('C19').value = { formula: 'SUMIF(Sales_Data!H:H,"BANK",Sales_Data!G:G)' };
+        wsSum.getCell('B20').value = 'Mobile Money';
+        wsSum.getCell('C20').value = { formula: 'SUMIF(Sales_Data!H:H,"MOBILE_MONEY",Sales_Data!G:G)' };
+        wsSum.getCell('B21').value = 'Card';
+        wsSum.getCell('C21').value = { formula: 'SUMIF(Sales_Data!H:H,"CARD",Sales_Data!G:G)' };
 
-        // Totals box
-        wsSum.getCell('B9').value = 'TOTALS';
-        wsSum.getCell('B9').font = { bold: true };
-
-        wsSum.getCell('B10').value = 'Total Net Revenue';
-        wsSum.getCell('C10').value = { formula: 'SUM(Sales_Data!E:E)' };
-        wsSum.getCell('B11').value = 'Total VAT';
-        wsSum.getCell('C11').value = { formula: 'SUM(Sales_Data!F:F)' };
-        wsSum.getCell('B12').value = 'Total Gross Revenue';
-        wsSum.getCell('C12').value = { formula: 'SUM(Sales_Data!G:G)' };
-
-        // Payment method breakdown
-        wsSum.getRow(13).height = 8;
-        wsSum.getCell('B14').value = 'PAYMENT METHOD BREAKDOWN';
-        wsSum.getCell('B14').font = { bold: true };
-
-        wsSum.getCell('B15').value = 'Cash Total';
-        wsSum.getCell('C15').value = { formula: 'SUMIF(Sales_Data!H:H,"CASH",Sales_Data!G:G)' };
-        wsSum.getCell('B16').value = 'Bank Total';
-        wsSum.getCell('C16').value = { formula: 'SUMIF(Sales_Data!H:H,"BANK",Sales_Data!G:G)' };
-        wsSum.getCell('B17').value = 'Mobile Money Total';
-        wsSum.getCell('C17').value = { formula: 'SUMIF(Sales_Data!H:H,"MOBILE_MONEY",Sales_Data!G:G)' };
-        wsSum.getCell('B18').value = 'Card Total';
-        wsSum.getCell('C18').value = { formula: 'SUMIF(Sales_Data!H:H,"CARD",Sales_Data!G:G)' };
-
-        // Formats + alignment
-        ['C10', 'C11', 'C12', 'C15', 'C16', 'C17', 'C18'].forEach((addr) => {
-          const c = wsSum.getCell(addr);
-          c.numFmt = '#,##0.00';
+        for (const r of [7, 8, 9, 12, 13, 14, 15, 18, 19, 20, 21]) {
+          const c = wsSum.getCell(`C${r}`);
+          c.numFmt = CURRENCY_FMT;
           c.font = { bold: true };
           c.alignment = { horizontal: 'right', vertical: 'middle' };
-        });
-        ['B10', 'B11', 'B12', 'B15', 'B16', 'B17', 'B18'].forEach((addr) => {
-          wsSum.getCell(addr).alignment = { horizontal: 'left', vertical: 'middle' };
-        });
+        }
+        for (const r of [7, 8, 9, 12, 13, 14, 15, 18, 19, 20, 21]) {
+          wsSum.getCell(`B${r}`).alignment = { horizontal: 'left', vertical: 'middle' };
+        }
 
-        // Bordered boxes around totals + breakdown
-        const fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } };
-        const boxBorder = borderThin;
         const applyBox = (top: number, bottom: number) => {
           for (let r = top; r <= bottom; r++) {
             for (let c = 2; c <= 3; c++) {
               const cell = wsSum.getRow(r).getCell(c);
-              cell.border = boxBorder;
+              cell.border = BORDER_THIN;
               if (r > top) cell.fill = fill;
             }
           }
         };
-        applyBox(9, 12);
-        applyBox(14, 18);
+        applyBox(7, 9);
+        applyBox(11, 15);
+        applyBox(17, 21);
 
-        // Page setup
         wsSum.pageSetup = {
           ...wsSum.pageSetup,
           horizontalCentered: true,
           fitToPage: true,
           fitToWidth: 1,
           fitToHeight: 0,
-          printArea: 'A1:D20',
+          printArea: 'A1:D24',
         };
 
         const buf: any = await wb.xlsx.writeBuffer();
@@ -475,22 +427,51 @@ export class ReportsService {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const ExcelJS = require('exceljs');
         const wb = new ExcelJS.Workbook();
+        const rangeFromLabel = from ? formatIsoDate(from) : 'ALL';
+        const rangeToLabel = to ? formatIsoDate(to) : 'ALL';
+        const periodLabel = `${rangeFromLabel} to ${rangeToLabel}`;
+
         const ws = wb.addWorksheet('Tax');
-        ws.columns = [
-          { header: 'Date', key: 'date', width: 14 },
-          { header: 'Sector', key: 'sector', width: 14 },
-          { header: 'Net (TSh)', key: 'net', width: 16 },
-          { header: 'VAT (TSh)', key: 'vat', width: 16 },
-          { header: 'Gross (TSh)', key: 'gross', width: 16 },
-        ];
-        txns.forEach((t: any) => ws.addRow({
-          date: formatDdMmYyyy(t.date),
-          sector: t.sector,
-          net: round0(t.netAmount),
-          vat: round0(t.vatAmount),
-          gross: round0(t.grossAmount),
-        }));
-        ws.addRow({ date: '', sector: 'TOTAL TAX', net: round0(totalNet), vat: round0(totalVat), gross: round0(totalGross) });
+        const headerEndRow = addHmsReportHeader(ws, { title: 'Tax Report', businessName, period: periodLabel });
+        ws.getRow(headerEndRow).height = 8;
+        const tableStartRow = headerEndRow + 1;
+        ws.views = [{ state: 'frozen', ySplit: tableStartRow - 1 }];
+
+        const headers = ['Date', 'Sector', 'Net Amount', 'VAT Amount', 'Gross Amount'];
+        const dataRows = txns.map((t: any) => [
+          formatDdMmYyyy(t.date),
+          t.sector,
+          round0(t.netAmount),
+          round0(t.vatAmount),
+          round0(t.grossAmount),
+        ]);
+        dataRows.push(['', 'TOTAL TAX', round0(totalNet), round0(totalVat), round0(totalGross)]);
+
+        ws.addTable({
+          name: 'TaxData',
+          ref: `A${tableStartRow}`,
+          headerRow: true,
+          totalsRow: false,
+          style: { theme: 'TableStyleLight9', showRowStripes: true },
+          columns: headers.map((h) => ({ name: h, filterButton: true })),
+          rows: dataRows,
+        });
+
+        applyHeaderRowStyle(ws.getRow(tableStartRow), headers.length);
+        for (const colIdx of [3, 4, 5]) {
+          ws.getColumn(colIdx).numFmt = CURRENCY_FMT;
+          ws.getColumn(colIdx).alignment = { horizontal: 'right', vertical: 'middle' };
+        }
+        for (const colIdx of [1, 2]) {
+          ws.getColumn(colIdx).alignment = { horizontal: 'left', vertical: 'middle' };
+        }
+        const lastRow = tableStartRow + dataRows.length;
+        for (let r = tableStartRow; r <= lastRow; r++) {
+          const row = ws.getRow(r);
+          for (let c = 1; c <= 5; c++) row.getCell(c).border = BORDER_THIN;
+        }
+        autoSizeColumns(ws);
+
         const buf: any = await wb.xlsx.writeBuffer();
         return {
           filename: `${baseName}.xlsx`,
@@ -561,16 +542,44 @@ export class ReportsService {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const ExcelJS = require('exceljs');
         const wb = new ExcelJS.Workbook();
+        const rangeFromLabel = from ? formatIsoDate(from) : 'ALL';
+        const rangeToLabel = to ? formatIsoDate(to) : 'ALL';
+        const periodLabel = `${rangeFromLabel} to ${rangeToLabel}`;
+
         const ws = wb.addWorksheet('Expenses');
-        ws.columns = [
-          { header: 'Date', key: 'date', width: 14 },
-          { header: 'Category', key: 'category', width: 18 },
-          { header: 'Description', key: 'description', width: 34 },
-          { header: 'Amount (TSh)', key: 'amount', width: 18 },
-          { header: 'Payment Mode', key: 'paymentMode', width: 18 },
-        ];
-        rows.forEach((r) => ws.addRow({ ...r, amount: round0(r.amount), paymentMode: '-' }));
-        ws.addRow({ date: '', category: '', description: 'TOTAL EXPENSES', amount: round0(total), paymentMode: '' });
+        const headerEndRow = addHmsReportHeader(ws, { title: 'Expenses Report', businessName, period: periodLabel });
+        ws.getRow(headerEndRow).height = 8;
+        const tableStartRow = headerEndRow + 1;
+        ws.views = [{ state: 'frozen', ySplit: tableStartRow - 1 }];
+
+        const headers = ['Date', 'Category', 'Description', 'Amount', 'Payment Mode'];
+        const sortedRows = [...rows].filter((r) => Boolean(r.date)).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+        const dataRows = sortedRows.map((r) => [r.date, r.category, r.description, round0(r.amount), '-']);
+        dataRows.push(['', '', 'TOTAL EXPENSES', round0(total), '']);
+
+        ws.addTable({
+          name: 'ExpensesData',
+          ref: `A${tableStartRow}`,
+          headerRow: true,
+          totalsRow: false,
+          style: { theme: 'TableStyleLight9', showRowStripes: true },
+          columns: headers.map((h) => ({ name: h, filterButton: true })),
+          rows: dataRows,
+        });
+
+        applyHeaderRowStyle(ws.getRow(tableStartRow), headers.length);
+        ws.getColumn(4).numFmt = CURRENCY_FMT;
+        ws.getColumn(4).alignment = { horizontal: 'right', vertical: 'middle' };
+        for (const colIdx of [1, 2, 3, 5]) {
+          ws.getColumn(colIdx).alignment = { horizontal: 'left', vertical: 'middle' };
+        }
+        const lastRow = tableStartRow + dataRows.length;
+        for (let r = tableStartRow; r <= lastRow; r++) {
+          const row = ws.getRow(r);
+          for (let c = 1; c <= 5; c++) row.getCell(c).border = BORDER_THIN;
+        }
+        autoSizeColumns(ws);
+
         const buf: any = await wb.xlsx.writeBuffer();
         return {
           filename: `${baseName}.xlsx`,
@@ -645,53 +654,97 @@ export class ReportsService {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const ExcelJS = require('exceljs');
       const wb = new ExcelJS.Workbook();
+      const rangeFromLabel = from ? formatIsoDate(from) : 'ALL';
+      const rangeToLabel = to ? formatIsoDate(to) : 'ALL';
+      const periodLabel = `${rangeFromLabel} to ${rangeToLabel}`;
 
       const wsSum = wb.addWorksheet('Summary');
-      wsSum.columns = [
-        { header: 'Metric', key: 'metric', width: 26 },
-        { header: 'Amount (TSh)', key: 'amount', width: 20 },
-      ];
-      wsSum.addRow({ metric: 'Total Net Revenue', amount: round0(totalNet) });
-      wsSum.addRow({ metric: 'Total VAT', amount: round0(totalVat) });
-      wsSum.addRow({ metric: 'Total Gross Revenue', amount: round0(totalGross) });
-      wsSum.addRow({ metric: 'Total Expenses', amount: round0(totalExpenses) });
-      wsSum.addRow({ metric: 'Net Profit (Net Revenue - Expenses)', amount: round0(netProfit) });
+      addHmsReportHeader(wsSum, { title: 'P&L Report', businessName, period: periodLabel });
+      wsSum.getRow(5).height = 8;
+      wsSum.getCell('B7').value = 'Total Net Revenue';
+      wsSum.getCell('C7').value = round0(totalNet);
+      wsSum.getCell('B8').value = 'Total VAT';
+      wsSum.getCell('C8').value = round0(totalVat);
+      wsSum.getCell('B9').value = 'Total Gross Revenue';
+      wsSum.getCell('C9').value = round0(totalGross);
+      wsSum.getCell('B10').value = 'Total Expenses';
+      wsSum.getCell('C10').value = round0(totalExpenses);
+      wsSum.getCell('B11').value = 'Net Profit';
+      wsSum.getCell('C11').value = round0(netProfit);
+      for (const r of [7, 8, 9, 10, 11]) {
+        wsSum.getCell(`C${r}`).numFmt = CURRENCY_FMT;
+        wsSum.getCell(`C${r}`).font = { bold: true };
+        wsSum.getCell(`C${r}`).alignment = { horizontal: 'right', vertical: 'middle' };
+      }
 
       const wsSales = wb.addWorksheet('Sales');
-      wsSales.columns = [
-        { header: 'Date', key: 'date', width: 14 },
-        { header: 'Sector', key: 'sector', width: 14 },
-        { header: 'Net (TSh)', key: 'net', width: 16 },
-        { header: 'VAT (TSh)', key: 'vat', width: 16 },
-        { header: 'Gross (TSh)', key: 'gross', width: 16 },
-        { header: 'Payment Mode', key: 'paymentMode', width: 22 },
-      ];
-      txns.forEach((t: any) => wsSales.addRow({
-        date: formatDdMmYyyy(t.date),
-        sector: t.sector,
-        net: round0(t.netAmount),
-        vat: round0(t.vatAmount),
-        gross: round0(t.grossAmount),
-        paymentMode: t.paymentMode,
-      }));
-      wsSales.addRow({ date: '', sector: 'TOTAL SALES', net: round0(totalNet), vat: round0(totalVat), gross: round0(totalGross), paymentMode: '' });
+      const salesHeaderEnd = addHmsReportHeader(wsSales, { title: 'P&L Report', businessName, period: periodLabel });
+      wsSales.getRow(salesHeaderEnd).height = 8;
+      const salesTableStart = salesHeaderEnd + 1;
+      wsSales.views = [{ state: 'frozen', ySplit: salesHeaderEnd }];
+      const salesHeaders = ['Date', 'Sector', 'Net Amount', 'VAT Amount', 'Gross Amount', 'Payment Mode'];
+      const salesDataRows = txns.map((t: any) => [
+        formatDdMmYyyy(t.date),
+        t.sector,
+        round0(t.netAmount),
+        round0(t.vatAmount),
+        round0(t.grossAmount),
+        t.paymentMode,
+      ]);
+      salesDataRows.push(['', 'TOTAL SALES', round0(totalNet), round0(totalVat), round0(totalGross), '']);
+      wsSales.addTable({
+        name: 'PnlSalesData',
+        ref: `A${salesTableStart}`,
+        headerRow: true,
+        totalsRow: false,
+        style: { theme: 'TableStyleLight9', showRowStripes: true },
+        columns: salesHeaders.map((h) => ({ name: h, filterButton: true })),
+        rows: salesDataRows,
+      });
+      applyHeaderRowStyle(wsSales.getRow(salesTableStart), salesHeaders.length);
+      for (const colIdx of [3, 4, 5]) {
+        wsSales.getColumn(colIdx).numFmt = CURRENCY_FMT;
+        wsSales.getColumn(colIdx).alignment = { horizontal: 'right', vertical: 'middle' };
+      }
+      for (const colIdx of [1, 2, 6]) wsSales.getColumn(colIdx).alignment = { horizontal: 'left', vertical: 'middle' };
+      for (let r = salesTableStart; r <= salesTableStart + salesDataRows.length; r++) {
+        const row = wsSales.getRow(r);
+        for (let c = 1; c <= 6; c++) row.getCell(c).border = BORDER_THIN;
+      }
+      autoSizeColumns(wsSales);
 
       const wsExp = wb.addWorksheet('Expenses');
-      wsExp.columns = [
-        { header: 'Date', key: 'date', width: 14 },
-        { header: 'Category', key: 'category', width: 18 },
-        { header: 'Description', key: 'description', width: 34 },
-        { header: 'Amount (TSh)', key: 'amount', width: 18 },
-        { header: 'Payment Mode', key: 'paymentMode', width: 18 },
-      ];
-      expRows.forEach((r: any) => wsExp.addRow({
-        date: formatDdMmYyyy(r.date),
-        category: r.category,
-        description: r.description,
-        amount: round0(r.amount),
-        paymentMode: '-',
-      }));
-      wsExp.addRow({ date: '', category: '', description: 'TOTAL EXPENSES', amount: round0(totalExpenses), paymentMode: '' });
+      const expHeaderEnd = addHmsReportHeader(wsExp, { title: 'P&L Report', businessName, period: periodLabel });
+      wsExp.getRow(expHeaderEnd).height = 8;
+      const expTableStart = expHeaderEnd + 1;
+      wsExp.views = [{ state: 'frozen', ySplit: expHeaderEnd }];
+      const expHeaders = ['Date', 'Category', 'Description', 'Amount', 'Payment Mode'];
+      const expDataRows = expRows.map((r: any) => [
+        formatDdMmYyyy(r.date),
+        r.category,
+        r.description,
+        round0(r.amount),
+        '-',
+      ]);
+      expDataRows.push(['', '', 'TOTAL EXPENSES', round0(totalExpenses), '']);
+      wsExp.addTable({
+        name: 'PnlExpensesData',
+        ref: `A${expTableStart}`,
+        headerRow: true,
+        totalsRow: false,
+        style: { theme: 'TableStyleLight9', showRowStripes: true },
+        columns: expHeaders.map((h) => ({ name: h, filterButton: true })),
+        rows: expDataRows,
+      });
+      applyHeaderRowStyle(wsExp.getRow(expTableStart), expHeaders.length);
+      wsExp.getColumn(4).numFmt = CURRENCY_FMT;
+      wsExp.getColumn(4).alignment = { horizontal: 'right', vertical: 'middle' };
+      for (const colIdx of [1, 2, 3, 5]) wsExp.getColumn(colIdx).alignment = { horizontal: 'left', vertical: 'middle' };
+      for (let r = expTableStart; r <= expTableStart + expDataRows.length; r++) {
+        const row = wsExp.getRow(r);
+        for (let c = 1; c <= 5; c++) row.getCell(c).border = BORDER_THIN;
+      }
+      autoSizeColumns(wsExp);
 
       const buf: any = await wb.xlsx.writeBuffer();
       return {

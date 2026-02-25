@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { addHmsReportHeader, applyHeaderRowStyle, autoSizeColumns, BORDER_THIN, CURRENCY_FMT } from '../common/excel-utils';
 import { applyHmsPageFooter, drawHmsReportHeader } from '../common/pdf-utils';
 import { PrismaService } from '../prisma/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -657,31 +658,63 @@ export class FinanceService {
     }
 
     if (format === 'xlsx') {
-      // Use runtime require to avoid CommonJS/ESM default-import issues in production builds
+      const business = await this.prisma.business.findUnique({
+        where: { id: businessId },
+        select: { name: true },
+      });
+      const businessName = business?.name || 'Business';
+
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const ExcelJS = require('exceljs');
       const wb = new ExcelJS.Workbook();
+      const periodLabel = `${safe(from)} to ${safe(to)}`;
+
       const ws = wb.addWorksheet('Transactions');
-      ws.columns = [
-        { header: 'Date', key: 'date', width: 22 },
-        { header: 'Reference ID', key: 'referenceId', width: 18 },
-        { header: 'Sector', key: 'sector', width: 14 },
-        { header: 'Net Amount', key: 'netAmount', width: 14 },
-        { header: 'VAT Amount', key: 'vatAmount', width: 14 },
-        { header: 'Gross Amount', key: 'grossAmount', width: 14 },
-        { header: 'Payment Mode', key: 'paymentMode', width: 16 },
-      ];
-      txns.forEach((t) =>
-        ws.addRow({
-          date: t.date.toISOString(),
-          referenceId: t.referenceId,
-          sector: t.sector,
-          netAmount: round2(t.netAmount),
-          vatAmount: round2(t.vatAmount),
-          grossAmount: round2(t.grossAmount),
-          paymentMode: t.paymentMode,
-        }),
-      );
+      const headerEndRow = addHmsReportHeader(ws, {
+        title: 'Finance Transactions Report',
+        businessName,
+        period: periodLabel,
+      });
+      ws.getRow(headerEndRow).height = 8;
+      const tableStartRow = headerEndRow + 1;
+      ws.views = [{ state: 'frozen', ySplit: headerEndRow }];
+
+      const headers = ['Date', 'Reference ID', 'Sector', 'Net Amount', 'VAT Amount', 'Gross Amount', 'Payment Mode'];
+      const dataRows = txns.map((t) => [
+        t.date.toISOString().slice(0, 10),
+        t.referenceId,
+        t.sector,
+        round2(t.netAmount),
+        round2(t.vatAmount),
+        round2(t.grossAmount),
+        t.paymentMode,
+      ]);
+
+      ws.addTable({
+        name: 'FinanceTransactions',
+        ref: `A${tableStartRow}`,
+        headerRow: true,
+        totalsRow: false,
+        style: { theme: 'TableStyleLight9', showRowStripes: true },
+        columns: headers.map((h) => ({ name: h, filterButton: true })),
+        rows: dataRows,
+      });
+
+      applyHeaderRowStyle(ws.getRow(tableStartRow), headers.length);
+      for (const colIdx of [4, 5, 6]) {
+        ws.getColumn(colIdx).numFmt = CURRENCY_FMT;
+        ws.getColumn(colIdx).alignment = { horizontal: 'right', vertical: 'middle' };
+      }
+      for (const colIdx of [1, 2, 3, 7]) {
+        ws.getColumn(colIdx).alignment = { horizontal: 'left', vertical: 'middle' };
+      }
+      const lastRow = tableStartRow + dataRows.length;
+      for (let r = tableStartRow; r <= lastRow; r++) {
+        const row = ws.getRow(r);
+        for (let c = 1; c <= 7; c++) row.getCell(c).border = BORDER_THIN;
+      }
+      autoSizeColumns(ws);
+
       const buf: any = await wb.xlsx.writeBuffer();
       return {
         filename: `${baseName}.xlsx`,
