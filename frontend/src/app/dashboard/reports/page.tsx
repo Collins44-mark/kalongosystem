@@ -115,15 +115,18 @@ export default function ReportsPage() {
       notifyError(t('auth.sessionExpired'));
       return;
     }
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+    const baseUrl = format === 'xlsx'
+      ? (typeof window !== 'undefined' ? window.location.origin : '')
+      : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000');
+    const path = format === 'xlsx' ? '/api/reports/export' : '/reports/export';
     const params = new URLSearchParams();
     params.set('reportType', reportType);
-    params.set('format', format);
+    if (format !== 'xlsx') params.set('format', format);
     params.set('from', dateRange.from);
     params.set('to', dateRange.to);
     params.set('sector', sector);
 
-    const res = await fetch(`${baseUrl}/reports/export?${params.toString()}`, {
+    const res = await fetch(`${baseUrl}${path}?${params.toString()}`, {
       headers: { Authorization: `Bearer ${effectiveToken}` },
       credentials: 'include',
     });
