@@ -6,34 +6,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 export class HousekeepingService {
   constructor(private prisma: PrismaService) {}
 
-  /** Get rooms for housekeeping staff: recently checked-out (UNDER_MAINTENANCE) OR vacant not cleaned today */
-  async getRoomsForStaff(businessId: string, branchId: string) {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date(todayStart);
-    todayEnd.setHours(23, 59, 59, 999);
-
-    const rooms = await this.prisma.room.findMany({
-      where: { businessId, branchId },
-      include: {
-        category: true,
-        cleaningLogs: {
-          where: { createdAt: { gte: todayStart, lte: todayEnd } },
-          take: 1,
-        },
-      },
-      orderBy: { roomNumber: 'asc' },
-    });
-
-    const filtered = rooms.filter((r) => {
-      if (r.status === 'UNDER_MAINTENANCE') return true;
-      if (r.status === 'VACANT' && r.cleaningLogs.length === 0) return true;
-      return false;
-    });
-    return filtered.map(({ cleaningLogs, ...r }) => r);
-  }
-
-  /** Get all rooms for admin */
+  /** Get all rooms - both Housekeeping and Admin see full grid */
   async getRooms(businessId: string, branchId: string) {
     return this.prisma.room.findMany({
       where: { businessId, branchId },
@@ -45,7 +18,7 @@ export class HousekeepingService {
     });
   }
 
-  /** Mark room as cleaned - creates log only, does NOT change room status */
+  /** Mark room as cleaned - sets status to VACANT + creates log. Only for UNDER_MAINTENANCE (needs cleaning). */
   async markAsCleaned(
     businessId: string,
     branchId: string,
@@ -56,18 +29,25 @@ export class HousekeepingService {
       where: { id: roomId, businessId, branchId },
     });
     if (!room) throw new ForbiddenException('Room not found');
-    if (room.status !== 'VACANT' && room.status !== 'UNDER_MAINTENANCE') {
-      throw new ForbiddenException('Only vacant or under-maintenance rooms can be marked as cleaned');
+    if (room.status !== 'UNDER_MAINTENANCE') {
+      throw new ForbiddenException('Only rooms under maintenance (needs cleaning) can be marked as cleaned');
     }
-    return this.prisma.roomCleaningLog.create({
-      data: {
-        businessId,
-        branchId,
-        roomId,
-        cleanedByWorkerId: actor.workerId ?? null,
-        cleanedByWorkerName: actor.workerName ?? null,
-      },
-    });
+    await this.prisma.$transaction([
+      this.prisma.room.update({
+        where: { id: roomId },
+        data: { status: 'VACANT' },
+      }),
+      this.prisma.roomCleaningLog.create({
+        data: {
+          businessId,
+          branchId,
+          roomId,
+          cleanedByWorkerId: actor.workerId ?? null,
+          cleanedByWorkerName: actor.workerName ?? null,
+        },
+      }),
+    ]);
+    return this.prisma.room.findFirst({ where: { id: roomId }, include: { category: true } });
   }
 
   /** Get cleaning logs - newest first */
@@ -80,22 +60,19 @@ export class HousekeepingService {
     });
   }
 
-  /** Update room status - MANAGER only. Only VACANT <-> UNDER_MAINTENANCE allowed (maintenance toggle). */
+  /** Update room status - Admin only. Full override: VACANT, OCCUPIED, RESERVED, UNDER_MAINTENANCE. */
   async updateRoomStatus(
     businessId: string,
     roomId: string,
     status: string,
     actor?: { userId: string; role: string; workerId?: string | null; workerName?: string | null },
   ) {
-    const valid = ['VACANT', 'UNDER_MAINTENANCE'];
+    const valid = ['VACANT', 'OCCUPIED', 'RESERVED', 'UNDER_MAINTENANCE'];
     if (!valid.includes(status)) {
-      throw new ForbiddenException('Admin can only toggle maintenance (VACANT/UNDER_MAINTENANCE). Occupied/Reserved follow system logic.');
+      throw new ForbiddenException('Invalid room status');
     }
     const room = await this.prisma.room.findFirst({ where: { id: roomId, businessId } });
     if (!room) throw new ForbiddenException('Room not found');
-    if (!valid.includes(room.status)) {
-      throw new ForbiddenException('Cannot change status of occupied or reserved rooms');
-    }
     const res = await this.prisma.room.update({
       where: { id: roomId, businessId },
       data: { status },
@@ -166,6 +143,44 @@ export class HousekeepingService {
     return this.prisma.maintenanceRequest.update({
       where: { id: requestId, businessId },
       data: { status: 'REJECTED' },
+    });
+  }
+
+  /** Laundry: create request */
+  async createLaundryRequest(
+    businessId: string,
+    branchId: string,
+    data: { roomNumber?: string; item: string; quantity: number },
+    actor: { workerId?: string | null; workerName?: string | null },
+  ) {
+    return this.prisma.laundryRequest.create({
+      data: {
+        businessId,
+        branchId,
+        roomNumber: data.roomNumber ?? null,
+        item: data.item.trim(),
+        quantity: data.quantity || 1,
+        status: 'REQUESTED',
+        createdByWorkerId: actor.workerId ?? null,
+        createdByWorkerName: actor.workerName ?? null,
+      },
+    });
+  }
+
+  /** Laundry: mark as delivered */
+  async markLaundryDelivered(businessId: string, requestId: string) {
+    return this.prisma.laundryRequest.update({
+      where: { id: requestId, businessId },
+      data: { status: 'DELIVERED', deliveredAt: new Date() },
+    });
+  }
+
+  /** Laundry: list all - newest first */
+  async getLaundryRequests(businessId: string, branchId: string, limit = 100) {
+    return this.prisma.laundryRequest.findMany({
+      where: { businessId, branchId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
     });
   }
 }

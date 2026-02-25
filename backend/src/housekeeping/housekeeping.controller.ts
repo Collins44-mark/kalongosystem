@@ -12,7 +12,7 @@ import { IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
 
 class UpdateRoomDto {
   @IsString()
-  @IsIn(['VACANT', 'UNDER_MAINTENANCE'])
+  @IsIn(['VACANT', 'OCCUPIED', 'RESERVED', 'UNDER_MAINTENANCE'])
   status: string;
 }
 
@@ -30,6 +30,17 @@ class SubmitRequestDto {
   amount?: number;
 }
 
+class CreateLaundryDto {
+  @IsString()
+  @IsOptional()
+  roomNumber?: string;
+  @IsString()
+  item: string;
+  @IsNumber()
+  @IsOptional()
+  quantity?: number;
+}
+
 @Controller('housekeeping')
 @UseGuards(JwtAuthGuard, SubscriptionGuard, BusinessModuleGuard)
 @RequireModule('housekeeping')
@@ -40,11 +51,7 @@ export class HousekeepingController {
   @UseGuards(RolesGuard)
   @Roles('MANAGER', 'HOUSEKEEPING', 'FRONT_OFFICE')
   async getRooms(@CurrentUser() user: any) {
-    const isManager = ['MANAGER', 'ADMIN', 'OWNER'].includes(user.role || '');
-    if (isManager) {
-      return this.housekeeping.getRooms(user.businessId, user.branchId);
-    }
-    return this.housekeeping.getRoomsForStaff(user.businessId, user.branchId);
+    return this.housekeeping.getRooms(user.businessId, user.branchId);
   }
 
   @Post('rooms/:id/mark-cleaned')
@@ -106,16 +113,42 @@ export class HousekeepingController {
   }
 
   @Post('requests/:id/approve')
-  @UseGuards(RolesGuard)
-  @Roles('MANAGER')
+  @UseGuards(RolesGuard, AllowManagerGuard)
+  @Roles('MANAGER', 'ADMIN', 'OWNER')
   async approve(@CurrentUser() user: any, @Param('id') id: string) {
     return this.housekeeping.approveRequest(user.businessId, id);
   }
 
   @Post('requests/:id/reject')
-  @UseGuards(RolesGuard)
-  @Roles('MANAGER')
+  @UseGuards(RolesGuard, AllowManagerGuard)
+  @Roles('MANAGER', 'ADMIN', 'OWNER')
   async reject(@CurrentUser() user: any, @Param('id') id: string) {
     return this.housekeeping.rejectRequest(user.businessId, id);
+  }
+
+  @Get('laundry')
+  @UseGuards(RolesGuard)
+  @Roles('MANAGER', 'HOUSEKEEPING')
+  async getLaundry(@CurrentUser() user: any) {
+    return this.housekeeping.getLaundryRequests(user.businessId, user.branchId);
+  }
+
+  @Post('laundry')
+  @UseGuards(RolesGuard)
+  @Roles('MANAGER', 'HOUSEKEEPING')
+  async createLaundry(@CurrentUser() user: any, @Body() dto: CreateLaundryDto) {
+    return this.housekeeping.createLaundryRequest(
+      user.businessId,
+      user.branchId,
+      { roomNumber: dto.roomNumber, item: dto.item, quantity: dto.quantity ?? 1 },
+      { workerId: user.workerId ?? null, workerName: user.workerName ?? null },
+    );
+  }
+
+  @Post('laundry/:id/delivered')
+  @UseGuards(RolesGuard)
+  @Roles('MANAGER', 'HOUSEKEEPING')
+  async markLaundryDelivered(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.housekeeping.markLaundryDelivered(user.businessId, id);
   }
 }

@@ -103,6 +103,7 @@ model Business {
   inventoryRestocks InventoryRestock[]
   maintenanceRequests MaintenanceRequest[]
   roomCleaningLogs   RoomCleaningLog[]
+  laundryRequests   LaundryRequest[]
   expenses          Expense[]
   workers           Worker[]
   staffWorkers      StaffWorker[]
@@ -533,6 +534,25 @@ model MaintenanceRequest {
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@map("maintenance_requests")
+}
+
+model LaundryRequest {
+  id                  String    @id @default(cuid())
+  businessId          String
+  branchId            String    @default("main")
+  roomNumber          String?
+  item                String
+  quantity            Int       @default(1)
+  status              String    @default("REQUESTED") // REQUESTED, DELIVERED
+  createdByWorkerId   String?
+  createdByWorkerName String?
+  deliveredAt         DateTime?
+  createdAt           DateTime  @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, createdAt])
+  @@map("laundry_requests")
 }
 
 // ==================== FINANCE MODULE ====================
