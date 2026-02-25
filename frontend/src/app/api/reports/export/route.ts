@@ -327,38 +327,41 @@ export async function GET(req: NextRequest) {
         generatedDate,
       });
 
-      const summaryRows = [
-        ['Total Gross Revenue', totalGross],
-        ['(-) VAT', totalVat],
-        ['= Net Revenue', totalNet],
-        ['(-) Total Expenses', totalExpenses],
-        ['= Net Profit', netProfit],
-      ];
       ws.mergeCells(row, 1, row, 4);
       ws.getCell(row, 1).value = 'Summary';
       ws.getCell(row, 1).font = { bold: true };
       row += 2;
 
-      for (let i = 0; i < summaryRows.length; i++) {
-        const [label, val] = summaryRows[i];
-        ws.getCell(row, 1).value = label;
-        ws.getCell(row, 2).value = val;
-        ws.getCell(row, 2).numFmt = CURRENCY_FMT;
-        ws.getCell(row, 2).alignment = { horizontal: 'right' };
-        if (i === 2 || i === 4) ws.getCell(row, 1).font = { bold: true };
-        if (i === 4) {
-          ws.getCell(row, 1).font = { bold: true, size: 14 };
-          const profitCell = ws.getCell(row, 2);
-          profitCell.font = { bold: true, size: 14, color: { argb: netProfit >= 0 ? 'FF059669' : 'FFDC2626' } };
-        }
-        row++;
-      }
+      ws.getCell(row, 1).value = 'Total Revenue (Gross)';
+      ws.getCell(row, 2).value = totalGross;
+      ws.getCell(row, 2).numFmt = CURRENCY_FMT;
+      ws.getCell(row, 2).alignment = { horizontal: 'right' };
+      row++;
+
+      ws.getCell(row, 1).value = 'Total Expenses';
+      ws.getCell(row, 2).value = totalExpenses;
+      ws.getCell(row, 2).numFmt = CURRENCY_FMT;
+      ws.getCell(row, 2).alignment = { horizontal: 'right' };
+      row++;
+
+      ws.getCell(row, 1).value = 'Net Profit';
+      ws.getCell(row, 2).value = netProfit;
+      ws.getCell(row, 2).numFmt = CURRENCY_FMT;
+      ws.getCell(row, 2).alignment = { horizontal: 'right' };
+      ws.getCell(row, 1).font = { bold: true };
+      ws.getCell(row, 2).font = { bold: true, size: 14, color: { argb: netProfit >= 0 ? 'FF059669' : 'FFDC2626' } };
+      row++;
+
+      const marginPct = totalGross > 0 ? (netProfit / totalGross) * 100 : 0;
+      ws.getCell(row, 1).value = 'Profit Margin (%)';
+      ws.getCell(row, 2).value = `${marginPct.toFixed(1)}%`;
+      ws.getCell(row, 2).alignment = { horizontal: 'right' };
       row += 2;
 
-      const headers = ['Date', 'Sector', 'Net (TSh)', 'VAT (TSh)', 'Gross (TSh)'];
+      const headers = ['Date', 'Sector', 'Net (TSh)', 'Gross (TSh)'];
       const headerRow = ws.getRow(row);
       headers.forEach((h, i) => headerRow.getCell(i + 1).value = h);
-      styleHeaderRow(headerRow, 5);
+      styleHeaderRow(headerRow, 4);
       row++;
 
       const txns = txnsData.rows || [];
@@ -368,27 +371,25 @@ export async function GET(req: NextRequest) {
         dataRow.getCell(1).value = r.date?.slice(0, 10) || '';
         dataRow.getCell(2).value = toTitleCase(r.sector || '');
         dataRow.getCell(3).value = Number(r.netAmount || 0);
-        dataRow.getCell(4).value = Number(r.vatAmount || 0);
-        dataRow.getCell(5).value = Number(r.grossAmount || 0);
-        [3, 4, 5].forEach((c) => {
+        dataRow.getCell(4).value = Number(r.grossAmount || 0);
+        [3, 4].forEach((c) => {
           dataRow.getCell(c).numFmt = CURRENCY_FMT;
           dataRow.getCell(c).alignment = { horizontal: 'right' };
         });
-        styleDataRow(dataRow, 5, i % 2 === 1);
+        styleDataRow(dataRow, 4, i % 2 === 1);
         row++;
       });
 
       const totalRow = ws.getRow(row);
       totalRow.getCell(1).value = 'TOTAL';
       totalRow.getCell(3).value = totalNet;
-      totalRow.getCell(4).value = totalVat;
-      totalRow.getCell(5).value = totalGross;
-      [3, 4, 5].forEach((c) => {
+      totalRow.getCell(4).value = totalGross;
+      [3, 4].forEach((c) => {
         totalRow.getCell(c).numFmt = CURRENCY_FMT;
       });
-      styleTotalRow(totalRow, 5);
+      styleTotalRow(totalRow, 4);
 
-      ws.columns = [{ width: 12 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }];
+      ws.columns = [{ width: 12 }, { width: 22 }, { width: 16 }, { width: 16 }];
       const buf4 = await wb.xlsx.writeBuffer();
       buffer = Buffer.isBuffer(buf4) ? buf4 : Buffer.from(buf4 as ArrayBuffer);
       filename = `pnl-report-${formatDate(new Date())}.xlsx`;

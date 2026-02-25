@@ -671,37 +671,40 @@ export class ReportsService {
       const wsSum = wb.addWorksheet('Summary');
       addHmsReportHeader(wsSum, { title: 'P&L Report', businessName, period: periodLabel });
       wsSum.getRow(5).height = 8;
-      wsSum.getCell('B7').value = 'Total Net Revenue';
-      wsSum.getCell('C7').value = round0(totalNet);
-      wsSum.getCell('B8').value = 'Total VAT';
-      wsSum.getCell('C8').value = round0(totalVat);
-      wsSum.getCell('B9').value = 'Total Gross Revenue';
-      wsSum.getCell('C9').value = round0(totalGross);
-      wsSum.getCell('B10').value = 'Total Expenses';
-      wsSum.getCell('C10').value = round0(totalExpenses);
-      wsSum.getCell('B11').value = 'Net Profit';
-      wsSum.getCell('C11').value = round0(netProfit);
-      for (const r of [7, 8, 9, 10, 11]) {
+      wsSum.getColumn(2).width = 22;
+      wsSum.getColumn(3).width = 18;
+
+      wsSum.getCell('B7').value = 'Total Revenue (Gross)';
+      wsSum.getCell('C7').value = round0(totalGross);
+      wsSum.getCell('B8').value = 'Total Expenses';
+      wsSum.getCell('C8').value = round0(totalExpenses);
+      wsSum.getCell('B9').value = 'Net Profit';
+      wsSum.getCell('C9').value = round0(netProfit);
+      const marginPct = totalGross > 0 ? (netProfit / totalGross) * 100 : 0;
+      wsSum.getCell('B10').value = 'Profit Margin (%)';
+      wsSum.getCell('C10').value = `${marginPct.toFixed(1)}%`;
+
+      for (const r of [7, 8, 9]) {
         wsSum.getCell(`C${r}`).numFmt = CURRENCY_FMT;
-        wsSum.getCell(`C${r}`).font = { bold: true };
         wsSum.getCell(`C${r}`).alignment = { horizontal: 'right', vertical: 'middle' };
       }
+      wsSum.getCell('C9').font = { bold: true, color: { argb: netProfit >= 0 ? 'FF059669' : 'FFDC2626' } };
+      wsSum.getCell('C10').alignment = { horizontal: 'right', vertical: 'middle' };
 
       const wsSales = wb.addWorksheet('Sales');
       const salesHeaderEnd = addHmsReportHeader(wsSales, { title: 'P&L Report', businessName, period: periodLabel });
       wsSales.getRow(salesHeaderEnd).height = 8;
       const salesTableStart = salesHeaderEnd + 1;
       wsSales.views = [{ state: 'frozen', ySplit: salesHeaderEnd }];
-      const salesHeaders = ['Date', 'Sector', 'Net Amount', 'VAT Amount', 'Gross Amount', 'Payment Mode'];
+      const salesHeaders = ['Date', 'Sector', 'Net Amount', 'Gross Amount', 'Payment Mode'];
       const salesDataRows = txns.map((t: any) => [
         formatDdMmYyyy(t.date),
         t.sector,
         round0(t.netAmount),
-        round0(t.vatAmount),
         round0(t.grossAmount),
         t.paymentMode,
       ]);
-      salesDataRows.push(['', 'TOTAL SALES', round0(totalNet), round0(totalVat), round0(totalGross), '']);
+      salesDataRows.push(['', 'TOTAL SALES', round0(totalNet), round0(totalGross), '']);
       wsSales.addTable({
         name: 'PnlSalesData',
         ref: `A${salesTableStart}`,
@@ -712,14 +715,15 @@ export class ReportsService {
         rows: salesDataRows,
       });
       applyHeaderRowStyle(wsSales.getRow(salesTableStart), salesHeaders.length);
-      for (const colIdx of [3, 4, 5]) {
+      for (const colIdx of [3, 4]) {
         wsSales.getColumn(colIdx).numFmt = CURRENCY_FMT;
         wsSales.getColumn(colIdx).alignment = { horizontal: 'right', vertical: 'middle' };
+        wsSales.getColumn(colIdx).width = 16;
       }
-      for (const colIdx of [1, 2, 6]) wsSales.getColumn(colIdx).alignment = { horizontal: 'left', vertical: 'middle' };
+      for (const colIdx of [1, 2, 5]) wsSales.getColumn(colIdx).alignment = { horizontal: 'left', vertical: 'middle' };
       for (let r = salesTableStart; r <= salesTableStart + salesDataRows.length; r++) {
         const row = wsSales.getRow(r);
-        for (let c = 1; c <= 6; c++) row.getCell(c).border = BORDER_THIN;
+        for (let c = 1; c <= 5; c++) row.getCell(c).border = BORDER_THIN;
       }
       autoSizeColumns(wsSales);
 
