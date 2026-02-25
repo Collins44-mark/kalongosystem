@@ -449,6 +449,8 @@ function formatPayment(p: string, t: (k: string) => string) {
   return p;
 }
 
+type SettingsResponse = { restaurant_canAddMenuItems?: boolean };
+
 function MenuManagement({ token, items, onChanged }: { token: string; items: RestaurantItem[]; onChanged: () => void }) {
   const { t } = useTranslation();
   const [showAdd, setShowAdd] = useState(false);
@@ -464,6 +466,35 @@ function MenuManagement({ token, items, onChanged }: { token: string; items: Res
   const [editEnabled, setEditEnabled] = useState(true);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [restaurantCanAdd, setRestaurantCanAdd] = useState(false);
+  const [permLoading, setPermLoading] = useState(true);
+  const [permSaving, setPermSaving] = useState(false);
+
+  useEffect(() => {
+    if (!token) return;
+    api<SettingsResponse>('/api/settings', { token })
+      .then((s) => setRestaurantCanAdd(s.restaurant_canAddMenuItems === true))
+      .catch(() => setRestaurantCanAdd(false))
+      .finally(() => setPermLoading(false));
+  }, [token]);
+
+  async function toggleRestaurantCanAdd(checked: boolean) {
+    setPermSaving(true);
+    try {
+      await api('/api/settings', {
+        method: 'PATCH',
+        token,
+        body: JSON.stringify({ restaurant_canAddMenuItems: checked }),
+      });
+      setRestaurantCanAdd(checked);
+      notifySuccess(t('settings.saved'));
+      onChanged();
+    } catch (e) {
+      notifyError((e as Error).message);
+    } finally {
+      setPermSaving(false);
+    }
+  }
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -555,12 +586,25 @@ function MenuManagement({ token, items, onChanged }: { token: string; items: Res
 
   return (
     <div className="w-full bg-white border rounded p-4">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
         <h2 className="font-medium">{t('restaurant.menuManagement')}</h2>
-        <button type="button" onClick={() => setShowAdd(true)} className="px-3 py-1.5 bg-teal-600 text-white rounded text-sm">
-          {t('restaurant.addFoodItem')}
-        </button>
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 cursor-pointer text-sm">
+            <input
+              type="checkbox"
+              checked={restaurantCanAdd}
+              onChange={(e) => toggleRestaurantCanAdd(e.target.checked)}
+              disabled={permLoading || permSaving}
+              className="rounded border-slate-300 text-teal-600"
+            />
+            <span>{t('settings.restaurantAllowAddFoodItems')}</span>
+          </label>
+          <button type="button" onClick={() => setShowAdd(true)} className="px-3 py-1.5 bg-teal-600 text-white rounded text-sm">
+            {t('restaurant.addFoodItem')}
+          </button>
+        </div>
       </div>
+      <p className="text-xs text-slate-500 mb-3">{t('settings.restaurantAllowAddFoodItemsDesc')}</p>
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm min-w-[520px]">
