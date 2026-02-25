@@ -1629,13 +1629,13 @@ async function renderTaxPdf(input: {
       drawDividers(y, totalsH, TABLE_BORDER_LIGHT);
 
       doc.font('Helvetica-Bold').fontSize(11).fillColor('#000');
-      doc.text('Total Net Sales', tableX + padX, y + 11, { width: colW.date + colW.sector - padX * 2, align: 'left', lineBreak: false });
+      doc.text('TOTAL', tableX + padX, y + 11, { width: colW.date + colW.sector - padX * 2, align: 'left', lineBreak: false });
       let cx = tableX + colW.date + colW.sector;
-      doc.text(formatNumberTz(input.totals.net), cx + padX, y + 11, { width: colW.net - padX * 2, align: 'right' });
+      drawCellText(doc, formatNumberTz(input.totals.net), cx + padX, y + 11, colW.net - padX * 2, { align: 'right', baseSize: 11, minSize: 9, font: 'Helvetica-Bold' });
       cx += colW.net;
-      doc.text(formatNumberTz(input.totals.vat), cx + padX, y + 11, { width: colW.vat - padX * 2, align: 'right' });
+      drawCellText(doc, formatNumberTz(input.totals.vat), cx + padX, y + 11, colW.vat - padX * 2, { align: 'right', baseSize: 11, minSize: 9, font: 'Helvetica-Bold' });
       cx += colW.vat;
-      doc.text(formatNumberTz(input.totals.gross), cx + padX, y + 11, { width: colW.gross - padX * 2, align: 'right' });
+      drawCellText(doc, formatNumberTz(input.totals.gross), cx + padX, y + 11, colW.gross - padX * 2, { align: 'right', baseSize: 11, minSize: 9, font: 'Helvetica-Bold' });
 
       applyPageFooter(doc);
       doc.end();
