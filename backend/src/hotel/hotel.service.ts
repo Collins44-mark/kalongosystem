@@ -13,21 +13,15 @@ export class HotelService {
     private accounting: AccountingService,
   ) {}
 
+  /** balance = total - paidAmount; status: Paid | Partially Paid | Unpaid */
   private computePaymentSummary(totalAmount: Decimal, payments: { amount: Decimal }[]) {
     const total = Number(totalAmount);
     const paid = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
-    const balance = Math.max(0, total - paid);
-    const paymentStatus =
-      paid <= 0
-        ? 'UNPAID'
-        : balance <= 0
-          ? 'FULLY_PAID'
-          : 'PARTIALLY_PAID';
-    return {
-      paidAmount: paid,
-      balance,
-      paymentStatus,
-    };
+    const rawBalance = total - paid;
+    const balance = rawBalance <= 0 ? 0 : rawBalance; // Prevent negative balance (overpaid → 0)
+    if (paid <= 0) return { paidAmount: paid, balance, paymentStatus: 'UNPAID' as const };
+    if (balance <= 0) return { paidAmount: paid, balance, paymentStatus: 'FULLY_PAID' as const }; // Paid (or overpaid)
+    return { paidAmount: paid, balance, paymentStatus: 'PARTIALLY_PAID' as const };
   }
 
   async logAudit(
@@ -529,7 +523,12 @@ export class HotelService {
     }
     const checkOut = new Date(b.checkOut);
     if (newCheckOut <= checkOut) {
-      throw new NotFoundException('New check-out must be after current check-out');
+      throw new NotFoundException('Extension date must be after current check-out date');
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (newCheckOut < today) {
+      throw new NotFoundException('Cannot extend to a past date');
     }
     const nights = Math.ceil((newCheckOut.getTime() - new Date(b.checkIn).getTime()) / (1000 * 60 * 60 * 24));
     const roomAmount = Number(b.room.category.pricePerNight) * nights;
@@ -567,6 +566,11 @@ export class HotelService {
         paidAmount: summary.paidAmount.toFixed(2),
         balance: summary.balance.toFixed(2),
         paymentStatus: summary.paymentStatus,
+        guestName: updated.guestName,
+        guestPhone: updated.guestPhone,
+        checkIn: updated.checkIn,
+        room: updated.room,
+        currency: updated.currency,
       },
     };
   }

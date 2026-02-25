@@ -1176,6 +1176,16 @@ function ExtendStayModal({ booking, token, onDone, t }: { booking: Booking; toke
   const [loading, setLoading] = useState(false);
 
   async function submit() {
+    const currentCheckOut = booking.checkOut.slice(0, 10);
+    if (checkOut <= currentCheckOut) {
+      notifyError(t('frontOffice.extendDateAfterCheckout'));
+      return;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    if (checkOut < today) {
+      notifyError(t('frontOffice.extendDateNotPast'));
+      return;
+    }
     setLoading(true);
     try {
       await api(`/hotel/bookings/${booking.id}/extend`, {
@@ -1184,9 +1194,10 @@ function ExtendStayModal({ booking, token, onDone, t }: { booking: Booking; toke
         body: JSON.stringify({ checkOut }),
       });
       setShow(false);
+      notifySuccess(t('frontOffice.stayExtended'));
       onDone();
     } catch (e) {
-      alert((e as Error).message);
+      notifyError((e as Error).message);
     } finally {
       setLoading(false);
     }
@@ -1206,6 +1217,11 @@ function ExtendStayModal({ booking, token, onDone, t }: { booking: Booking; toke
               type="date"
               value={checkOut}
               onChange={(e) => setCheckOut(e.target.value)}
+              min={(() => {
+                const d = new Date(booking.checkOut);
+                d.setDate(d.getDate() + 1);
+                return d.toISOString().slice(0, 10);
+              })()}
               className="w-full min-w-0 max-w-full box-border px-3 py-2 border rounded mb-4 text-base"
             />
             <div className="flex gap-2">
