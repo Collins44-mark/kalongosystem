@@ -40,13 +40,24 @@ export class RestaurantService {
     });
   }
 
+  async getCanAddMenuItems(businessId: string): Promise<boolean> {
+    const s = await this.prisma.businessSetting.findFirst({
+      where: { businessId, key: 'restaurant_canAddMenuItems' },
+    });
+    return s?.value === 'true';
+  }
+
   async createItem(
     businessId: string,
     branchId: string,
     data: { name: string; price: number; category?: string | null; isEnabled?: boolean },
     createdBy: { userId: string; role: string; workerId?: string | null; workerName?: string | null },
   ) {
-    if (createdBy.role !== 'MANAGER') throw new ForbiddenException('Only MANAGER can manage menu');
+    const isManager = ['MANAGER', 'ADMIN', 'OWNER'].includes(createdBy.role || '');
+    if (!isManager) {
+      const canAdd = await this.getCanAddMenuItems(businessId);
+      if (!canAdd) throw new ForbiddenException('Restaurant role cannot add menu items');
+    }
     const item = await this.prisma.restaurantItem.create({
       data: {
         businessId,
@@ -73,7 +84,8 @@ export class RestaurantService {
     data: { name?: string; price?: number; category?: string | null; isEnabled?: boolean },
     actor: { userId: string; role: string },
   ) {
-    if (actor.role !== 'MANAGER') throw new ForbiddenException('Only MANAGER can manage menu');
+    const isManager = ['MANAGER', 'ADMIN', 'OWNER'].includes(actor.role || '');
+    if (!isManager) throw new ForbiddenException('Only Admin can edit or disable menu items');
     const existing = await this.prisma.restaurantItem.findFirst({ where: { id: itemId, businessId, branchId } });
     if (!existing) throw new NotFoundException('Item not found');
     const updated = await this.prisma.restaurantItem.update({
@@ -126,7 +138,7 @@ export class RestaurantService {
     const pm = String(paymentMethod ?? '').trim();
     if (!pm) throw new BadRequestException('Payment method is required');
     const paymentModeUpper = pm.toUpperCase();
-    if (!['CASH', 'BANK', 'MOBILE_MONEY'].includes(paymentModeUpper)) {
+    if (!['CASH', 'BANK', 'MPESA', 'TIGOPESA', 'AIRTEL_MONEY'].includes(paymentModeUpper)) {
       throw new BadRequestException('Invalid payment method');
     }
     const order = await this.prisma.restaurantOrder.create({

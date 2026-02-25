@@ -22,7 +22,7 @@ class CreateOrderDto {
   @IsArray()
   items: OrderItemDto[];
   @IsString()
-  @IsIn(['CASH', 'BANK', 'MOBILE_MONEY'])
+  @IsIn(['CASH', 'BANK', 'MPESA', 'TIGOPESA', 'AIRTEL_MONEY'])
   paymentMethod: string;
   @IsOptional()
   @IsString()
@@ -53,8 +53,18 @@ export class RestaurantController {
   @UseGuards(RolesGuard)
   @Roles('MANAGER', 'RESTAURANT', 'KITCHEN')
   async getItems(@CurrentUser() user: any) {
-    const includeDisabled = user.role === 'MANAGER';
+    const includeDisabled = ['MANAGER', 'ADMIN', 'OWNER'].includes(user.role || '');
     return this.restaurant.getItems(user.businessId, user.branchId, includeDisabled);
+  }
+
+  @Get('add-item-permission')
+  @UseGuards(RolesGuard)
+  @Roles('MANAGER', 'RESTAURANT', 'KITCHEN')
+  async getAddItemPermission(@CurrentUser() user: any) {
+    const isManager = ['MANAGER', 'ADMIN', 'OWNER'].includes(user.role || '');
+    if (isManager) return { enabled: true };
+    const enabled = await this.restaurant.getCanAddMenuItems(user.businessId);
+    return { enabled };
   }
 
   @Post('orders')
@@ -129,10 +139,10 @@ export class RestaurantController {
     }));
   }
 
-  /** Menu management (MANAGER only) */
+  /** Menu management: Admin always; Restaurant when canAddMenuItems enabled */
   @Post('items')
-  @UseGuards(RolesGuard, AllowManagerGuard)
-  @Roles('MANAGER', 'ADMIN', 'OWNER')
+  @UseGuards(RolesGuard)
+  @Roles('MANAGER', 'ADMIN', 'OWNER', 'RESTAURANT', 'KITCHEN')
   async createItem(@CurrentUser() user: any, @Body() dto: CreateItemDto) {
     return this.restaurant.createItem(
       user.businessId,

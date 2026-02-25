@@ -43,6 +43,7 @@ export class ApiController {
     @Body()
     dto: {
       enableDragDropBooking?: boolean;
+      restaurant_canAddMenuItems?: boolean;
       vat_enabled?: boolean;
       vat_name?: string;
       vat_rate?: number;
@@ -55,6 +56,10 @@ export class ApiController {
   ) {
     if (typeof dto.enableDragDropBooking === 'boolean') {
       return this.api.updateSetting(user.businessId, 'enableDragDropBooking', dto.enableDragDropBooking);
+    }
+    if (typeof dto.restaurant_canAddMenuItems === 'boolean') {
+      await this.api.updateSetting(user.businessId, 'restaurant_canAddMenuItems', dto.restaurant_canAddMenuItems);
+      return this.api.getSettings(user.businessId);
     }
     const updates: Array<Promise<any>> = [];
     if (typeof dto.vat_enabled === 'boolean') {

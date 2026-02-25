@@ -117,8 +117,11 @@ export class ApiService {
     const taxesRaw = map['taxes'];
     const taxes = Array.isArray(taxesRaw) ? taxesRaw : null;
 
+    const restaurantCanAddMenuItems = map['restaurant_canAddMenuItems'] === true;
+
     return {
       enableDragDropBooking: map['enableDragDropBooking'] === true,
+      restaurant_canAddMenuItems: restaurantCanAddMenuItems,
       vat_enabled: vatEnabled,
       vat_name: vatName,
       vat_rate: isFinite(vatRate) ? vatRate : 0,

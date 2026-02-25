@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/store/auth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
 import { isManagerLevel } from '@/lib/roles';
 import { useSearch } from '@/store/search';
+import { notifyError, notifySuccess } from '@/store/notifications';
 
 type RestaurantItem = { id: string; name: string; price: string; category?: string | null; isEnabled?: boolean };
 type OrderRow = {
@@ -16,6 +17,7 @@ type OrderRow = {
   items: { id: string; name: string; quantity: number }[];
 };
 type StaffWorker = { id: string; role: string; fullName: string; status?: string };
+type AddItemPermission = { enabled: boolean };
 
 export default function RestaurantPage() {
   const { token, user } = useAuth();
@@ -23,6 +25,7 @@ export default function RestaurantPage() {
   const isAdmin = isManagerLevel(user?.role);
   const searchQuery = useSearch((s) => s.query);
   const [items, setItems] = useState<RestaurantItem[]>([]);
+  const [addPerm, setAddPerm] = useState<AddItemPermission>({ enabled: false });
   const [cart, setCart] = useState<{ itemId: string; name: string; price: number; qty: number }[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'BANK' | 'MPESA' | 'TIGOPESA' | 'AIRTEL_MONEY'>('CASH');
   const [loading, setLoading] = useState(true);
@@ -38,9 +41,13 @@ export default function RestaurantPage() {
   const [filterWorkerId, setFilterWorkerId] = useState('');
   const [filterPayment, setFilterPayment] = useState('');
   const [workers, setWorkers] = useState<StaffWorker[]>([]);
+  const [showAddItem, setShowAddItem] = useState(false);
+  const [addingItem, setAddingItem] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newCategory, setNewCategory] = useState('');
+  const [newPrice, setNewPrice] = useState('');
   const q = (searchQuery || '').trim().toLowerCase();
 
-  // Refresh when user returns to tab or when data is updated (e.g. order created).
   useEffect(() => {
     if (!token) return;
     const onVisible = () => {
@@ -64,6 +71,38 @@ export default function RestaurantPage() {
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
   }, [token, autoTick]);
+
+  useEffect(() => {
+    if (!token || isAdmin) return;
+    api<AddItemPermission>('/restaurant/add-item-permission', { token })
+      .then(setAddPerm)
+      .catch(() => setAddPerm({ enabled: false }));
+  }, [token, isAdmin, autoTick]);
+
+  async function addNewItem() {
+    if (!token) return;
+    if (!newName.trim()) return;
+    const p = Number(newPrice);
+    if (!isFinite(p) || p < 0) return;
+    setAddingItem(true);
+    try {
+      await api('/restaurant/items', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ name: newName.trim(), price: p, category: newCategory.trim() || null, isEnabled: true }),
+      });
+      setShowAddItem(false);
+      setNewName('');
+      setNewCategory('');
+      setNewPrice('');
+      notifySuccess(t('restaurant.itemAdded'));
+      setAutoTick((x) => x + 1);
+    } catch (e) {
+      notifyError((e as Error).message);
+    } finally {
+      setAddingItem(false);
+    }
+  }
 
   function loadHistory() {
     if (!token) return;
@@ -95,6 +134,7 @@ export default function RestaurantPage() {
   }, [token, isAdmin]);
 
   function addToCart(item: RestaurantItem) {
+    if (item.isEnabled === false) return;
     const existing = cart.find((c) => c.itemId === item.id);
     const price = parseFloat(item.price);
     if (existing) {
@@ -110,6 +150,13 @@ export default function RestaurantPage() {
 
   async function confirmOrder() {
     if (cart.length === 0) return;
+    const enabledItems = items.filter((i) => i.isEnabled !== false);
+    const invalid = cart.some((c) => !enabledItems.find((i) => i.id === c.itemId));
+    if (invalid) {
+      notifyError(t('restaurant.itemsDisabledRefresh'));
+      setAutoTick((x) => x + 1);
+      return;
+    }
     setSubmitting(true);
     setMessage('');
     try {
@@ -123,10 +170,12 @@ export default function RestaurantPage() {
       });
       if (typeof window !== 'undefined') try { localStorage.setItem('hms-data-updated', Date.now().toString()); } catch { /* ignore */ }
       setMessage(t('restaurant.orderConfirmed'));
+      notifySuccess(t('restaurant.orderConfirmed'));
       setCart([]);
       loadHistory();
+      setAutoTick((x) => x + 1);
     } catch (e) {
-      setMessage((e as Error).message);
+      notifyError((e as Error).message);
     } finally {
       setSubmitting(false);
     }
@@ -149,93 +198,75 @@ export default function RestaurantPage() {
         return txt.includes(q);
       });
 
+  const orderItems = isAdmin ? displayedItems : displayedItems.filter((it) => it.isEnabled !== false);
+
   return (
     <div>
       <h1 className="text-xl font-semibold mb-4">{t('restaurant.title')}</h1>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div>
-          <h2 className="font-medium mb-2">{t('restaurant.items')}</h2>
-          {isAdmin ? (
-            <div className="overflow-x-auto bg-white border rounded">
-              <table className="w-full text-sm min-w-[520px]">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="text-left p-3">{t('restaurant.foodName')}</th>
-                    <th className="text-left p-3">{t('restaurant.category')}</th>
-                    <th className="text-right p-3">{t('restaurant.price')}</th>
-                    <th className="text-left p-3">{t('restaurant.status')}</th>
-                    <th className="text-left p-3 w-20">{t('common.add')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {displayedItems.map((it) => (
-                    <tr key={it.id} className="border-t">
-                      <td className="p-3 font-medium">{it.name}</td>
-                      <td className="p-3">{it.category || '-'}</td>
-                      <td className="p-3 text-right">{formatTzs(parseFloat(it.price))}</td>
+
+      <div className="flex flex-col gap-6">
+        <div className="w-full">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="font-medium">{t('restaurant.items')}</h2>
+            {!isAdmin && addPerm.enabled && (
+              <button
+                type="button"
+                onClick={() => setShowAddItem(true)}
+                className="px-3 py-1.5 bg-teal-600 text-white rounded text-sm"
+              >
+                {t('restaurant.addFoodItem')}
+              </button>
+            )}
+          </div>
+          <div className="overflow-x-auto bg-white border rounded">
+            <table className="w-full text-sm min-w-[400px]">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="text-left p-3">{t('restaurant.foodName')}</th>
+                  <th className="text-left p-3">{t('restaurant.category')}</th>
+                  <th className="text-right p-3">{t('restaurant.price')}</th>
+                  {isAdmin && <th className="text-left p-3">{t('restaurant.status')}</th>}
+                  <th className="p-3 w-20">{t('common.add')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orderItems.map((it) => (
+                  <tr
+                    key={it.id}
+                    className={`border-t ${it.isEnabled === false ? 'opacity-50' : 'cursor-pointer hover:bg-slate-50'}`}
+                    onClick={() => it.isEnabled !== false && addToCart(it)}
+                  >
+                    <td className="p-3 font-medium">{it.name}</td>
+                    <td className="p-3">{it.category || '-'}</td>
+                    <td className="p-3 text-right text-slate-600">{formatTzs(parseFloat(it.price))}</td>
+                    {isAdmin && (
                       <td className="p-3">
                         <span className={`text-xs px-2 py-1 rounded ${it.isEnabled === false ? 'bg-slate-200 text-slate-700' : 'bg-green-100 text-green-800'}`}>
                           {it.isEnabled === false ? t('restaurant.disabled') : t('restaurant.enabled')}
                         </span>
                       </td>
-                      <td className="p-3">
-                        <button
-                          type="button"
-                          onClick={() => addToCart(it)}
-                          disabled={it.isEnabled === false}
-                          className="text-teal-600 hover:underline text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {t('common.add')}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {displayedItems.length === 0 && (
-                    <tr><td className="p-3 text-slate-500" colSpan={5}>{t('common.noItems')}</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="overflow-x-auto bg-white border rounded">
-              <table className="w-full text-sm min-w-[280px]">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="text-left p-3">{t('restaurant.foodName')}</th>
-                    <th className="text-right p-3">{t('restaurant.price')}</th>
-                    <th className="p-3 w-20">{t('common.add')}</th>
+                    )}
+                    <td className="p-3">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); addToCart(it); }}
+                        disabled={it.isEnabled === false}
+                        className="text-teal-600 hover:underline text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {t('common.add')}
+                      </button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {displayedItems.map((it) => (
-                    <tr
-                      key={it.id}
-                      className={`border-t ${it.isEnabled === false ? 'opacity-50' : 'cursor-pointer hover:bg-slate-50'}`}
-                      onClick={() => it.isEnabled !== false && addToCart(it)}
-                    >
-                      <td className="p-3 font-medium">{it.name}</td>
-                      <td className="p-3 text-right text-slate-600">{formatTzs(parseFloat(it.price))}</td>
-                      <td className="p-3">
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); addToCart(it); }}
-                          disabled={it.isEnabled === false}
-                          className="text-teal-600 hover:underline text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {t('common.add')}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {displayedItems.length === 0 && (
-                    <tr><td className="p-3 text-slate-500" colSpan={3}>{t('common.noItems')}</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
+                ))}
+                {orderItems.length === 0 && (
+                  <tr><td className="p-3 text-slate-500" colSpan={isAdmin ? 5 : 4}>{t('common.noItems')}</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div>
+
+        <div className="w-full">
           <h2 className="font-medium mb-2">{t('restaurant.order')}</h2>
           <div className="bg-white border rounded p-4 space-y-2">
             {cart.map((c) => (
@@ -255,7 +286,7 @@ export default function RestaurantPage() {
                     }}
                     className="w-20 px-2 py-1 border rounded text-sm"
                   />
-                <button onClick={() => removeFromCart(c.itemId)} className="text-red-600 text-sm">{t('common.remove')}</button>
+                  <button onClick={() => removeFromCart(c.itemId)} className="text-red-600 text-sm">{t('common.remove')}</button>
                 </div>
               </div>
             ))}
@@ -282,17 +313,49 @@ export default function RestaurantPage() {
               <button
                 onClick={confirmOrder}
                 disabled={submitting}
-                className="mt-4 w-full py-2 bg-teal-600 text-white rounded"
+                className="mt-4 w-full py-2 bg-teal-600 text-white rounded disabled:opacity-50"
               >
                 {t('restaurant.confirmOrder')}
               </button>
             </>
           )}
           {message && <p className="mt-2 text-sm text-green-600">{message}</p>}
-
-          {isAdmin && <MenuManagement token={token ?? ''} items={items} onChanged={() => setAutoTick((x) => x + 1)} />}
         </div>
+
+        {isAdmin && (
+          <MenuManagement token={token ?? ''} items={items} onChanged={() => setAutoTick((x) => x + 1)} />
+        )}
       </div>
+
+      {!isAdmin && showAddItem && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded max-w-sm w-full p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-medium">{t('restaurant.addFoodItem')}</h3>
+              <button onClick={() => setShowAddItem(false)} className="text-slate-500">✕</button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm mb-1">{t('restaurant.foodName')}</label>
+                <input value={newName} onChange={(e) => setNewName(e.target.value)} className="w-full px-3 py-2 border rounded" />
+              </div>
+              <div>
+                <label className="block text-sm mb-1">{t('restaurant.category')}</label>
+                <input value={newCategory} onChange={(e) => setNewCategory(e.target.value)} className="w-full px-3 py-2 border rounded" />
+              </div>
+              <div>
+                <label className="block text-sm mb-1">{t('restaurant.price')}</label>
+                <input type="number" min="0" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} className="w-full px-3 py-2 border rounded" />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={addNewItem} disabled={addingItem} className="px-4 py-2 bg-teal-600 text-white rounded w-full disabled:opacity-50">
+                {addingItem ? '...' : t('common.save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mt-8 bg-white border rounded p-4">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -399,6 +462,17 @@ function MenuManagement({ token, items, onChanged }: { token: string; items: Res
   const [editCategory, setEditCategory] = useState('');
   const [editPrice, setEditPrice] = useState('');
   const [editEnabled, setEditEnabled] = useState(true);
+  const [menuOpen, setMenuOpen] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(null);
+    };
+    document.addEventListener('click', onClick);
+    return () => document.removeEventListener('click', onClick);
+  }, [menuOpen]);
 
   async function addItem() {
     if (!token) return;
@@ -416,7 +490,10 @@ function MenuManagement({ token, items, onChanged }: { token: string; items: Res
       setName('');
       setCategory('');
       setPrice('');
+      notifySuccess(t('restaurant.itemAdded'));
       onChanged();
+    } catch (e) {
+      notifyError((e as Error).message);
     } finally {
       setAdding(false);
     }
@@ -428,6 +505,7 @@ function MenuManagement({ token, items, onChanged }: { token: string; items: Res
     setEditCategory(it.category || '');
     setEditPrice(it.price);
     setEditEnabled(it.isEnabled !== false);
+    setMenuOpen(null);
   }
 
   async function saveEdit() {
@@ -447,30 +525,52 @@ function MenuManagement({ token, items, onChanged }: { token: string; items: Res
         }),
       });
       setEditing(null);
+      notifySuccess(t('restaurant.itemUpdated'));
       onChanged();
+    } catch (e) {
+      notifyError((e as Error).message);
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  async function toggleEnabled(it: RestaurantItem) {
+    if (!token) return;
+    setMenuOpen(null);
+    setSavingEdit(true);
+    try {
+      await api(`/restaurant/items/${it.id}`, {
+        method: 'PATCH',
+        token,
+        body: JSON.stringify({ isEnabled: it.isEnabled !== false ? false : true }),
+      });
+      notifySuccess(it.isEnabled === false ? t('restaurant.itemEnabled') : t('restaurant.itemDisabled'));
+      onChanged();
+    } catch (e) {
+      notifyError((e as Error).message);
     } finally {
       setSavingEdit(false);
     }
   }
 
   return (
-    <div className="mt-6">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="font-medium">{t('restaurant.menuManagement')}</h3>
+    <div className="w-full bg-white border rounded p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-medium">{t('restaurant.menuManagement')}</h2>
         <button type="button" onClick={() => setShowAdd(true)} className="px-3 py-1.5 bg-teal-600 text-white rounded text-sm">
           {t('restaurant.addFoodItem')}
         </button>
       </div>
 
-      <div className="overflow-x-auto bg-white border rounded">
-        <table className="w-full text-sm min-w-[720px]">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[520px]">
           <thead className="bg-slate-50">
             <tr>
               <th className="text-left p-3">{t('restaurant.foodName')}</th>
               <th className="text-left p-3">{t('restaurant.category')}</th>
-              <th className="text-left p-3">{t('restaurant.price')}</th>
+              <th className="text-right p-3">{t('restaurant.price')}</th>
               <th className="text-left p-3">{t('restaurant.status')}</th>
-              <th className="text-left p-3 w-24">{t('common.edit')}</th>
+              <th className="text-right p-3 w-14"></th>
             </tr>
           </thead>
           <tbody>
@@ -478,16 +578,46 @@ function MenuManagement({ token, items, onChanged }: { token: string; items: Res
               <tr key={it.id} className="border-t">
                 <td className="p-3 font-medium">{it.name}</td>
                 <td className="p-3">{it.category || '-'}</td>
-                <td className="p-3">{formatTzs(parseFloat(it.price))}</td>
+                <td className="p-3 text-right">{formatTzs(parseFloat(it.price))}</td>
                 <td className="p-3">
                   <span className={`text-xs px-2 py-1 rounded ${it.isEnabled === false ? 'bg-slate-200 text-slate-700' : 'bg-green-100 text-green-800'}`}>
                     {it.isEnabled === false ? t('restaurant.disabled') : t('restaurant.enabled')}
                   </span>
                 </td>
-                <td className="p-3">
-                  <button type="button" onClick={() => startEdit(it)} className="text-teal-700 hover:underline text-sm">
-                    {t('common.edit')}
-                  </button>
+                <td className="p-3 text-right" ref={menuOpen === it.id ? menuRef : undefined}>
+                  <div className="relative inline-block">
+                    <button
+                      type="button"
+                      onClick={() => setMenuOpen(menuOpen === it.id ? null : it.id)}
+                      className="p-1.5 rounded text-slate-500 hover:bg-slate-200"
+                      aria-label="Actions"
+                    >
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                        <circle cx="12" cy="5" r="1.5" />
+                        <circle cx="12" cy="12" r="1.5" />
+                        <circle cx="12" cy="19" r="1.5" />
+                      </svg>
+                    </button>
+                    {menuOpen === it.id && (
+                      <div className="absolute right-0 top-full mt-1 py-1 w-40 bg-white rounded-lg shadow-lg border border-slate-200 z-10">
+                        <button
+                          type="button"
+                          onClick={() => startEdit(it)}
+                          className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                        >
+                          {t('common.edit')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleEnabled(it)}
+                          disabled={savingEdit}
+                          className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          {it.isEnabled === false ? t('settings.enableUser') : t('settings.disableUser')}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
