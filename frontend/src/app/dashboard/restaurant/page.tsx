@@ -584,8 +584,8 @@ function MenuManagement({ token, items, onChanged }: { token: string; items: Res
                     {it.isEnabled === false ? t('restaurant.disabled') : t('restaurant.enabled')}
                   </span>
                 </td>
-                <td className="p-3 text-right" ref={menuOpen === it.id ? menuRef : undefined}>
-                  <div className="relative inline-block">
+                <td className="p-3 text-right">
+                  <div className="relative inline-block" ref={menuOpen === it.id ? menuRef : undefined}>
                     <button
                       type="button"
                       onClick={() => setMenuOpen(menuOpen === it.id ? null : it.id)}

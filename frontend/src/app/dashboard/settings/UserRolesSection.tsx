@@ -213,8 +213,8 @@ export function UserRolesSection({ token, t }: { token: string; t: (k: string) =
                       {u.isDisabled ? t('settings.disabled') : t('settings.active')}
                     </span>
                   </td>
-                  <td className="p-3 text-right" ref={menuOpen === u.id ? menuRef : undefined}>
-                    <div className="relative inline-block">
+                  <td className="p-3 text-right">
+                    <div className="relative inline-block" ref={menuOpen === u.id ? menuRef : undefined}>
                       <button
                         type="button"
                         onClick={() => setMenuOpen(menuOpen === u.id ? null : u.id)}
