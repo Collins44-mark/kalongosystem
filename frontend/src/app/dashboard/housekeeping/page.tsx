@@ -20,6 +20,10 @@ function roomBorderClass(status: string): string {
   return 'border-slate-300 bg-slate-100';
 }
 
+const SECTION_CLASS = 'bg-white border border-slate-200 rounded-lg overflow-hidden';
+const SECTION_HEADER = 'font-medium p-4 border-b border-slate-100';
+const CARD_PADDING = 'p-4';
+
 export default function HousekeepingPage() {
   const { token, user } = useAuth();
   const { t } = useTranslation();
@@ -35,6 +39,7 @@ export default function HousekeepingPage() {
   const [showReportIssue, setShowReportIssue] = useState(false);
   const [showLaundry, setShowLaundry] = useState(false);
   const [reportDesc, setReportDesc] = useState('');
+  const [reportPriority, setReportPriority] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('MEDIUM');
   const [laundryRoom, setLaundryRoom] = useState('');
   const [laundryItem, setLaundryItem] = useState('');
   const [laundryQty, setLaundryQty] = useState('1');
@@ -97,14 +102,16 @@ export default function HousekeepingPage() {
     if (!token || !reportDesc.trim()) return;
     setSubmitting(true);
     try {
+      const desc = `[${reportPriority}] ${reportDesc.trim()}`;
       await api('/housekeeping/requests', {
         method: 'POST',
         token,
-        body: JSON.stringify({ description: reportDesc.trim(), type: 'MAINTENANCE', roomId: selectedRoom?.id ?? undefined }),
+        body: JSON.stringify({ description: desc, type: 'MAINTENANCE', roomId: selectedRoom?.id ?? undefined }),
       });
       notifySuccess(t('housekeeping.reportIssue'));
       setShowReportIssue(false);
       setReportDesc('');
+      setReportPriority('MEDIUM');
       refresh();
     } catch (e) {
       notifyError((e as Error).message);
@@ -146,6 +153,21 @@ export default function HousekeepingPage() {
     }
   }
 
+  async function updateMaintenanceStatus(id: string, status: string) {
+    if (!token || !isAdmin) return;
+    try {
+      if (status === 'APPROVED') {
+        await api(`/housekeeping/requests/${id}/approve`, { method: 'POST', token });
+      } else if (status === 'REJECTED') {
+        await api(`/housekeeping/requests/${id}/reject`, { method: 'POST', token });
+      }
+      notifySuccess(t('housekeeping.statusUpdated'));
+      refresh();
+    } catch (e) {
+      notifyError((e as Error).message);
+    }
+  }
+
   if (loading) return <div>{t('common.loading')}</div>;
 
   const q = (searchQuery || '').trim().toLowerCase();
@@ -162,12 +184,19 @@ export default function HousekeepingPage() {
     return t('overview.underMaintenance');
   };
 
+  const maintenanceStatusLabel = (s: string) => {
+    if (s === 'PENDING') return t('housekeeping.pending');
+    if (s === 'APPROVED') return t('housekeeping.resolved');
+    if (s === 'REJECTED') return t('housekeeping.rejected');
+    return s;
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6">
       <h1 className="text-xl font-semibold">{t('housekeeping.title')}</h1>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+      {/* 1) Summary Cards Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
         <div className={`p-4 rounded-lg border ${roomBorderClass('VACANT')}`}>
           <div className="text-xs text-slate-600">{t('overview.totalRooms')}</div>
           <div className="text-xl font-semibold">{rooms.length}</div>
@@ -194,70 +223,44 @@ export default function HousekeepingPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Room Grid + Task Panel */}
-        <div className="lg:col-span-2 space-y-6">
-          <div>
-            <h2 className="font-medium mb-3">{t('overview.rooms')}</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {displayedRooms.map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => setSelectedRoom(selectedRoom?.id === r.id ? null : r)}
-                  className={`p-3 sm:p-4 rounded-lg border min-h-[80px] flex flex-col justify-between text-left ${roomBorderClass(r.status)} ${
-                    selectedRoom?.id === r.id ? 'ring-2 ring-teal-400' : ''
-                  }`}
-                >
-                  <div>
-                    <div className="font-medium text-sm sm:text-base">{r.roomNumber}</div>
-                    <div className="text-xs text-slate-600">{r.category?.name ?? '-'}</div>
-                  </div>
-                  <div className="text-xs text-slate-500 mt-1">{statusLabel(r.status)}</div>
-                </button>
-              ))}
-            </div>
-            {displayedRooms.length === 0 && <p className="text-slate-500 text-sm py-4">{t('common.noItems')}</p>}
-          </div>
-
-          {/* Task Panel: Rooms Needing Cleaning */}
-          <div className="bg-white border rounded-lg overflow-hidden">
-            <h3 className="font-medium p-4 border-b">{t('housekeeping.roomsNeedingCleaning')}</h3>
-            <div className="p-4">
-              {needsCleaning.length === 0 ? (
-                <p className="text-slate-500 text-sm">{t('housekeeping.noRoomsToClean')}</p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {needsCleaning.map((r) => (
-                    <div key={r.id} className={`flex items-center justify-between gap-2 px-3 py-2 rounded border ${roomBorderClass(r.status)}`}>
-                      <span className="font-medium text-sm">{r.roomNumber}</span>
-                      <button
-                        type="button"
-                        onClick={() => markAsCleaned(r.id)}
-                        disabled={!!markingId}
-                        className="px-2 py-1 bg-teal-600 text-white rounded text-xs disabled:opacity-50"
-                      >
-                        {markingId === r.id ? '...' : t('housekeeping.markAsCleaned')}
-                      </button>
-                    </div>
-                  ))}
+      {/* 2) Rooms Grid Section */}
+      <div className={SECTION_CLASS}>
+        <h2 className={SECTION_HEADER}>{t('overview.rooms')}</h2>
+        <div className={CARD_PADDING}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+            {displayedRooms.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => setSelectedRoom(selectedRoom?.id === r.id ? null : r)}
+                className={`p-4 rounded-lg border min-h-[80px] flex flex-col justify-between text-left ${roomBorderClass(r.status)} ${
+                  selectedRoom?.id === r.id ? 'ring-2 ring-teal-400' : ''
+                }`}
+              >
+                <div>
+                  <div className="font-medium">{r.roomNumber}</div>
+                  <div className="text-xs text-slate-600">{r.category?.name ?? '-'}</div>
                 </div>
-              )}
-            </div>
+                <div className="text-xs text-slate-500 mt-1">{statusLabel(r.status)}</div>
+              </button>
+            ))}
           </div>
+          {displayedRooms.length === 0 && <p className="text-slate-500 text-sm py-4">{t('common.noItems')}</p>}
         </div>
+      </div>
 
-        {/* Sidebar: Room Detail + Actions */}
-        <div className="space-y-6">
-          {selectedRoom ? (
-            <div className="bg-white border rounded-lg p-4 sticky top-4">
-              <h3 className="font-medium mb-3">{selectedRoom.roomNumber} — {statusLabel(selectedRoom.status)}</h3>
+      {/* Room Details Panel + Request Linen (same layout, inline) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {selectedRoom ? (
+          <div className={`md:col-span-2 ${SECTION_CLASS}`}>
+            <h3 className={SECTION_HEADER}>{selectedRoom.roomNumber} — {statusLabel(selectedRoom.status)}</h3>
+            <div className={CARD_PADDING}>
               <div className="text-sm text-slate-600 mb-3">{selectedRoom.category?.name}</div>
               {selectedRoom.cleaningLogs && selectedRoom.cleaningLogs.length > 0 && (
-                <div className="mb-3 text-xs">
-                  <div className="text-slate-500">{t('housekeeping.lastCleanedBy')}</div>
+                <div className="mb-4 text-sm">
+                  <div className="text-slate-500 text-xs">{t('housekeeping.lastCleanedBy')}</div>
                   <div>{selectedRoom.cleaningLogs[0]?.cleanedByWorkerName ?? '-'}</div>
-                  <div className="text-slate-500">
+                  <div className="text-slate-500 text-xs">
                     {selectedRoom.cleaningLogs[0]?.createdAt ? new Date(selectedRoom.cleaningLogs[0].createdAt).toLocaleString() : '-'}
                   </div>
                 </div>
@@ -273,7 +276,7 @@ export default function HousekeepingPage() {
                     {markingId === selectedRoom.id ? '...' : t('housekeeping.markAsCleaned')}
                   </button>
                 )}
-                {isAdmin && (
+                {isAdmin ? (
                   <div>
                     <label className="block text-xs text-slate-500 mb-1">{t('housekeeping.status')}</label>
                     <select
@@ -288,6 +291,13 @@ export default function HousekeepingPage() {
                       <option value="UNDER_MAINTENANCE">{t('overview.underMaintenance')}</option>
                     </select>
                   </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">{t('housekeeping.status')}</label>
+                    <select value={selectedRoom.status} disabled className="w-full px-3 py-2 border rounded text-sm bg-slate-50 opacity-75 cursor-not-allowed">
+                      <option value={selectedRoom.status}>{statusLabel(selectedRoom.status)}</option>
+                    </select>
+                  </div>
                 )}
                 <button
                   type="button"
@@ -298,108 +308,177 @@ export default function HousekeepingPage() {
                 </button>
               </div>
             </div>
-          ) : (
-            <div className="bg-white border rounded-lg p-4 text-slate-500 text-sm">
-              {t('housekeeping.selectRoomHint')}
+          </div>
+        ) : (
+          <div className={`md:col-span-2 ${SECTION_CLASS}`}>
+            <div className={CARD_PADDING}>
+              <p className="text-slate-500 text-sm">{t('housekeeping.selectRoomHint')}</p>
             </div>
-          )}
-
-          <div className="flex gap-2">
+          </div>
+        )}
+        <div className={SECTION_CLASS}>
+          <h3 className={SECTION_HEADER}>{t('housekeeping.laundry')}</h3>
+          <div className={CARD_PADDING}>
             <button
               type="button"
               onClick={() => setShowLaundry(true)}
-              className="flex-1 px-3 py-2 bg-teal-600 text-white rounded text-sm"
+              className="w-full px-3 py-2 bg-teal-600 text-white rounded text-sm"
             >
               {t('housekeeping.requestLinen')}
             </button>
           </div>
+        </div>
+      </div>
 
-          {/* Cleaning History */}
-          <div className="bg-white border rounded-lg overflow-hidden">
-            <h3 className="font-medium p-4 border-b">{t('housekeeping.cleaningHistory')}</h3>
-            <div className="overflow-x-auto max-h-48 overflow-y-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 sticky top-0">
-                  <tr>
-                    <th className="text-left p-3">{t('frontOffice.roomNumber')}</th>
-                    <th className="text-left p-3">{t('housekeeping.cleanedBy')}</th>
-                    <th className="text-left p-3">{t('common.date')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cleaningLogs.length === 0 ? (
-                    <tr><td className="p-3 text-slate-500" colSpan={3}>{t('common.noItems')}</td></tr>
-                  ) : (
-                    cleaningLogs.slice(0, 20).map((l) => (
-                      <tr key={l.id} className="border-t">
-                        <td className="p-3">{l.room?.roomNumber ?? '-'}</td>
-                        <td className="p-3">{l.cleanedByWorkerName ?? '-'}</td>
-                        <td className="p-3 whitespace-nowrap">{new Date(l.createdAt).toLocaleString()}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Laundry History */}
-          <div className="bg-white border rounded-lg overflow-hidden">
-            <h3 className="font-medium p-4 border-b">{t('housekeeping.laundryHistory')}</h3>
-            <div className="overflow-x-auto max-h-48 overflow-y-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 sticky top-0">
-                  <tr>
-                    <th className="text-left p-3">{t('frontOffice.roomNumber')}</th>
-                    <th className="text-left p-3">{t('housekeeping.item')}</th>
-                    <th className="text-right p-3">{t('housekeeping.quantity')}</th>
-                    <th className="text-left p-3">{t('housekeeping.status')}</th>
-                    <th className="w-20"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {laundryRequests.length === 0 ? (
-                    <tr><td className="p-3 text-slate-500" colSpan={5}>{t('common.noItems')}</td></tr>
-                  ) : (
-                    laundryRequests.slice(0, 15).map((l) => (
-                      <tr key={l.id} className="border-t">
-                        <td className="p-3">{l.roomNumber ?? '-'}</td>
-                        <td className="p-3">{l.item}</td>
-                        <td className="p-3 text-right">{l.quantity}</td>
-                        <td className="p-3">{l.status === 'DELIVERED' ? t('housekeeping.delivered') : t('housekeeping.requested')}</td>
-                        <td className="p-3">
-                          {l.status === 'REQUESTED' && (
-                            <button
-                              type="button"
-                              onClick={() => markLaundryDelivered(l.id)}
-                              className="text-teal-600 text-xs hover:underline"
-                            >
-                              {t('housekeeping.markDelivered')}
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Maintenance Requests (Admin) */}
-          {isAdmin && maintenanceRequests.length > 0 && (
-            <div className="bg-white border rounded-lg overflow-hidden">
-              <h3 className="font-medium p-4 border-b">{t('housekeeping.maintenanceRequests')}</h3>
-              <div className="divide-y max-h-40 overflow-y-auto">
-                {maintenanceRequests.slice(0, 5).map((req) => (
-                  <div key={req.id} className="p-3 text-sm">
-                    <div className="font-medium">{req.description}</div>
-                    <div className="text-xs text-slate-500">{req.status} · {new Date(req.createdAt).toLocaleString()}</div>
-                  </div>
-                ))}
-              </div>
+      {/* 3) Rooms Needing Cleaning Section */}
+      <div className={SECTION_CLASS}>
+        <h3 className={SECTION_HEADER}>{t('housekeeping.roomsNeedingCleaning')}</h3>
+        <div className={CARD_PADDING}>
+          {needsCleaning.length === 0 ? (
+            <p className="text-slate-500 text-sm">{t('housekeeping.noRoomsToClean')}</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {needsCleaning.map((r) => (
+                <div key={r.id} className={`flex items-center justify-between gap-2 px-3 py-2 rounded border ${roomBorderClass(r.status)}`}>
+                  <span className="font-medium text-sm">{r.roomNumber}</span>
+                  <button
+                    type="button"
+                    onClick={() => markAsCleaned(r.id)}
+                    disabled={!!markingId}
+                    className="px-2 py-1 bg-teal-600 text-white rounded text-xs disabled:opacity-50"
+                  >
+                    {markingId === r.id ? '...' : t('housekeeping.markAsCleaned')}
+                  </button>
+                </div>
+              ))}
             </div>
           )}
+        </div>
+      </div>
+
+      {/* 4) Cleaning History Section */}
+      <div className={SECTION_CLASS}>
+        <h3 className={SECTION_HEADER}>{t('housekeeping.cleaningHistory')}</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="text-left p-3">{t('frontOffice.roomNumber')}</th>
+                <th className="text-left p-3">{t('housekeeping.cleanedBy')}</th>
+                <th className="text-left p-3">{t('common.date')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cleaningLogs.length === 0 ? (
+                <tr><td className="p-4 text-slate-500" colSpan={3}>{t('common.noItems')}</td></tr>
+              ) : (
+                cleaningLogs.map((l) => (
+                  <tr key={l.id} className="border-t border-slate-100">
+                    <td className="p-3">{l.room?.roomNumber ?? '-'}</td>
+                    <td className="p-3">{l.cleanedByWorkerName ?? '-'}</td>
+                    <td className="p-3 whitespace-nowrap">{new Date(l.createdAt).toLocaleString()}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 5) Laundry History Section */}
+      <div className={SECTION_CLASS}>
+        <h3 className={SECTION_HEADER}>{t('housekeeping.laundryHistory')}</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="text-left p-3">{t('frontOffice.roomNumber')}</th>
+                <th className="text-left p-3">{t('housekeeping.item')}</th>
+                <th className="text-right p-3">{t('housekeeping.quantity')}</th>
+                <th className="text-left p-3">{t('housekeeping.status')}</th>
+                <th className="w-24"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {laundryRequests.length === 0 ? (
+                <tr><td className="p-4 text-slate-500" colSpan={5}>{t('common.noItems')}</td></tr>
+              ) : (
+                laundryRequests.map((l) => (
+                  <tr key={l.id} className="border-t border-slate-100">
+                    <td className="p-3">{l.roomNumber ?? '-'}</td>
+                    <td className="p-3">{l.item}</td>
+                    <td className="p-3 text-right">{l.quantity}</td>
+                    <td className="p-3">{l.status === 'DELIVERED' ? t('housekeeping.delivered') : t('housekeeping.requested')}</td>
+                    <td className="p-3">
+                      {l.status === 'REQUESTED' && (
+                        <button
+                          type="button"
+                          onClick={() => markLaundryDelivered(l.id)}
+                          className="text-teal-600 text-xs hover:underline"
+                        >
+                          {t('housekeeping.markDelivered')}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 6) Maintenance Requests Section (visible to both, Admin can update) */}
+      <div className={SECTION_CLASS}>
+        <h3 className={SECTION_HEADER}>{t('housekeeping.maintenanceRequests')}</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="text-left p-3">{t('frontOffice.roomNumber')}</th>
+                <th className="text-left p-3">{t('housekeeping.description')}</th>
+                <th className="text-left p-3">{t('housekeeping.status')}</th>
+                <th className="text-left p-3">{t('common.date')}</th>
+                {isAdmin && <th className="w-32"></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {maintenanceRequests.length === 0 ? (
+                <tr><td className="p-4 text-slate-500" colSpan={isAdmin ? 5 : 4}>{t('common.noItems')}</td></tr>
+              ) : (
+                maintenanceRequests.map((req) => (
+                  <tr key={req.id} className="border-t border-slate-100">
+                    <td className="p-3">{rooms.find((r) => r.id === req.roomId)?.roomNumber ?? '-'}</td>
+                    <td className="p-3">{req.description}</td>
+                    <td className="p-3">{maintenanceStatusLabel(req.status)}</td>
+                    <td className="p-3 whitespace-nowrap">{new Date(req.createdAt).toLocaleString()}</td>
+                    {isAdmin && (
+                      <td className="p-3">
+                        {req.status === 'PENDING' && (
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              onClick={() => updateMaintenanceStatus(req.id, 'APPROVED')}
+                              className="px-2 py-1 bg-teal-600 text-white rounded text-xs"
+                            >
+                              {t('housekeeping.resolve')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateMaintenanceStatus(req.id, 'REJECTED')}
+                              className="px-2 py-1 border border-slate-300 rounded text-xs hover:bg-slate-50"
+                            >
+                              {t('housekeeping.reject')}
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -407,18 +486,35 @@ export default function HousekeepingPage() {
       {showReportIssue && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-4">
-            <h3 className="font-medium mb-3">{t('housekeeping.reportIssue')}</h3>
-            <textarea
-              value={reportDesc}
-              onChange={(e) => setReportDesc(e.target.value)}
-              placeholder={t('housekeeping.reportIssue')}
-              className="w-full px-3 py-2 border rounded text-sm mb-4 min-h-[80px]"
-            />
-            <div className="flex gap-2">
+            <h3 className="font-medium mb-4">{t('housekeeping.reportIssue')}</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm mb-1">{t('frontOffice.roomNumber')}</label>
+                <input value={selectedRoom?.roomNumber ?? ''} readOnly className="w-full px-3 py-2 border rounded text-sm bg-slate-50" />
+              </div>
+              <div>
+                <label className="block text-sm mb-1">{t('housekeeping.priority')}</label>
+                <select value={reportPriority} onChange={(e) => setReportPriority(e.target.value as 'LOW' | 'MEDIUM' | 'HIGH')} className="w-full px-3 py-2 border rounded text-sm">
+                  <option value="LOW">{t('housekeeping.priorityLow')}</option>
+                  <option value="MEDIUM">{t('housekeeping.priorityMedium')}</option>
+                  <option value="HIGH">{t('housekeeping.priorityHigh')}</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm mb-1">{t('housekeeping.issueDescription')}</label>
+                <textarea
+                  value={reportDesc}
+                  onChange={(e) => setReportDesc(e.target.value)}
+                  placeholder={t('housekeeping.issueDescription')}
+                  className="w-full px-3 py-2 border rounded text-sm min-h-[80px]"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
               <button onClick={submitReport} disabled={submitting || !reportDesc.trim()} className="px-4 py-2 bg-teal-600 text-white rounded text-sm disabled:opacity-50">
                 {submitting ? '...' : t('common.save')}
               </button>
-              <button onClick={() => { setShowReportIssue(false); setReportDesc(''); }} className="px-4 py-2 border rounded text-sm">
+              <button onClick={() => { setShowReportIssue(false); setReportDesc(''); setReportPriority('MEDIUM'); }} className="px-4 py-2 border rounded text-sm">
                 {t('common.cancel')}
               </button>
             </div>
@@ -430,7 +526,7 @@ export default function HousekeepingPage() {
       {showLaundry && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-4">
-            <h3 className="font-medium mb-3">{t('housekeeping.requestLinen')}</h3>
+            <h3 className="font-medium mb-4">{t('housekeeping.requestLinen')}</h3>
             <div className="space-y-3">
               <div>
                 <label className="block text-sm mb-1">{t('frontOffice.roomNumber')}</label>
