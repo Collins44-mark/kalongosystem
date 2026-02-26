@@ -8,10 +8,32 @@ import { useSearch } from '@/store/search';
 import { notifyError, notifySuccess } from '@/store/notifications';
 import { isManagerLevel } from '@/lib/roles';
 
-type Room = { id: string; roomNumber: string; status: string; category: { name: string }; cleaningLogs?: CleaningLog[] };
+type StaffWorker = { id: string; fullName: string };
+type Room = {
+  id: string;
+  roomNumber: string;
+  status: string;
+  category: { name: string };
+  cleaningLogs?: CleaningLog[];
+  cleaningAssignedToWorker?: StaffWorker | null;
+  cleaningAssignedByWorker?: StaffWorker | null;
+  cleaningAssignedAt?: string | null;
+};
 type CleaningLog = { id: string; roomId: string; cleanedByWorkerName: string | null; createdAt: string; room?: { roomNumber: string } };
 type MaintenanceRequest = { id: string; roomId: string | null; description: string; type: string; status: string; createdAt: string };
-type LaundryRequest = { id: string; roomNumber: string | null; item: string; quantity: number; status: string; createdAt: string; deliveredAt: string | null };
+type LaundryRequest = {
+  id: string;
+  roomNumber: string | null;
+  item: string;
+  quantity: number;
+  status: string;
+  createdAt: string;
+  deliveredAt: string | null;
+  createdByWorkerName?: string | null;
+  assignedToWorker?: StaffWorker | null;
+  assignedByWorker?: StaffWorker | null;
+  assignedAt?: string | null;
+};
 
 function roomBorderClass(status: string): string {
   if (status === 'OCCUPIED') return 'border-green-200 bg-green-50';
@@ -24,6 +46,11 @@ const SECTION_CLASS = 'bg-white border border-slate-200 rounded-lg overflow-hidd
 const SECTION_HEADER = 'font-medium p-4 border-b border-slate-100';
 const CARD_PADDING = 'p-4';
 
+type MaintFilter = 'all' | 'pending' | 'in_progress' | 'resolved' | 'by_room' | 'by_date';
+type MaintDateFilter = 'today' | 'week' | 'month';
+type HistoryType = 'cleaning' | 'laundry' | 'all';
+type HistoryFilter = 'today' | 'week' | 'month' | 'by_room' | 'by_staff';
+
 export default function HousekeepingPage() {
   const { token, user } = useAuth();
   const { t } = useTranslation();
@@ -32,18 +59,34 @@ export default function HousekeepingPage() {
   const [cleaningLogs, setCleaningLogs] = useState<CleaningLog[]>([]);
   const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRequest[]>([]);
   const [laundryRequests, setLaundryRequests] = useState<LaundryRequest[]>([]);
+  const [staffWorkers, setStaffWorkers] = useState<StaffWorker[]>([]);
   const [loading, setLoading] = useState(true);
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [statusSaving, setStatusSaving] = useState<string | null>(null);
   const [showReportIssue, setShowReportIssue] = useState(false);
   const [showLaundry, setShowLaundry] = useState(false);
+  const [showMaintenanceReason, setShowMaintenanceReason] = useState(false);
+  const [pendingMaintenanceRoomId, setPendingMaintenanceRoomId] = useState<string | null>(null);
+  const [maintenanceReason, setMaintenanceReason] = useState('');
+  const [maintenanceEstimatedAt, setMaintenanceEstimatedAt] = useState('');
+  const [showAssignCleaning, setShowAssignCleaning] = useState(false);
+  const [showAssignLaundry, setShowAssignLaundry] = useState(false);
+  const [assignLaundryId, setAssignLaundryId] = useState<string | null>(null);
+  const [assignWorkerId, setAssignWorkerId] = useState('');
   const [reportDesc, setReportDesc] = useState('');
   const [reportPriority, setReportPriority] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('MEDIUM');
   const [laundryRoom, setLaundryRoom] = useState('');
   const [laundryItem, setLaundryItem] = useState('');
   const [laundryQty, setLaundryQty] = useState('1');
   const [submitting, setSubmitting] = useState(false);
+  const [maintFilter, setMaintFilter] = useState<MaintFilter>('all');
+  const [maintRoomFilter, setMaintRoomFilter] = useState('');
+  const [maintDateFilter, setMaintDateFilter] = useState<MaintDateFilter>('today');
+  const [historyType, setHistoryType] = useState<HistoryType>('cleaning');
+  const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('today');
+  const [historyRoomFilter, setHistoryRoomFilter] = useState('');
+  const [historyStaffFilter, setHistoryStaffFilter] = useState('');
   const isAdmin = isManagerLevel(user?.role);
 
   function refresh() {
@@ -53,11 +96,13 @@ export default function HousekeepingPage() {
       api<CleaningLog[]>('/housekeeping/cleaning-logs', { token }),
       api<MaintenanceRequest[]>('/housekeeping/requests', { token }),
       api<LaundryRequest[]>('/housekeeping/laundry', { token }),
-    ]).then(([r, c, m, l]) => {
+      api<StaffWorker[]>('/housekeeping/assignable-staff', { token }),
+    ]).then(([r, c, m, l, s]) => {
       setRooms(r);
       setCleaningLogs(c);
       setMaintenanceRequests(m);
       setLaundryRequests(l);
+      setStaffWorkers(s ?? []);
       setSelectedRoom((prev) => (prev ? r.find((x) => x.id === prev.id) ?? null : null));
     }).catch(() => {}).finally(() => setLoading(false));
   }
@@ -83,11 +128,16 @@ export default function HousekeepingPage() {
     }
   }
 
-  async function setRoomStatus(roomId: string, status: string) {
+  async function setRoomStatus(roomId: string, status: string, extra?: { maintenanceReason?: string; maintenanceEstimatedAt?: string }) {
     if (!token) return;
     setStatusSaving(roomId);
     try {
-      await api(`/housekeeping/rooms/${roomId}/status`, { method: 'PUT', token, body: JSON.stringify({ status }) });
+      const body: Record<string, unknown> = { status };
+      if (status === 'UNDER_MAINTENANCE' && extra) {
+        body.maintenanceReason = extra.maintenanceReason ?? '';
+        if (extra.maintenanceEstimatedAt) body.maintenanceEstimatedAt = extra.maintenanceEstimatedAt;
+      }
+      await api(`/housekeeping/rooms/${roomId}/status`, { method: 'PUT', token, body: JSON.stringify(body) });
       notifySuccess(t('housekeeping.statusUpdated'));
       refresh();
       if (selectedRoom?.id === roomId) setSelectedRoom(null);
@@ -96,6 +146,29 @@ export default function HousekeepingPage() {
     } finally {
       setStatusSaving(null);
     }
+  }
+
+  function handleStatusChange(roomId: string, newStatus: string) {
+    if (newStatus === 'UNDER_MAINTENANCE') {
+      setPendingMaintenanceRoomId(roomId);
+      setShowMaintenanceReason(true);
+      setMaintenanceReason('');
+      setMaintenanceEstimatedAt('');
+    } else {
+      setRoomStatus(roomId, newStatus);
+    }
+  }
+
+  function confirmMaintenanceReason() {
+    if (!pendingMaintenanceRoomId || !maintenanceReason.trim()) return;
+    setRoomStatus(pendingMaintenanceRoomId, 'UNDER_MAINTENANCE', {
+      maintenanceReason: maintenanceReason.trim(),
+      maintenanceEstimatedAt: maintenanceEstimatedAt.trim() || undefined,
+    });
+    setShowMaintenanceReason(false);
+    setPendingMaintenanceRoomId(null);
+    setMaintenanceReason('');
+    setMaintenanceEstimatedAt('');
   }
 
   async function submitReport() {
@@ -142,14 +215,58 @@ export default function HousekeepingPage() {
     }
   }
 
+  async function approveLaundry(id: string) {
+    if (!token || !isAdmin) return;
+    try {
+      await api(`/housekeeping/laundry/${id}/approve`, { method: 'PATCH', token });
+      notifySuccess(t('housekeeping.approved'));
+      refresh();
+    } catch (e) {
+      notifyError((e as Error).message);
+    }
+  }
+
   async function markLaundryDelivered(id: string) {
-    if (!token) return;
+    if (!token || !isAdmin) return;
     try {
       await api(`/housekeeping/laundry/${id}/delivered`, { method: 'POST', token });
       notifySuccess(t('housekeeping.markDelivered'));
       refresh();
     } catch (e) {
       notifyError((e as Error).message);
+    }
+  }
+
+  async function assignCleaning(roomId: string) {
+    if (!token || !assignWorkerId) return;
+    setSubmitting(true);
+    try {
+      await api(`/housekeeping/rooms/${roomId}/assign-cleaning`, { method: 'PUT', token, body: JSON.stringify({ workerId: assignWorkerId }) });
+      notifySuccess(t('housekeeping.assigned'));
+      setShowAssignCleaning(false);
+      setAssignWorkerId('');
+      refresh();
+    } catch (e) {
+      notifyError((e as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function assignLaundry(reqId: string) {
+    if (!token || !assignWorkerId) return;
+    setSubmitting(true);
+    try {
+      await api(`/housekeeping/laundry/${reqId}/assign`, { method: 'PUT', token, body: JSON.stringify({ workerId: assignWorkerId }) });
+      notifySuccess(t('housekeeping.assigned'));
+      setShowAssignLaundry(false);
+      setAssignLaundryId(null);
+      setAssignWorkerId('');
+      refresh();
+    } catch (e) {
+      notifyError((e as Error).message);
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -160,6 +277,8 @@ export default function HousekeepingPage() {
         await api(`/housekeeping/requests/${id}/approve`, { method: 'POST', token });
       } else if (status === 'REJECTED') {
         await api(`/housekeeping/requests/${id}/reject`, { method: 'POST', token });
+      } else {
+        await api(`/housekeeping/requests/${id}/status`, { method: 'PUT', token, body: JSON.stringify({ status }) });
       }
       notifySuccess(t('housekeeping.statusUpdated'));
       refresh();
@@ -186,10 +305,79 @@ export default function HousekeepingPage() {
 
   const maintenanceStatusLabel = (s: string) => {
     if (s === 'PENDING') return t('housekeeping.pending');
+    if (s === 'IN_PROGRESS') return t('housekeeping.inProgress');
     if (s === 'APPROVED') return t('housekeeping.resolved');
     if (s === 'REJECTED') return t('housekeeping.rejected');
     return s;
   };
+
+  const laundryStatusLabel = (s: string) => {
+    if (s === 'REQUESTED') return t('housekeeping.requested');
+    if (s === 'APPROVED') return t('housekeeping.approved');
+    if (s === 'DELIVERED') return t('housekeeping.delivered');
+    return s;
+  };
+
+  // Filter maintenance requests
+  const filteredMaintenance = maintenanceRequests.filter((req) => {
+    if (maintFilter === 'all') return true;
+    if (maintFilter === 'pending') return req.status === 'PENDING';
+    if (maintFilter === 'in_progress') return req.status === 'IN_PROGRESS';
+    if (maintFilter === 'resolved') return req.status === 'APPROVED' || req.status === 'REJECTED';
+    if (maintFilter === 'by_room') {
+      if (!maintRoomFilter) return true;
+      const room = rooms.find((r) => r.id === req.roomId);
+      return room?.roomNumber === maintRoomFilter;
+    }
+    if (maintFilter === 'by_date') {
+      const d = new Date(req.createdAt);
+      const now = new Date();
+      if (maintDateFilter === 'today') return d >= todayStart;
+      if (maintDateFilter === 'week') {
+        const weekStart = new Date(now);
+        weekStart.setDate(weekStart.getDate() - 7);
+        return d >= weekStart;
+      }
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      return d >= monthStart;
+    }
+    return true;
+  });
+
+  // Filter history
+  const filterHistoryByDate = (dateStr: string, filter: HistoryFilter) => {
+    const d = new Date(dateStr);
+    const now = new Date();
+    if (filter === 'today') return d >= todayStart;
+    if (filter === 'week') {
+      const weekStart = new Date(now);
+      weekStart.setDate(weekStart.getDate() - 7);
+      return d >= weekStart;
+    }
+    if (filter === 'month') {
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      return d >= monthStart;
+    }
+    return true;
+  };
+
+  const filteredCleaningLogs = cleaningLogs.filter((l) => {
+    if (!filterHistoryByDate(l.createdAt, historyFilter)) return false;
+    if (historyFilter === 'by_room' && historyRoomFilter) return l.room?.roomNumber === historyRoomFilter;
+    if (historyFilter === 'by_staff' && historyStaffFilter) return (l.cleanedByWorkerName ?? '').toLowerCase().includes(historyStaffFilter.toLowerCase());
+    return true;
+  });
+
+  const filteredLaundryRequests = laundryRequests.filter((l) => {
+    if (!filterHistoryByDate(l.createdAt, historyFilter)) return false;
+    if (historyFilter === 'by_room' && historyRoomFilter) return l.roomNumber === historyRoomFilter;
+    if (historyFilter === 'by_staff' && historyStaffFilter) {
+      const staff = ((l.assignedToWorker?.fullName ?? '') + (l.createdByWorkerName ?? '')).toLowerCase();
+      return staff.includes(historyStaffFilter.toLowerCase());
+    }
+    return true;
+  });
+
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -249,13 +437,19 @@ export default function HousekeepingPage() {
         </div>
       </div>
 
-      {/* Room Details Panel + Request Linen (same layout, inline) */}
+      {/* Room Details Panel + Request Linen */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {selectedRoom ? (
           <div className={`md:col-span-2 ${SECTION_CLASS}`}>
             <h3 className={SECTION_HEADER}>{selectedRoom.roomNumber} — {statusLabel(selectedRoom.status)}</h3>
             <div className={CARD_PADDING}>
               <div className="text-sm text-slate-600 mb-3">{selectedRoom.category?.name}</div>
+              {selectedRoom.cleaningAssignedToWorker && (
+                <div className="mb-3 text-sm">
+                  <span className="text-slate-500 text-xs">{t('housekeeping.assignedTo')}: </span>
+                  <span>{selectedRoom.cleaningAssignedToWorker.fullName}</span>
+                </div>
+              )}
               {selectedRoom.cleaningLogs && selectedRoom.cleaningLogs.length > 0 && (
                 <div className="mb-4 text-sm">
                   <div className="text-slate-500 text-xs">{t('housekeeping.lastCleanedBy')}</div>
@@ -266,6 +460,13 @@ export default function HousekeepingPage() {
                 </div>
               )}
               <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowAssignCleaning(true); setAssignWorkerId(selectedRoom.cleaningAssignedToWorker?.id ?? ''); }}
+                  className="w-full px-3 py-2 border border-slate-300 rounded text-sm hover:bg-slate-50"
+                >
+                  {t('housekeeping.assignCleaning')}
+                </button>
                 {selectedRoom.status === 'UNDER_MAINTENANCE' && (
                   <button
                     type="button"
@@ -281,7 +482,7 @@ export default function HousekeepingPage() {
                     <label className="block text-xs text-slate-500 mb-1">{t('housekeeping.status')}</label>
                     <select
                       value={selectedRoom.status}
-                      onChange={(e) => setRoomStatus(selectedRoom.id, e.target.value)}
+                      onChange={(e) => handleStatusChange(selectedRoom.id, e.target.value)}
                       disabled={!!statusSaving}
                       className="w-full px-3 py-2 border rounded text-sm"
                     >
@@ -356,81 +557,38 @@ export default function HousekeepingPage() {
         </div>
       </div>
 
-      {/* 4) Cleaning History Section */}
+      {/* 4) Maintenance Requests Section */}
       <div className={SECTION_CLASS}>
-        <h3 className={SECTION_HEADER}>{t('housekeeping.cleaningHistory')}</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="text-left p-3">{t('frontOffice.roomNumber')}</th>
-                <th className="text-left p-3">{t('housekeeping.cleanedBy')}</th>
-                <th className="text-left p-3">{t('common.date')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cleaningLogs.length === 0 ? (
-                <tr><td className="p-4 text-slate-500" colSpan={3}>{t('common.noItems')}</td></tr>
-              ) : (
-                cleaningLogs.map((l) => (
-                  <tr key={l.id} className="border-t border-slate-100">
-                    <td className="p-3">{l.room?.roomNumber ?? '-'}</td>
-                    <td className="p-3">{l.cleanedByWorkerName ?? '-'}</td>
-                    <td className="p-3 whitespace-nowrap">{new Date(l.createdAt).toLocaleString()}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+        <div className="p-4 border-b border-slate-100 flex flex-wrap items-center gap-3">
+          <h3 className="font-medium">{t('housekeeping.maintenanceRequests')}</h3>
+          <select
+            value={maintFilter}
+            onChange={(e) => setMaintFilter(e.target.value as MaintFilter)}
+            className="px-3 py-1.5 border rounded text-sm"
+          >
+            <option value="all">{t('housekeeping.filterAll')}</option>
+            <option value="pending">{t('housekeeping.pending')}</option>
+            <option value="in_progress">{t('housekeeping.inProgress')}</option>
+            <option value="resolved">{t('housekeeping.resolved')}</option>
+            <option value="by_room">{t('housekeeping.filterByRoom')}</option>
+            <option value="by_date">{t('housekeeping.filterByDate')}</option>
+          </select>
+          {maintFilter === 'by_room' && (
+            <select value={maintRoomFilter} onChange={(e) => setMaintRoomFilter(e.target.value)} className="px-3 py-1.5 border rounded text-sm">
+              <option value="">{t('housekeeping.selectRoom')}</option>
+              {rooms.map((r) => (
+                <option key={r.id} value={r.roomNumber}>{r.roomNumber}</option>
+              ))}
+            </select>
+          )}
+          {maintFilter === 'by_date' && (
+            <select value={maintDateFilter} onChange={(e) => setMaintDateFilter(e.target.value as MaintDateFilter)} className="px-3 py-1.5 border rounded text-sm">
+              <option value="today">{t('housekeeping.today')}</option>
+              <option value="week">{t('housekeeping.thisWeek')}</option>
+              <option value="month">{t('housekeeping.thisMonth')}</option>
+            </select>
+          )}
         </div>
-      </div>
-
-      {/* 5) Laundry History Section */}
-      <div className={SECTION_CLASS}>
-        <h3 className={SECTION_HEADER}>{t('housekeeping.laundryHistory')}</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="text-left p-3">{t('frontOffice.roomNumber')}</th>
-                <th className="text-left p-3">{t('housekeeping.item')}</th>
-                <th className="text-right p-3">{t('housekeeping.quantity')}</th>
-                <th className="text-left p-3">{t('housekeeping.status')}</th>
-                <th className="w-24"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {laundryRequests.length === 0 ? (
-                <tr><td className="p-4 text-slate-500" colSpan={5}>{t('common.noItems')}</td></tr>
-              ) : (
-                laundryRequests.map((l) => (
-                  <tr key={l.id} className="border-t border-slate-100">
-                    <td className="p-3">{l.roomNumber ?? '-'}</td>
-                    <td className="p-3">{l.item}</td>
-                    <td className="p-3 text-right">{l.quantity}</td>
-                    <td className="p-3">{l.status === 'DELIVERED' ? t('housekeeping.delivered') : t('housekeeping.requested')}</td>
-                    <td className="p-3">
-                      {l.status === 'REQUESTED' && (
-                        <button
-                          type="button"
-                          onClick={() => markLaundryDelivered(l.id)}
-                          className="text-teal-600 text-xs hover:underline"
-                        >
-                          {t('housekeeping.markDelivered')}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* 6) Maintenance Requests Section (visible to both, Admin can update) */}
-      <div className={SECTION_CLASS}>
-        <h3 className={SECTION_HEADER}>{t('housekeeping.maintenanceRequests')}</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50">
@@ -439,14 +597,14 @@ export default function HousekeepingPage() {
                 <th className="text-left p-3">{t('housekeeping.description')}</th>
                 <th className="text-left p-3">{t('housekeeping.status')}</th>
                 <th className="text-left p-3">{t('common.date')}</th>
-                {isAdmin && <th className="w-32"></th>}
+                {isAdmin && <th className="w-40"></th>}
               </tr>
             </thead>
             <tbody>
-              {maintenanceRequests.length === 0 ? (
+              {filteredMaintenance.length === 0 ? (
                 <tr><td className="p-4 text-slate-500" colSpan={isAdmin ? 5 : 4}>{t('common.noItems')}</td></tr>
               ) : (
-                maintenanceRequests.map((req) => (
+                filteredMaintenance.map((req) => (
                   <tr key={req.id} className="border-t border-slate-100">
                     <td className="p-3">{rooms.find((r) => r.id === req.roomId)?.roomNumber ?? '-'}</td>
                     <td className="p-3">{req.description}</td>
@@ -455,19 +613,24 @@ export default function HousekeepingPage() {
                     {isAdmin && (
                       <td className="p-3">
                         {req.status === 'PENDING' && (
-                          <div className="flex gap-1">
-                            <button
-                              type="button"
-                              onClick={() => updateMaintenanceStatus(req.id, 'APPROVED')}
-                              className="px-2 py-1 bg-teal-600 text-white rounded text-xs"
-                            >
+                          <div className="flex flex-wrap gap-1">
+                            <button type="button" onClick={() => updateMaintenanceStatus(req.id, 'IN_PROGRESS')} className="px-2 py-1 border border-slate-300 rounded text-xs hover:bg-slate-50">
+                              {t('housekeeping.inProgress')}
+                            </button>
+                            <button type="button" onClick={() => updateMaintenanceStatus(req.id, 'APPROVED')} className="px-2 py-1 bg-teal-600 text-white rounded text-xs">
                               {t('housekeeping.resolve')}
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => updateMaintenanceStatus(req.id, 'REJECTED')}
-                              className="px-2 py-1 border border-slate-300 rounded text-xs hover:bg-slate-50"
-                            >
+                            <button type="button" onClick={() => updateMaintenanceStatus(req.id, 'REJECTED')} className="px-2 py-1 border border-slate-300 rounded text-xs hover:bg-slate-50">
+                              {t('housekeeping.reject')}
+                            </button>
+                          </div>
+                        )}
+                        {req.status === 'IN_PROGRESS' && (
+                          <div className="flex flex-wrap gap-1">
+                            <button type="button" onClick={() => updateMaintenanceStatus(req.id, 'APPROVED')} className="px-2 py-1 bg-teal-600 text-white rounded text-xs">
+                              {t('housekeeping.resolve')}
+                            </button>
+                            <button type="button" onClick={() => updateMaintenanceStatus(req.id, 'REJECTED')} className="px-2 py-1 border border-slate-300 rounded text-xs hover:bg-slate-50">
                               {t('housekeeping.reject')}
                             </button>
                           </div>
@@ -482,7 +645,147 @@ export default function HousekeepingPage() {
         </div>
       </div>
 
-      {/* Report Issue Modal */}
+      {/* 5) Combined History Section */}
+      <div className={SECTION_CLASS}>
+        <div className="p-4 border-b border-slate-100 flex flex-wrap items-center gap-3">
+          <h3 className="font-medium">{t('housekeeping.history')}</h3>
+          <select value={historyType} onChange={(e) => setHistoryType(e.target.value as HistoryType)} className="px-3 py-1.5 border rounded text-sm">
+            <option value="cleaning">{t('housekeeping.cleaningHistory')}</option>
+            <option value="laundry">{t('housekeeping.laundryHistory')}</option>
+            <option value="all">{t('housekeeping.allActivity')}</option>
+          </select>
+          <select value={historyFilter} onChange={(e) => setHistoryFilter(e.target.value as HistoryFilter)} className="px-3 py-1.5 border rounded text-sm">
+            <option value="today">{t('housekeeping.today')}</option>
+            <option value="week">{t('housekeeping.thisWeek')}</option>
+            <option value="month">{t('housekeeping.thisMonth')}</option>
+            <option value="by_room">{t('housekeeping.filterByRoom')}</option>
+            <option value="by_staff">{t('housekeeping.filterByStaff')}</option>
+          </select>
+          {historyFilter === 'by_room' && (
+            <select value={historyRoomFilter} onChange={(e) => setHistoryRoomFilter(e.target.value)} className="px-3 py-1.5 border rounded text-sm">
+              <option value="">{t('housekeeping.selectRoom')}</option>
+              {rooms.map((r) => (
+                <option key={r.id} value={r.roomNumber}>{r.roomNumber}</option>
+              ))}
+            </select>
+          )}
+          {historyFilter === 'by_staff' && (
+            <input
+              type="text"
+              value={historyStaffFilter}
+              onChange={(e) => setHistoryStaffFilter(e.target.value)}
+              placeholder={t('housekeeping.staffName')}
+              className="px-3 py-1.5 border rounded text-sm w-40"
+            />
+          )}
+        </div>
+        <div className="overflow-x-auto">
+          {(historyType === 'cleaning' || historyType === 'all') && (
+            <>
+              <h4 className="p-3 text-sm font-medium text-slate-600">{t('housekeeping.cleaningHistory')}</h4>
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="text-left p-3">{t('frontOffice.roomNumber')}</th>
+                    <th className="text-left p-3">{t('housekeeping.cleanedBy')}</th>
+                    <th className="text-left p-3">{t('common.date')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredCleaningLogs.length === 0 ? (
+                    <tr><td className="p-4 text-slate-500" colSpan={3}>{t('common.noItems')}</td></tr>
+                  ) : (
+                    filteredCleaningLogs.map((l) => (
+                      <tr key={l.id} className="border-t border-slate-100">
+                        <td className="p-3">{l.room?.roomNumber ?? '-'}</td>
+                        <td className="p-3">{l.cleanedByWorkerName ?? '-'}</td>
+                        <td className="p-3 whitespace-nowrap">{new Date(l.createdAt).toLocaleString()}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </>
+          )}
+          {(historyType === 'laundry' || historyType === 'all') && (
+            <>
+              <h4 className={`text-sm font-medium text-slate-600 ${historyType === 'all' ? 'p-3 pt-6' : 'p-3'}`}>{t('housekeeping.laundryHistory')}</h4>
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="text-left p-3">{t('frontOffice.roomNumber')}</th>
+                    <th className="text-left p-3">{t('housekeeping.item')}</th>
+                    <th className="text-right p-3">{t('housekeeping.quantity')}</th>
+                    <th className="text-left p-3">{t('housekeeping.status')}</th>
+                    <th className="text-left p-3">{t('housekeeping.assignedTo')}</th>
+                    <th className="w-32"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredLaundryRequests.length === 0 ? (
+                    <tr><td className="p-4 text-slate-500" colSpan={6}>{t('common.noItems')}</td></tr>
+                  ) : (
+                    filteredLaundryRequests.map((l) => (
+                      <tr key={l.id} className="border-t border-slate-100">
+                        <td className="p-3">{l.roomNumber ?? '-'}</td>
+                        <td className="p-3">{l.item}</td>
+                        <td className="p-3 text-right">{l.quantity}</td>
+                        <td className="p-3">{laundryStatusLabel(l.status)}</td>
+                        <td className="p-3">{l.assignedToWorker?.fullName ?? '-'}</td>
+                        <td className="p-3">
+                          {isAdmin && l.status === 'REQUESTED' && (
+                            <button type="button" onClick={() => approveLaundry(l.id)} className="text-teal-600 text-xs hover:underline mr-2">
+                              {t('housekeeping.approve')}
+                            </button>
+                          )}
+                          {isAdmin && l.status === 'APPROVED' && (
+                            <button type="button" onClick={() => markLaundryDelivered(l.id)} className="text-teal-600 text-xs hover:underline mr-2">
+                              {t('housekeeping.markDelivered')}
+                            </button>
+                          )}
+                          {l.status !== 'DELIVERED' && (
+                            <button type="button" onClick={() => { setAssignLaundryId(l.id); setShowAssignLaundry(true); setAssignWorkerId(l.assignedToWorker?.id ?? ''); }} className="text-slate-600 text-xs hover:underline">
+                              {t('housekeeping.assign')}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Modals */}
+      {showMaintenanceReason && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-4">
+            <h3 className="font-medium mb-4">{t('housekeeping.underMaintenanceReason')}</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm mb-1">{t('housekeeping.reason')} *</label>
+                <textarea value={maintenanceReason} onChange={(e) => setMaintenanceReason(e.target.value)} className="w-full px-3 py-2 border rounded text-sm min-h-[80px]" required />
+              </div>
+              <div>
+                <label className="block text-sm mb-1">{t('housekeeping.estimatedCompletion')}</label>
+                <input type="date" value={maintenanceEstimatedAt} onChange={(e) => setMaintenanceEstimatedAt(e.target.value)} className="w-full px-3 py-2 border rounded text-sm" />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={confirmMaintenanceReason} disabled={!maintenanceReason.trim()} className="px-4 py-2 bg-teal-600 text-white rounded text-sm disabled:opacity-50">
+                {t('common.confirm')}
+              </button>
+              <button onClick={() => { setShowMaintenanceReason(false); setPendingMaintenanceRoomId(null); setMaintenanceReason(''); setMaintenanceEstimatedAt(''); }} className="px-4 py-2 border rounded text-sm">
+                {t('common.cancel')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showReportIssue && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-4">
@@ -502,12 +805,7 @@ export default function HousekeepingPage() {
               </div>
               <div>
                 <label className="block text-sm mb-1">{t('housekeeping.issueDescription')}</label>
-                <textarea
-                  value={reportDesc}
-                  onChange={(e) => setReportDesc(e.target.value)}
-                  placeholder={t('housekeeping.issueDescription')}
-                  className="w-full px-3 py-2 border rounded text-sm min-h-[80px]"
-                />
+                <textarea value={reportDesc} onChange={(e) => setReportDesc(e.target.value)} placeholder={t('housekeeping.issueDescription')} className="w-full px-3 py-2 border rounded text-sm min-h-[80px]" />
               </div>
             </div>
             <div className="flex gap-2 mt-4">
@@ -522,7 +820,6 @@ export default function HousekeepingPage() {
         </div>
       )}
 
-      {/* Request Linen Modal */}
       {showLaundry && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-4">
@@ -546,6 +843,60 @@ export default function HousekeepingPage() {
                 {submitting ? '...' : t('common.save')}
               </button>
               <button onClick={() => { setShowLaundry(false); setLaundryRoom(''); setLaundryItem(''); setLaundryQty('1'); }} className="px-4 py-2 border rounded text-sm">
+                {t('common.cancel')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAssignCleaning && selectedRoom && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-4">
+            <h3 className="font-medium mb-4">{t('housekeeping.assignCleaning')} — {selectedRoom.roomNumber}</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm mb-1">{t('housekeeping.assignToStaff')}</label>
+                <select value={assignWorkerId} onChange={(e) => setAssignWorkerId(e.target.value)} className="w-full px-3 py-2 border rounded text-sm">
+                  <option value="">{t('common.select')}</option>
+                  {staffWorkers.map((w) => (
+                    <option key={w.id} value={w.id}>{w.fullName}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => assignCleaning(selectedRoom.id)} disabled={submitting || !assignWorkerId} className="px-4 py-2 bg-teal-600 text-white rounded text-sm disabled:opacity-50">
+                {submitting ? '...' : t('common.save')}
+              </button>
+              <button onClick={() => { setShowAssignCleaning(false); setAssignWorkerId(''); }} className="px-4 py-2 border rounded text-sm">
+                {t('common.cancel')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAssignLaundry && assignLaundryId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-4">
+            <h3 className="font-medium mb-4">{t('housekeeping.assignLaundry')}</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm mb-1">{t('housekeeping.assignToStaff')}</label>
+                <select value={assignWorkerId} onChange={(e) => setAssignWorkerId(e.target.value)} className="w-full px-3 py-2 border rounded text-sm">
+                  <option value="">{t('common.select')}</option>
+                  {staffWorkers.map((w) => (
+                    <option key={w.id} value={w.id}>{w.fullName}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => assignLaundry(assignLaundryId)} disabled={submitting || !assignWorkerId} className="px-4 py-2 bg-teal-600 text-white rounded text-sm disabled:opacity-50">
+                {submitting ? '...' : t('common.save')}
+              </button>
+              <button onClick={() => { setShowAssignLaundry(false); setAssignLaundryId(null); setAssignWorkerId(''); }} className="px-4 py-2 border rounded text-sm">
                 {t('common.cancel')}
               </button>
             </div>
