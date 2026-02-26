@@ -66,10 +66,6 @@ export default function HousekeepingPage() {
   const [statusSaving, setStatusSaving] = useState<string | null>(null);
   const [showReportIssue, setShowReportIssue] = useState(false);
   const [showLaundry, setShowLaundry] = useState(false);
-  const [showMaintenanceReason, setShowMaintenanceReason] = useState(false);
-  const [pendingMaintenanceRoomId, setPendingMaintenanceRoomId] = useState<string | null>(null);
-  const [maintenanceReason, setMaintenanceReason] = useState('');
-  const [maintenanceEstimatedAt, setMaintenanceEstimatedAt] = useState('');
   const [showAssignCleaning, setShowAssignCleaning] = useState(false);
   const [showAssignLaundry, setShowAssignLaundry] = useState(false);
   const [assignLaundryId, setAssignLaundryId] = useState<string | null>(null);
@@ -91,20 +87,28 @@ export default function HousekeepingPage() {
 
   function refresh() {
     if (!token) return;
-    Promise.all([
+    Promise.allSettled([
       api<Room[]>('/housekeeping/rooms', { token }),
       api<CleaningLog[]>('/housekeeping/cleaning-logs', { token }),
       api<MaintenanceRequest[]>('/housekeeping/requests', { token }),
       api<LaundryRequest[]>('/housekeeping/laundry', { token }),
       api<StaffWorker[]>('/housekeeping/assignable-staff', { token }),
-    ]).then(([r, c, m, l, s]) => {
+    ]).then(([roomsRes, logsRes, maintRes, laundryRes, staffRes]) => {
+      const r = roomsRes.status === 'fulfilled' && Array.isArray(roomsRes.value) ? roomsRes.value : [];
+      const c = logsRes.status === 'fulfilled' && Array.isArray(logsRes.value) ? logsRes.value : [];
+      const m = maintRes.status === 'fulfilled' && Array.isArray(maintRes.value) ? maintRes.value : [];
+      const l = laundryRes.status === 'fulfilled' && Array.isArray(laundryRes.value) ? laundryRes.value : [];
+      const s = staffRes.status === 'fulfilled' && Array.isArray(staffRes.value) ? staffRes.value : [];
       setRooms(r);
       setCleaningLogs(c);
       setMaintenanceRequests(m);
       setLaundryRequests(l);
-      setStaffWorkers(s ?? []);
+      setStaffWorkers(s);
       setSelectedRoom((prev) => (prev ? r.find((x) => x.id === prev.id) ?? null : null));
-    }).catch(() => {}).finally(() => setLoading(false));
+      if (roomsRes.status === 'rejected') {
+        notifyError(roomsRes.reason instanceof Error ? roomsRes.reason.message : 'Failed to load rooms');
+      }
+    }).finally(() => setLoading(false));
   }
 
   useEffect(() => {
@@ -128,16 +132,11 @@ export default function HousekeepingPage() {
     }
   }
 
-  async function setRoomStatus(roomId: string, status: string, extra?: { maintenanceReason?: string; maintenanceEstimatedAt?: string }) {
+  async function setRoomStatus(roomId: string, status: string) {
     if (!token) return;
     setStatusSaving(roomId);
     try {
-      const body: Record<string, unknown> = { status };
-      if (status === 'UNDER_MAINTENANCE' && extra) {
-        body.maintenanceReason = extra.maintenanceReason ?? '';
-        if (extra.maintenanceEstimatedAt) body.maintenanceEstimatedAt = extra.maintenanceEstimatedAt;
-      }
-      await api(`/housekeeping/rooms/${roomId}/status`, { method: 'PUT', token, body: JSON.stringify(body) });
+      await api(`/housekeeping/rooms/${roomId}/status`, { method: 'PUT', token, body: JSON.stringify({ status }) });
       notifySuccess(t('housekeeping.statusUpdated'));
       refresh();
       if (selectedRoom?.id === roomId) setSelectedRoom(null);
@@ -149,26 +148,7 @@ export default function HousekeepingPage() {
   }
 
   function handleStatusChange(roomId: string, newStatus: string) {
-    if (newStatus === 'UNDER_MAINTENANCE') {
-      setPendingMaintenanceRoomId(roomId);
-      setShowMaintenanceReason(true);
-      setMaintenanceReason('');
-      setMaintenanceEstimatedAt('');
-    } else {
-      setRoomStatus(roomId, newStatus);
-    }
-  }
-
-  function confirmMaintenanceReason() {
-    if (!pendingMaintenanceRoomId || !maintenanceReason.trim()) return;
-    setRoomStatus(pendingMaintenanceRoomId, 'UNDER_MAINTENANCE', {
-      maintenanceReason: maintenanceReason.trim(),
-      maintenanceEstimatedAt: maintenanceEstimatedAt.trim() || undefined,
-    });
-    setShowMaintenanceReason(false);
-    setPendingMaintenanceRoomId(null);
-    setMaintenanceReason('');
-    setMaintenanceEstimatedAt('');
+    setRoomStatus(roomId, newStatus);
   }
 
   async function submitReport() {
@@ -318,6 +298,8 @@ export default function HousekeepingPage() {
     return s;
   };
 
+  const roomCleaningLogsFor = (roomId: string) => cleaningLogs.filter((l) => l.roomId === roomId);
+
   // Filter maintenance requests
   const filteredMaintenance = maintenanceRequests.filter((req) => {
     if (maintFilter === 'all') return true;
@@ -450,15 +432,17 @@ export default function HousekeepingPage() {
                   <span>{selectedRoom.cleaningAssignedToWorker.fullName}</span>
                 </div>
               )}
-              {selectedRoom.cleaningLogs && selectedRoom.cleaningLogs.length > 0 && (
-                <div className="mb-4 text-sm">
-                  <div className="text-slate-500 text-xs">{t('housekeeping.lastCleanedBy')}</div>
-                  <div>{selectedRoom.cleaningLogs[0]?.cleanedByWorkerName ?? '-'}</div>
-                  <div className="text-slate-500 text-xs">
-                    {selectedRoom.cleaningLogs[0]?.createdAt ? new Date(selectedRoom.cleaningLogs[0].createdAt).toLocaleString() : '-'}
+              {(() => {
+                const roomLogs = roomCleaningLogsFor(selectedRoom.id);
+                const lastLog = roomLogs[0];
+                return lastLog ? (
+                  <div className="mb-4 text-sm">
+                    <div className="text-slate-500 text-xs">{t('housekeeping.lastCleanedBy')}</div>
+                    <div>{lastLog.cleanedByWorkerName ?? '-'}</div>
+                    <div className="text-slate-500 text-xs">{new Date(lastLog.createdAt).toLocaleString()}</div>
                   </div>
-                </div>
-              )}
+                ) : null;
+              })()}
               <div className="space-y-2">
                 <button
                   type="button"
@@ -760,32 +744,6 @@ export default function HousekeepingPage() {
       </div>
 
       {/* Modals */}
-      {showMaintenanceReason && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-4">
-            <h3 className="font-medium mb-4">{t('housekeeping.underMaintenanceReason')}</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm mb-1">{t('housekeeping.reason')} *</label>
-                <textarea value={maintenanceReason} onChange={(e) => setMaintenanceReason(e.target.value)} className="w-full px-3 py-2 border rounded text-sm min-h-[80px]" required />
-              </div>
-              <div>
-                <label className="block text-sm mb-1">{t('housekeeping.estimatedCompletion')}</label>
-                <input type="date" value={maintenanceEstimatedAt} onChange={(e) => setMaintenanceEstimatedAt(e.target.value)} className="w-full px-3 py-2 border rounded text-sm" />
-              </div>
-            </div>
-            <div className="flex gap-2 mt-4">
-              <button onClick={confirmMaintenanceReason} disabled={!maintenanceReason.trim()} className="px-4 py-2 bg-teal-600 text-white rounded text-sm disabled:opacity-50">
-                {t('common.confirm')}
-              </button>
-              <button onClick={() => { setShowMaintenanceReason(false); setPendingMaintenanceRoomId(null); setMaintenanceReason(''); setMaintenanceEstimatedAt(''); }} className="px-4 py-2 border rounded text-sm">
-                {t('common.cancel')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {showReportIssue && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-4">
