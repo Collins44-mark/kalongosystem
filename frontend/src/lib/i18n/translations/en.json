@@ -345,6 +345,8 @@
   "housekeeping.assign": "Assign",
   "housekeeping.assignedTo": "Assigned to",
   "housekeeping.assigned": "Assigned",
+  "housekeeping.viewMore": "View more",
+  "housekeeping.viewLess": "View less",
 
   "finance.title": "Finance",
   "finance.onlyManagers": "Only managers and finance can access finance.",
