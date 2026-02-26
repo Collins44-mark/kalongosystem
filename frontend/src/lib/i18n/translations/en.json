@@ -345,6 +345,8 @@
   "housekeeping.assign": "Assign",
   "housekeeping.assignedTo": "Assigned to",
   "housekeeping.assigned": "Assigned",
+  "housekeeping.completed": "Completed",
+  "housekeeping.setToInProgress": "Set to In Progress",
   "housekeeping.viewMore": "View more",
   "housekeeping.viewLess": "View less",
 

@@ -153,6 +153,23 @@ export class HousekeepingController {
     return this.housekeeping.getAssignableStaff(user.businessId);
   }
 
+  @Put('rooms/:id/cleaning-status')
+  @UseGuards(RolesGuard)
+  @Roles('MANAGER', 'HOUSEKEEPING')
+  async updateCleaningStatus(
+    @CurrentUser() user: any,
+    @Param('id') roomId: string,
+    @Body() dto: { status: string },
+  ) {
+    return this.housekeeping.updateCleaningStatus(
+      user.businessId,
+      user.branchId || 'main',
+      roomId,
+      dto.status,
+      { workerId: user.workerId ?? null, workerName: user.workerName ?? null },
+    );
+  }
+
   @Put('rooms/:id/assign-cleaning')
   @UseGuards(RolesGuard)
   @Roles('MANAGER', 'ADMIN', 'OWNER', 'HOUSEKEEPING')
@@ -171,8 +188,8 @@ export class HousekeepingController {
   }
 
   @Put('laundry/:id/assign')
-  @UseGuards(RolesGuard)
-  @Roles('MANAGER', 'ADMIN', 'OWNER', 'HOUSEKEEPING')
+  @UseGuards(RolesGuard, AllowManagerGuard)
+  @Roles('MANAGER', 'ADMIN', 'OWNER')
   async assignLaundry(
     @CurrentUser() user: any,
     @Param('id') id: string,
@@ -210,6 +227,17 @@ export class HousekeepingController {
   @Roles('MANAGER', 'ADMIN', 'OWNER')
   async approveLaundry(@CurrentUser() user: any, @Param('id') id: string) {
     return this.housekeeping.approveLaundry(user.businessId, id);
+  }
+
+  @Put('laundry/:id/status')
+  @UseGuards(RolesGuard)
+  @Roles('MANAGER', 'HOUSEKEEPING')
+  async updateLaundryStatus(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body() dto: { status: string },
+  ) {
+    return this.housekeeping.updateLaundryStatus(user.businessId, id, dto.status);
   }
 
   @Post('laundry/:id/delivered')

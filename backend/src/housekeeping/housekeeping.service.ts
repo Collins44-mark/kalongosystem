@@ -6,7 +6,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 export class HousekeepingService {
   constructor(private prisma: PrismaService) {}
 
-  /** Get all rooms - both Housekeeping and Admin see full grid */
+  /** Get all rooms with cleaning assignment */
   async getRooms(businessId: string, branchId: string) {
     const branch = branchId || 'main';
     return this.prisma.room.findMany({
@@ -14,12 +14,14 @@ export class HousekeepingService {
       include: {
         category: true,
         cleaningLogs: { orderBy: { createdAt: 'desc' }, take: 10 },
+        cleaningAssignedToWorker: { select: { id: true, fullName: true } },
+        cleaningAssignedByWorker: { select: { id: true, fullName: true } },
       },
       orderBy: { roomNumber: 'asc' },
     });
   }
 
-  /** Get assignable staff (HOUSEKEEPING role) for cleaning/laundry assignment */
+  /** Get assignable staff (HOUSEKEEPING role) for cleaning/laundry */
   async getAssignableStaff(businessId: string) {
     return this.prisma.staffWorker.findMany({
       where: { businessId, role: 'HOUSEKEEPING', status: 'ACTIVE' },
@@ -28,66 +30,131 @@ export class HousekeepingService {
     });
   }
 
-  /** Assign cleaning to a worker (no-op until migration adds columns) */
+  /** Assign cleaning - Admin assigns, Housekeeping can reassign */
   async assignCleaning(
     businessId: string,
     branchId: string,
     roomId: string,
-    _workerId: string,
-    _actor: { workerId?: string | null; workerName?: string | null },
-  ) {
-    const room = await this.prisma.room.findFirst({
-      where: { id: roomId, businessId, branchId },
-    });
-    if (!room) throw new ForbiddenException('Room not found');
-    return this.prisma.room.findFirst({
-      where: { id: roomId, businessId },
-      include: { category: true },
-    });
-  }
-
-  /** Assign laundry to a worker (no-op until migration adds columns) */
-  async assignLaundry(
-    businessId: string,
-    requestId: string,
-    _workerId: string,
-    _actor: { workerId?: string | null; workerName?: string | null },
-  ) {
-    return this.prisma.laundryRequest.findFirst({
-      where: { id: requestId, businessId },
-    });
-  }
-
-  /** Mark room as cleaned - sets status to VACANT + creates log. Only for UNDER_MAINTENANCE (needs cleaning). */
-  async markAsCleaned(
-    businessId: string,
-    branchId: string,
-    roomId: string,
-    actor: { userId: string; workerId?: string | null; workerName?: string | null },
+    workerId: string,
+    actor: { workerId?: string | null; workerName?: string | null },
   ) {
     const room = await this.prisma.room.findFirst({
       where: { id: roomId, businessId, branchId },
     });
     if (!room) throw new ForbiddenException('Room not found');
     if (room.status !== 'UNDER_MAINTENANCE') {
-      throw new ForbiddenException('Only rooms under maintenance (needs cleaning) can be marked as cleaned');
+      throw new BadRequestException('Can only assign cleaning to rooms under maintenance');
     }
-    await this.prisma.$transaction([
-      this.prisma.room.update({
-        where: { id: roomId },
-        data: { status: 'VACANT' },
-      }),
-      this.prisma.roomCleaningLog.create({
-        data: {
-          businessId,
-          branchId,
-          roomId,
-          cleanedByWorkerId: actor.workerId ?? null,
-          cleanedByWorkerName: actor.workerName ?? null,
-        },
-      }),
-    ]);
-    return this.prisma.room.findFirst({ where: { id: roomId }, include: { category: true } });
+    const worker = await this.prisma.staffWorker.findFirst({
+      where: { id: workerId, businessId, role: 'HOUSEKEEPING', status: 'ACTIVE' },
+    });
+    if (!worker) throw new BadRequestException('Invalid staff member');
+    return this.prisma.room.update({
+      where: { id: roomId, businessId },
+      data: {
+        cleaningAssignedToWorkerId: workerId,
+        cleaningAssignedAt: new Date(),
+        cleaningAssignedByWorkerId: actor.workerId ?? null,
+        cleaningStatus: 'ASSIGNED',
+      },
+      include: { category: true, cleaningAssignedToWorker: { select: { id: true, fullName: true } } },
+    });
+  }
+
+  /** Update cleaning task status - Housekeeping: Assigned → In Progress → Completed */
+  async updateCleaningStatus(
+    businessId: string,
+    branchId: string,
+    roomId: string,
+    status: string,
+    actor: { workerId?: string | null; workerName?: string | null },
+  ) {
+    const valid = ['ASSIGNED', 'IN_PROGRESS', 'COMPLETED'];
+    if (!valid.includes(status)) throw new BadRequestException('Invalid status');
+    const room = await this.prisma.room.findFirst({
+      where: { id: roomId, businessId, branchId },
+      include: { cleaningAssignedToWorker: { select: { id: true, fullName: true } } },
+    });
+    if (!room) throw new ForbiddenException('Room not found');
+    if (room.status !== 'UNDER_MAINTENANCE') {
+      throw new BadRequestException('Room is not under maintenance');
+    }
+    if (status === 'COMPLETED') {
+      const assignedId = room.cleaningAssignedToWorkerId ?? null;
+      const assignedName = room.cleaningAssignedToWorker?.fullName ?? null;
+      await this.prisma.$transaction([
+        this.prisma.room.update({
+          where: { id: roomId, businessId },
+          data: {
+            status: 'VACANT',
+            cleaningAssignedToWorkerId: null,
+            cleaningAssignedAt: null,
+            cleaningAssignedByWorkerId: null,
+            cleaningStatus: null,
+          },
+        }),
+        this.prisma.roomCleaningLog.create({
+          data: {
+            businessId,
+            branchId: branchId || 'main',
+            roomId,
+            cleanedByWorkerId: actor.workerId ?? null,
+            cleanedByWorkerName: actor.workerName ?? null,
+            assignedStaffId: assignedId ?? null,
+            assignedStaffName: assignedName ?? null,
+          },
+        }),
+      ]);
+      return this.prisma.room.findFirst({ where: { id: roomId }, include: { category: true } });
+    }
+    return this.prisma.room.update({
+      where: { id: roomId, businessId },
+      data: { cleaningStatus: status },
+      include: { category: true, cleaningAssignedToWorker: { select: { id: true, fullName: true } } },
+    });
+  }
+
+  /** Assign laundry - Admin only */
+  async assignLaundry(
+    businessId: string,
+    requestId: string,
+    workerId: string,
+    actor: { workerId?: string | null; workerName?: string | null },
+  ) {
+    const worker = await this.prisma.staffWorker.findFirst({
+      where: { id: workerId, businessId, role: 'HOUSEKEEPING', status: 'ACTIVE' },
+    });
+    if (!worker) throw new BadRequestException('Invalid staff member');
+    return this.prisma.laundryRequest.update({
+      where: { id: requestId, businessId },
+      data: {
+        assignedToWorkerId: workerId,
+        assignedByWorkerId: actor.workerId ?? null,
+        assignedAt: new Date(),
+        status: 'ASSIGNED',
+      },
+      include: { assignedToWorker: { select: { id: true, fullName: true } } },
+    });
+  }
+
+  /** Update laundry task status - Housekeeping: Assigned → In Progress → Completed */
+  async updateLaundryStatus(businessId: string, requestId: string, status: string) {
+    const valid = ['ASSIGNED', 'IN_PROGRESS', 'COMPLETED'];
+    if (!valid.includes(status)) throw new BadRequestException('Invalid status');
+    return this.prisma.laundryRequest.update({
+      where: { id: requestId, businessId },
+      data: { status },
+    });
+  }
+
+  /** Mark room as cleaned - legacy: Housekeeping marks Completed (same as updateCleaningStatus COMPLETED) */
+  async markAsCleaned(
+    businessId: string,
+    branchId: string,
+    roomId: string,
+    actor: { userId: string; workerId?: string | null; workerName?: string | null },
+  ) {
+    return this.updateCleaningStatus(businessId, branchId, roomId, 'COMPLETED', actor);
   }
 
   /** Get cleaning logs - newest first */
@@ -100,7 +167,7 @@ export class HousekeepingService {
     });
   }
 
-  /** Update room status - Admin only. Full override: VACANT, OCCUPIED, RESERVED, UNDER_MAINTENANCE. */
+  /** Update room status - Admin only. Clears cleaning assignment on override. */
   async updateRoomStatus(
     businessId: string,
     roomId: string,
@@ -109,14 +176,19 @@ export class HousekeepingService {
     _extra?: { maintenanceReason?: string; maintenanceEstimatedAt?: string },
   ) {
     const valid = ['VACANT', 'OCCUPIED', 'RESERVED', 'UNDER_MAINTENANCE'];
-    if (!valid.includes(status)) {
-      throw new ForbiddenException('Invalid room status');
-    }
+    if (!valid.includes(status)) throw new ForbiddenException('Invalid room status');
     const room = await this.prisma.room.findFirst({ where: { id: roomId, businessId } });
     if (!room) throw new ForbiddenException('Room not found');
+    const data: Record<string, unknown> = {
+      status,
+      cleaningAssignedToWorkerId: null,
+      cleaningAssignedAt: null,
+      cleaningAssignedByWorkerId: null,
+      cleaningStatus: null,
+    };
     const res = await this.prisma.room.update({
       where: { id: roomId, businessId },
-      data: { status },
+      data: data as Record<string, unknown>,
     });
     if (actor?.userId) {
       try {
@@ -134,22 +206,16 @@ export class HousekeepingService {
           },
         });
       } catch {
-        // ignore audit failures
+        // ignore
       }
     }
     return res;
   }
 
-  /** Submit maintenance or expense request - housekeeping cannot approve */
   async submitRequest(
     businessId: string,
     branchId: string,
-    data: {
-      roomId?: string;
-      description: string;
-      type: string;
-      amount?: number;
-    },
+    data: { roomId?: string; description: string; type: string; amount?: number },
     createdBy: string,
   ) {
     return this.prisma.maintenanceRequest.create({
@@ -175,9 +241,7 @@ export class HousekeepingService {
 
   async updateRequestStatus(businessId: string, requestId: string, status: string) {
     const valid = ['PENDING', 'IN_PROGRESS', 'APPROVED', 'REJECTED'];
-    if (!valid.includes(status)) {
-      throw new BadRequestException('Invalid status');
-    }
+    if (!valid.includes(status)) throw new BadRequestException('Invalid status');
     return this.prisma.maintenanceRequest.update({
       where: { id: requestId, businessId },
       data: { status },
@@ -198,7 +262,6 @@ export class HousekeepingService {
     });
   }
 
-  /** Laundry: create request */
   async createLaundryRequest(
     businessId: string,
     branchId: string,
@@ -219,7 +282,6 @@ export class HousekeepingService {
     });
   }
 
-  /** Laundry: approve (Admin only) - maps to delivered until APPROVED column exists */
   async approveLaundry(businessId: string, requestId: string) {
     return this.prisma.laundryRequest.update({
       where: { id: requestId, businessId },
@@ -227,7 +289,6 @@ export class HousekeepingService {
     });
   }
 
-  /** Laundry: mark as delivered (Admin only) */
   async markLaundryDelivered(businessId: string, requestId: string) {
     return this.prisma.laundryRequest.update({
       where: { id: requestId, businessId },
@@ -235,10 +296,13 @@ export class HousekeepingService {
     });
   }
 
-  /** Laundry: list all - newest first */
   async getLaundryRequests(businessId: string, branchId: string, limit = 100) {
     return this.prisma.laundryRequest.findMany({
       where: { businessId, branchId },
+      include: {
+        assignedToWorker: { select: { id: true, fullName: true } },
+        assignedByWorker: { select: { id: true, fullName: true } },
+      },
       orderBy: { createdAt: 'desc' },
       take: limit,
     });

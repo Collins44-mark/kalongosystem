@@ -18,8 +18,9 @@ type Room = {
   cleaningAssignedToWorker?: StaffWorker | null;
   cleaningAssignedByWorker?: StaffWorker | null;
   cleaningAssignedAt?: string | null;
+  cleaningStatus?: string | null;
 };
-type CleaningLog = { id: string; roomId: string; cleanedByWorkerName: string | null; createdAt: string; room?: { roomNumber: string } };
+type CleaningLog = { id: string; roomId: string; cleanedByWorkerName: string | null; assignedStaffName?: string | null; createdAt: string; room?: { roomNumber: string } };
 type MaintenanceRequest = { id: string; roomId: string | null; description: string; type: string; status: string; createdAt: string };
 type LaundryRequest = {
   id: string;
@@ -125,7 +126,7 @@ export default function HousekeepingPage() {
     if (!token) return;
     setMarkingId(roomId);
     try {
-      await api(`/housekeeping/rooms/${roomId}/mark-cleaned`, { method: 'POST', token });
+      await api(`/housekeeping/rooms/${roomId}/cleaning-status`, { method: 'PUT', token, body: JSON.stringify({ status: 'COMPLETED' }) });
       notifySuccess(t('housekeeping.markAsCleaned'));
       refresh();
       if (selectedRoom?.id === roomId) setSelectedRoom(null);
@@ -133,6 +134,31 @@ export default function HousekeepingPage() {
       notifyError((e as Error).message);
     } finally {
       setMarkingId(null);
+    }
+  }
+
+  async function updateCleaningStatus(roomId: string, status: string) {
+    if (!token) return;
+    setMarkingId(roomId);
+    try {
+      await api(`/housekeeping/rooms/${roomId}/cleaning-status`, { method: 'PUT', token, body: JSON.stringify({ status }) });
+      notifySuccess(t('housekeeping.statusUpdated'));
+      refresh();
+    } catch (e) {
+      notifyError((e as Error).message);
+    } finally {
+      setMarkingId(null);
+    }
+  }
+
+  async function updateLaundryStatus(id: string, status: string) {
+    if (!token) return;
+    try {
+      await api(`/housekeeping/laundry/${id}/status`, { method: 'PUT', token, body: JSON.stringify({ status }) });
+      notifySuccess(t('housekeeping.statusUpdated'));
+      refresh();
+    } catch (e) {
+      notifyError((e as Error).message);
     }
   }
 
@@ -196,17 +222,6 @@ export default function HousekeepingPage() {
       notifyError((e as Error).message);
     } finally {
       setSubmitting(false);
-    }
-  }
-
-  async function approveLaundry(id: string) {
-    if (!token || !isAdmin) return;
-    try {
-      await api(`/housekeeping/laundry/${id}/approve`, { method: 'PATCH', token });
-      notifySuccess(t('housekeeping.approved'));
-      refresh();
-    } catch (e) {
-      notifyError((e as Error).message);
     }
   }
 
@@ -295,8 +310,18 @@ export default function HousekeepingPage() {
     return s;
   };
 
+  const cleaningStatusLabel = (s: string) => {
+    if (s === 'ASSIGNED') return t('housekeeping.assigned');
+    if (s === 'IN_PROGRESS') return t('housekeeping.inProgress');
+    if (s === 'COMPLETED') return t('housekeeping.completed');
+    return s;
+  };
+
   const laundryStatusLabel = (s: string) => {
     if (s === 'REQUESTED') return t('housekeeping.requested');
+    if (s === 'ASSIGNED') return t('housekeeping.assigned');
+    if (s === 'IN_PROGRESS') return t('housekeeping.inProgress');
+    if (s === 'COMPLETED') return t('housekeeping.completed');
     if (s === 'APPROVED') return t('housekeeping.approved');
     if (s === 'DELIVERED') return t('housekeeping.delivered');
     return s;
@@ -434,6 +459,9 @@ export default function HousekeepingPage() {
                 <div className="mb-3 text-sm">
                   <span className="text-slate-500 text-xs">{t('housekeeping.assignedTo')}: </span>
                   <span>{selectedRoom.cleaningAssignedToWorker.fullName}</span>
+                  {selectedRoom.cleaningStatus && (
+                    <span className="ml-2 text-xs text-slate-500">({cleaningStatusLabel(selectedRoom.cleaningStatus)})</span>
+                  )}
                 </div>
               )}
               {(() => {
@@ -455,6 +483,16 @@ export default function HousekeepingPage() {
                 >
                   {t('housekeeping.assignCleaning')}
                 </button>
+                {selectedRoom.status === 'UNDER_MAINTENANCE' && selectedRoom.cleaningStatus === 'ASSIGNED' && (
+                  <button
+                    type="button"
+                    onClick={() => updateCleaningStatus(selectedRoom.id, 'IN_PROGRESS')}
+                    disabled={!!markingId}
+                    className="w-full px-3 py-2 border border-slate-300 rounded text-sm hover:bg-slate-50 min-h-[40px] disabled:opacity-50"
+                  >
+                    {markingId === selectedRoom.id ? '...' : t('housekeeping.setToInProgress')}
+                  </button>
+                )}
                 {selectedRoom.status === 'UNDER_MAINTENANCE' && (
                   <button
                     type="button"
@@ -795,20 +833,26 @@ export default function HousekeepingPage() {
                       <div className="text-xs text-slate-500 mt-2">{t('housekeeping.assignedTo')}</div>
                       <div className="text-sm break-words">{l.assignedToWorker?.fullName ?? '-'}</div>
                       <div className="flex flex-col gap-2 mt-3">
-                        {isAdmin && l.status === 'REQUESTED' && (
-                          <button type="button" onClick={() => approveLaundry(l.id)} className="w-full py-2 bg-teal-600 text-white rounded text-sm">
-                            {t('housekeeping.approve')}
-                          </button>
-                        )}
-                        {isAdmin && l.status === 'APPROVED' && (
+                        {isAdmin && l.status === 'COMPLETED' && (
                           <button type="button" onClick={() => markLaundryDelivered(l.id)} className="w-full py-2 bg-teal-600 text-white rounded text-sm">
                             {t('housekeeping.markDelivered')}
                           </button>
                         )}
-                        {l.status !== 'DELIVERED' && (
+                        {isAdmin && !['DELIVERED'].includes(l.status) && (
                           <button type="button" onClick={() => { setAssignLaundryId(l.id); setShowAssignLaundry(true); setAssignWorkerId(l.assignedToWorker?.id ?? ''); }} className="w-full py-2 border border-slate-300 rounded text-sm">
                             {t('housekeeping.assign')}
                           </button>
+                        )}
+                        {['ASSIGNED', 'IN_PROGRESS'].includes(l.status) && (
+                          <select
+                            value={l.status}
+                            onChange={(e) => updateLaundryStatus(l.id, e.target.value)}
+                            className="w-full px-3 py-2 border rounded text-sm min-h-[40px]"
+                          >
+                            <option value="ASSIGNED">{laundryStatusLabel('ASSIGNED')}</option>
+                            <option value="IN_PROGRESS">{laundryStatusLabel('IN_PROGRESS')}</option>
+                            <option value="COMPLETED">{laundryStatusLabel('COMPLETED')}</option>
+                          </select>
                         )}
                       </div>
                     </div>
@@ -840,20 +884,26 @@ export default function HousekeepingPage() {
                           <td className="p-3">{laundryStatusLabel(l.status)}</td>
                           <td className="p-3">{l.assignedToWorker?.fullName ?? '-'}</td>
                           <td className="p-3">
-                            {isAdmin && l.status === 'REQUESTED' && (
-                              <button type="button" onClick={() => approveLaundry(l.id)} className="text-teal-600 text-xs hover:underline mr-2">
-                                {t('housekeeping.approve')}
-                              </button>
-                            )}
-                            {isAdmin && l.status === 'APPROVED' && (
+                            {isAdmin && l.status === 'COMPLETED' && (
                               <button type="button" onClick={() => markLaundryDelivered(l.id)} className="text-teal-600 text-xs hover:underline mr-2">
                                 {t('housekeeping.markDelivered')}
                               </button>
                             )}
-                            {l.status !== 'DELIVERED' && (
-                              <button type="button" onClick={() => { setAssignLaundryId(l.id); setShowAssignLaundry(true); setAssignWorkerId(l.assignedToWorker?.id ?? ''); }} className="text-slate-600 text-xs hover:underline">
+                            {isAdmin && !['DELIVERED'].includes(l.status) && (
+                              <button type="button" onClick={() => { setAssignLaundryId(l.id); setShowAssignLaundry(true); setAssignWorkerId(l.assignedToWorker?.id ?? ''); }} className="text-slate-600 text-xs hover:underline mr-2">
                                 {t('housekeeping.assign')}
                               </button>
+                            )}
+                            {['ASSIGNED', 'IN_PROGRESS'].includes(l.status) && (
+                              <select
+                                value={l.status}
+                                onChange={(e) => updateLaundryStatus(l.id, e.target.value)}
+                                className="px-2 py-1 border rounded text-xs"
+                              >
+                                <option value="ASSIGNED">{laundryStatusLabel('ASSIGNED')}</option>
+                                <option value="IN_PROGRESS">{laundryStatusLabel('IN_PROGRESS')}</option>
+                                <option value="COMPLETED">{laundryStatusLabel('COMPLETED')}</option>
+                              </select>
                             )}
                           </td>
                         </tr>
