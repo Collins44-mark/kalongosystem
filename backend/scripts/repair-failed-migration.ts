@@ -7,8 +7,20 @@ config({ path: resolve(__dirname, "../.env") });
 import { Client } from "pg";
 
 async function repairMigration() {
+  let connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error("DATABASE_URL is not set");
+  }
+  // Render internal host (dpg-xxx-a) is not resolvable locally - use external host
+  if (connectionString.includes("@dpg-") && connectionString.includes("-a/")) {
+    connectionString = connectionString.replace(
+      /@(dpg-[a-z0-9]+-a)\//,
+      "@$1.oregon-postgres.render.com/"
+    );
+  }
+
   const client = new Client({
-    connectionString: process.env.DATABASE_URL,
+    connectionString,
     ssl: { rejectUnauthorized: false }
   });
 
