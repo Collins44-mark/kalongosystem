@@ -116,8 +116,41 @@ model Business {
   roleMessages      RoleMessage[]
   tasks             Task[]
   taskReads         TaskRead[]
+  adminAlerts       AdminAlert[]
 
   @@map("businesses")
+}
+
+model AdminAlert {
+  id         String   @id @default(cuid())
+  businessId String
+  type       String   // MAINTENANCE_REQUEST, LAUNDRY_REQUEST, ROLE_MESSAGE
+  title      String
+  message    String   @db.Text
+  entityType String?  // maintenance_request, laundry_request, etc.
+  entityId   String?
+  senderRole String
+  senderId   String?
+  createdAt  DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  reads    AdminAlertRead[]
+
+  @@index([businessId, createdAt])
+  @@map("admin_alerts")
+}
+
+model AdminAlertRead {
+  id        String   @id @default(cuid())
+  alertId   String
+  userId    String
+  readAt    DateTime @default(now())
+
+  alert AdminAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@unique([alertId, userId])
+  @@index([userId])
+  @@map("admin_alert_reads")
 }
 
 model BusinessSetting {

@@ -1,23 +1,87 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { useNotifications } from '@/store/notifications';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAuth } from '@/store/auth';
+import { api } from '@/lib/api';
+import { isManagerLevel } from '@/lib/roles';
+
+type AdminAlert = {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  entityType?: string | null;
+  entityId?: string | null;
+  senderRole: string;
+  createdAt: string;
+  read: boolean;
+};
 
 export function NotificationsPanel() {
-  const { items, markAllRead, clear, remove } = useNotifications();
+  const { token, user } = useAuth();
   const [open, setOpen] = useState(false);
+  const [alerts, setAlerts] = useState<AdminAlert[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const unreadCount = useMemo(() => items.filter((i) => !i.read).length, [items]);
+  const isAdmin = isManagerLevel(user?.role);
+
+  const fetchAlerts = useCallback(async () => {
+    if (!token || !isAdmin) return;
+    setLoading(true);
+    try {
+      const data = await api<AdminAlert[]>('/notifications', { token });
+      setAlerts(Array.isArray(data) ? data : []);
+    } catch {
+      setAlerts([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [token, isAdmin]);
+
+  const markAllRead = useCallback(async () => {
+    if (!token || !isAdmin) return;
+    try {
+      await api('/notifications/mark-read', { method: 'POST', token });
+      await fetchAlerts();
+    } catch {
+      /* ignore */
+    }
+  }, [token, isAdmin, fetchAlerts]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    fetchAlerts();
+  }, [isAdmin, fetchAlerts]);
+
+  useEffect(() => {
+    if (!isAdmin || !token) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchAlerts();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [isAdmin, token, fetchAlerts]);
+
+  const unreadCount = useMemo(() => alerts.filter((a) => !a.read).length, [alerts]);
+
+  const handleToggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (next) markAllRead();
+  };
+
+  const alertTypeLabel = (type: string) => {
+    if (type === 'MAINTENANCE_REQUEST') return 'Maintenance';
+    if (type === 'LAUNDRY_REQUEST') return 'Laundry';
+    if (type === 'ROLE_MESSAGE') return 'Message';
+    return type;
+  };
 
   return (
     <div className="relative">
       <button
         type="button"
-        onClick={() => {
-          const next = !open;
-          setOpen(next);
-          if (next) markAllRead();
-        }}
+        onClick={handleToggle}
         className="relative p-2 rounded hover:bg-slate-100"
         aria-label="Notifications"
       >
@@ -36,41 +100,29 @@ export function NotificationsPanel() {
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} aria-hidden />
           <div className="absolute left-0 top-full mt-2 w-[320px] max-w-[90vw] bg-white border rounded-lg shadow-lg z-20 overflow-hidden">
             <div className="flex items-center justify-between px-3 py-2 border-b bg-slate-50">
-              <div className="text-sm font-medium text-slate-700">Notifications</div>
-              <div className="flex items-center gap-2">
-                <button onClick={clear} className="text-xs text-slate-600 hover:underline">
-                  Clear
-                </button>
-                <button onClick={() => setOpen(false)} className="text-xs text-slate-600 hover:underline">
-                  Close
-                </button>
-              </div>
+              <div className="text-sm font-medium text-slate-700">Alerts</div>
+              <button onClick={() => setOpen(false)} className="text-xs text-slate-600 hover:underline">
+                Close
+              </button>
             </div>
             <div className="max-h-[60vh] overflow-auto">
-              {items.length === 0 ? (
-                <div className="p-3 text-sm text-slate-500">No notifications</div>
+              {loading ? (
+                <div className="p-3 text-sm text-slate-500">Loading...</div>
+              ) : alerts.length === 0 ? (
+                <div className="p-3 text-sm text-slate-500">No alerts</div>
               ) : (
-                items.map((n) => (
-                  <div key={n.id} className="px-3 py-2 border-b last:border-b-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className={`text-xs font-medium ${
-                          n.type === 'success' ? 'text-green-700' : n.type === 'error' ? 'text-red-700' : 'text-slate-700'
-                        }`}>
-                          {n.type.toUpperCase()}
-                        </div>
-                        <div className="text-sm text-slate-800 break-words">{n.message}</div>
-                        <div className="text-[11px] text-slate-500 mt-0.5">
-                          {new Date(n.createdAt).toLocaleString()}
-                        </div>
+                alerts.map((a) => (
+                  <div
+                    key={a.id}
+                    className={`px-3 py-2 border-b last:border-b-0 ${!a.read ? 'bg-amber-50/50' : ''}`}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-teal-700">{alertTypeLabel(a.type)}</div>
+                      <div className="text-sm font-medium text-slate-800 break-words">{a.title}</div>
+                      <div className="text-sm text-slate-600 break-words mt-0.5">{a.message}</div>
+                      <div className="text-[11px] text-slate-500 mt-1">
+                        From {a.senderRole} · {new Date(a.createdAt).toLocaleString()}
                       </div>
-                      <button
-                        onClick={() => remove(n.id)}
-                        className="text-xs text-slate-400 hover:text-slate-700"
-                        aria-label="Remove"
-                      >
-                        ✕
-                      </button>
                     </div>
                   </div>
                 ))
@@ -82,4 +134,3 @@ export function NotificationsPanel() {
     </div>
   );
 }
-

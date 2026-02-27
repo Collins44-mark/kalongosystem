@@ -111,6 +111,7 @@ export class HousekeepingController {
       user.branchId,
       dto,
       user.sub,
+      user.role,
     );
   }
 
@@ -218,7 +219,11 @@ export class HousekeepingController {
       user.businessId,
       user.branchId,
       { roomNumber: dto.roomNumber, item: dto.item, quantity: dto.quantity ?? 1 },
-      { workerId: user.workerId ?? null, workerName: user.workerName ?? null },
+      {
+        workerId: user.workerId ?? null,
+        workerName: user.workerName ?? null,
+        role: user.role,
+      },
     );
   }
 

@@ -1,10 +1,14 @@
 import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class HousekeepingService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notifications: NotificationsService,
+  ) {}
 
   /** Get all rooms with cleaning assignment */
   async getRooms(businessId: string, branchId: string) {
@@ -217,8 +221,9 @@ export class HousekeepingService {
     branchId: string,
     data: { roomId?: string; description: string; type: string; amount?: number },
     createdBy: string,
+    actorRole?: string | null,
   ) {
-    return this.prisma.maintenanceRequest.create({
+    const req = await this.prisma.maintenanceRequest.create({
       data: {
         businessId,
         branchId,
@@ -230,6 +235,20 @@ export class HousekeepingService {
         createdBy,
       },
     });
+    await this.notifications.createAdminAlertIfNeeded(
+      {
+        businessId,
+        type: 'MAINTENANCE_REQUEST',
+        title: 'Maintenance request',
+        message: data.description,
+        entityType: 'maintenance_request',
+        entityId: req.id,
+        senderRole: actorRole ?? 'HOUSEKEEPING',
+        senderId: createdBy,
+      },
+      actorRole,
+    );
+    return req;
   }
 
   async getRequests(businessId: string, branchId: string) {
@@ -266,9 +285,9 @@ export class HousekeepingService {
     businessId: string,
     branchId: string,
     data: { roomNumber?: string; item: string; quantity: number },
-    actor: { workerId?: string | null; workerName?: string | null },
+    actor: { workerId?: string | null; workerName?: string | null; role?: string | null },
   ) {
-    return this.prisma.laundryRequest.create({
+    const req = await this.prisma.laundryRequest.create({
       data: {
         businessId,
         branchId,
@@ -280,6 +299,20 @@ export class HousekeepingService {
         createdByWorkerName: actor.workerName ?? null,
       },
     });
+    await this.notifications.createAdminAlertIfNeeded(
+      {
+        businessId,
+        type: 'LAUNDRY_REQUEST',
+        title: 'Laundry request',
+        message: `${data.item} x ${data.quantity}${data.roomNumber ? ` (Room ${data.roomNumber})` : ''}`,
+        entityType: 'laundry_request',
+        entityId: req.id,
+        senderRole: actor.role ?? 'HOUSEKEEPING',
+        senderId: actor.workerId ?? null,
+      },
+      actor.role,
+    );
+    return req;
   }
 
   async approveLaundry(businessId: string, requestId: string) {

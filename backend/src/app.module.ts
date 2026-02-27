@@ -21,6 +21,7 @@ import { SuperAdminModule } from './super-admin/super-admin.module';
 import { AccountingModule } from './accounting/accounting.module';
 import { OtherRevenueModule } from './other-revenue/other-revenue.module';
 import { TasksModule } from './tasks/tasks.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { TasksModule } from './tasks/tasks.module';
     AccountingModule,
     OtherRevenueModule,
     TasksModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}
