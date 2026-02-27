@@ -1,3 +1,0 @@
--- Placeholder migration recreated to align with production database.
--- Original migration failed in production.
--- This file intentionally contains no SQL changes.
