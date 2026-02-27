@@ -69,7 +69,7 @@ const SIDEBAR_LINKS: { href: string; labelKey: string; roles: string[]; module: 
   { href: '/dashboard/housekeeping', labelKey: 'nav.housekeeping', roles: ['MANAGER', 'HOUSEKEEPING'], module: 'housekeeping' },
   { href: '/dashboard/finance', labelKey: 'nav.finance', roles: ['MANAGER', 'FINANCE'], module: 'finance' },
   { href: '/dashboard/workers', labelKey: 'nav.workers', roles: ['MANAGER', 'ADMIN', 'OWNER'], module: 'workers' },
-  { href: '/dashboard/reports', labelKey: 'nav.reports', roles: ['MANAGER', 'ADMIN', 'OWNER'], module: 'reports' },
+  { href: '/dashboard/reports', labelKey: 'nav.reports', roles: ['MANAGER', 'ADMIN', 'OWNER', 'FINANCE'], module: 'reports' },
   { href: '/dashboard/settings', labelKey: 'nav.settings', roles: ['MANAGER', 'ADMIN', 'OWNER'], module: 'settings' },
   { href: '/dashboard/tasks', labelKey: 'nav.tasks', roles: ['MANAGER', 'ADMIN', 'OWNER', 'FRONT_OFFICE', 'BAR', 'RESTAURANT', 'KITCHEN', 'HOUSEKEEPING', 'FINANCE'], module: 'tasks' },
 ];
@@ -257,6 +257,7 @@ export default function DashboardLayout({
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const isAdmin = isManagerLevel(user?.role);
+  const showSidebar = isAdmin || roleForNav === 'FINANCE';
   const defaultRoute = visibleLinks[0]?.href ?? defaultDashboardRoute(user?.role);
   const [backVisibleFromPage, setBackVisibleFromPage] = useState(false);
   useEffect(() => {
@@ -291,7 +292,7 @@ export default function DashboardLayout({
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      {isAdmin && (
+      {showSidebar && (
         <>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
