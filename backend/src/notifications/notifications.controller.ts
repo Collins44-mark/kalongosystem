@@ -8,7 +8,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { AllowManagerGuard } from '../common/guards/allow-manager.guard';
 
-@Controller('notifications')
+@Controller('api/notifications')
 @UseGuards(JwtAuthGuard, SubscriptionGuard, BusinessModuleGuard)
 export class NotificationsController {
   constructor(private notifications: NotificationsService) {}

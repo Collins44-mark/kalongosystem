@@ -29,7 +29,7 @@ export function NotificationsPanel() {
     if (!token || !isAdmin) return;
     setLoading(true);
     try {
-      const data = await api<AdminAlert[]>('/notifications', { token });
+      const data = await api<AdminAlert[]>('/api/notifications', { token });
       setAlerts(Array.isArray(data) ? data : []);
     } catch {
       setAlerts([]);
@@ -41,7 +41,7 @@ export function NotificationsPanel() {
   const markAllRead = useCallback(async () => {
     if (!token || !isAdmin) return;
     try {
-      await api('/notifications/mark-read', { method: 'POST', token });
+      await api('/api/notifications/mark-read', { method: 'POST', token });
       await fetchAlerts();
     } catch {
       /* ignore */
