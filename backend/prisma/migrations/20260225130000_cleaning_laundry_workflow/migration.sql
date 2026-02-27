@@ -1,0 +1,2 @@
+-- Placeholder: migration failed in production, marked as applied via resolve --applied
+-- No schema changes (already reverted)
