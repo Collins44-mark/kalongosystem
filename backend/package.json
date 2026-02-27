@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "SaaS Hotel Management System - Backend",
   "scripts": {
-    "build": "npx prisma generate && (npx prisma db execute --file prisma/scripts/clear-failed-migration.sql --schema prisma/schema.prisma || true) && npx prisma migrate deploy && node node_modules/@nestjs/cli/bin/nest.js build",
+    "build": "npx prisma generate && node scripts/clear-failed-migration.js && npx prisma migrate deploy && node node_modules/@nestjs/cli/bin/nest.js build",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
