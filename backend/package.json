@@ -10,7 +10,7 @@
     "start:prod": "node dist/main",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:migrate:prod": "prisma migrate resolve --rolled-back 20260225130000_cleaning_laundry_workflow 2>/dev/null || true && prisma migrate deploy",
+    "prisma:migrate:prod": "bash scripts/fix-failed-migration.sh",
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
