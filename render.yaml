@@ -5,7 +5,7 @@ services:
     runtime: node
     region: oregon
     rootDir: backend
-    buildCommand: npm install --include=dev && npm run prisma:generate && (npx prisma db execute --file prisma/scripts/clear-failed-migration.sql --schema prisma/schema.prisma || true) && npx prisma migrate deploy && npm run build
+    buildCommand: npm install --include=dev && npm run prisma:generate && (npx prisma db execute --file scripts/rollback-cleaning-workflow.sql --schema prisma/schema.prisma || true) && (npx prisma db execute --file prisma/scripts/clear-failed-migration.sql --schema prisma/schema.prisma || true) && npx prisma migrate deploy && npm run build
     startCommand: npm run start:prod
     envVars:
       - key: NODE_ENV

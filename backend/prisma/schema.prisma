@@ -66,10 +66,6 @@ model StaffWorker {
   tasksAssigned  Task[]     @relation("TaskTargetWorker")
   tasksCompleted Task[]     @relation("TaskCompletedByWorker")
   taskReads      TaskRead[]
-  roomCleaningAssignments   Room[] @relation("RoomCleaningAssignment")
-  roomCleaningAssignmentsBy Room[] @relation("RoomCleaningAssignedBy")
-  laundryAssignments        LaundryRequest[] @relation("LaundryAssignment")
-  laundryAssignmentsBy      LaundryRequest[] @relation("LaundryAssignedBy")
 
   @@map("staff_workers")
 }
@@ -208,10 +204,6 @@ model Room {
   roomNumber    String
   roomName      String?  // Optional display name
   status        String   @default("VACANT") // VACANT, OCCUPIED, RESERVED, UNDER_MAINTENANCE
-  cleaningAssignedToWorkerId   String?   @map("cleaning_assigned_to_worker_id")
-  cleaningAssignedAt          DateTime? @map("cleaning_assigned_at")
-  cleaningAssignedByWorkerId  String?   @map("cleaning_assigned_by_worker_id")
-  cleaningStatus              String?   @map("cleaning_status") // ASSIGNED, IN_PROGRESS
   createdAt     DateTime @default(now())
   createdBy     String?
   updatedAt     DateTime @updatedAt
@@ -220,8 +212,6 @@ model Room {
   category RoomCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   bookings Booking[]
   cleaningLogs RoomCleaningLog[]
-  cleaningAssignedToWorker   StaffWorker? @relation("RoomCleaningAssignment", fields: [cleaningAssignedToWorkerId], references: [id], onDelete: SetNull)
-  cleaningAssignedByWorker  StaffWorker? @relation("RoomCleaningAssignedBy", fields: [cleaningAssignedByWorkerId], references: [id], onDelete: SetNull)
 
   @@unique([businessId, branchId, roomNumber])
   @@map("rooms")
@@ -234,8 +224,6 @@ model RoomCleaningLog {
   roomId             String
   cleanedByWorkerId  String?
   cleanedByWorkerName String?
-  assignedStaffId    String?  @map("assigned_staff_id")
-  assignedStaffName  String?  @map("assigned_staff_name")
   createdAt          DateTime @default(now())
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
@@ -591,15 +579,10 @@ model LaundryRequest {
   status              String    @default("REQUESTED") // REQUESTED, ASSIGNED, IN_PROGRESS, COMPLETED, DELIVERED
   createdByWorkerId   String?
   createdByWorkerName String?
-  assignedToWorkerId  String?   @map("assigned_to_worker_id")
-  assignedByWorkerId  String?   @map("assigned_by_worker_id")
-  assignedAt          DateTime? @map("assigned_at")
   deliveredAt         DateTime?
   createdAt           DateTime  @default(now())
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  assignedToWorker   StaffWorker? @relation("LaundryAssignment", fields: [assignedToWorkerId], references: [id], onDelete: SetNull)
-  assignedByWorker   StaffWorker? @relation("LaundryAssignedBy", fields: [assignedByWorkerId], references: [id], onDelete: SetNull)
 
   @@index([businessId, createdAt])
   @@map("laundry_requests")
