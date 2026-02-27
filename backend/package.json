@@ -10,7 +10,7 @@
     "start:prod": "node dist/main",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:migrate:prod": "npx prisma migrate resolve --applied 20260225130000_cleaning_laundry_workflow || true && npx prisma migrate deploy",
+    "prisma:migrate:prod": "npx prisma migrate resolve --rolled-back 20260225130000_cleaning_laundry_workflow || true && npx prisma migrate deploy",
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
