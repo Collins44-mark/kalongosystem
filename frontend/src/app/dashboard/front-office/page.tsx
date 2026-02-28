@@ -1718,6 +1718,7 @@ function NewBookingForm({
   const [paymentMode, setPaymentMode] = useState('');
   const [checkInImmediately, setCheckInImmediately] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
   const isManager = ['MANAGER', 'ADMIN', 'OWNER'].includes(user?.role || '');
 
   const category = categories.find((c) => c.id === categoryId);
@@ -1739,6 +1740,10 @@ function NewBookingForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!roomId || nights < 1 || !guestPhone.trim()) return;
+    if (!paymentMode.trim()) {
+      setShowPaymentMethodModal(true);
+      return;
+    }
     setLoading(true);
     try {
       const paid = paidAmount.trim() ? parseFloat(paidAmount.replace(/[^\d.]/g, '')) : undefined;
@@ -1771,6 +1776,37 @@ function NewBookingForm({
   }
 
   return (
+    <>
+      {showPaymentMethodModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('frontOffice.selectPaymentMethodTitle')}
+          onClick={() => setShowPaymentMethodModal(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl bg-white shadow-lg border p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-base font-semibold text-slate-900">
+              {t('frontOffice.selectPaymentMethodTitle')}
+            </div>
+            <div className="mt-2 text-sm text-slate-600">
+              {t('frontOffice.selectPaymentMethod')}
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowPaymentMethodModal(false)}
+                className="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700 text-sm"
+              >
+                {t('common.close')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     <form onSubmit={handleSubmit} className="max-w-lg space-y-4">
       <div>
         <label className="block text-sm mb-1">{t('frontOffice.roomCategory')}</label>
@@ -1879,6 +1915,7 @@ function NewBookingForm({
         {t('frontOffice.createBooking')}
       </button>
     </form>
+    </>
   );
 }
 

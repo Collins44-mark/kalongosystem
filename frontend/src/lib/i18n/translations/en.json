@@ -160,6 +160,8 @@
   "frontOffice.paymentHistory": "Payment history",
   "frontOffice.noPayments": "No payments recorded",
   "frontOffice.paymentModeLabel": "Payment mode",
+  "frontOffice.selectPaymentMethod": "Please select a payment method.",
+  "frontOffice.selectPaymentMethodTitle": "Select payment method",
   "frontOffice.paidAmount": "Paid amount (TZS)",
   "frontOffice.paidAmountHint": "Optional. If paid now, enter amount and select payment mode. Links to Finance.",
   "frontOffice.changeRoom": "Change room",
