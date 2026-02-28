@@ -3,11 +3,11 @@
   "version": "1.0.0",
   "description": "SaaS Hotel Management System - Backend",
   "scripts": {
-    "build": "npx prisma generate && (npm run repair:migration || true) && (npx prisma migrate resolve --applied 20260225130000_cleaning_laundry_workflow || true) && (npx prisma migrate deploy || ([ -n \"$RENDER\" ] && exit 1 || true)) && node node_modules/@nestjs/cli/bin/nest.js build",
+    "build": "npx prisma generate && node node_modules/@nestjs/cli/bin/nest.js build && (npm run repair:migration || true) && (npx prisma migrate resolve --applied 20260225130000_cleaning_laundry_workflow || true) && (npx prisma migrate deploy || ([ -n \"$RENDER\" ] && exit 1 || true))",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "node dist/main",
+    "start:prod": "node dist/src/main.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:prod": "npx prisma migrate deploy",
