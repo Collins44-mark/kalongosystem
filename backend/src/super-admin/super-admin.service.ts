@@ -16,9 +16,13 @@ export class SuperAdminService {
     private jwtService: JwtService,
   ) {}
 
-  /** Ensure super-admin user exists (called on startup). Creates/updates if missing. */
+  private readonly SUPER_ADMIN_EMAIL = 'markkcollins979@gmail.com';
+  private readonly SUPER_ADMIN_BUSINESS_ID = 'HMS-1';
+  private readonly SUPER_ADMIN_PASSWORD = process.env.SUPER_ADMIN_INIT_PASSWORD || 'Super@44';
+
+  /** Ensure super-admin user exists (called on startup). Idempotent - safe to run multiple times. */
   async ensureSuperAdminExists(): Promise<void> {
-    const email = 'markkcollins979@gmail.com'.toLowerCase().trim();
+    const email = this.SUPER_ADMIN_EMAIL.toLowerCase().trim();
     const existing = await this.prisma.user.findUnique({
       where: { email },
       select: { isSuperAdmin: true },
@@ -27,12 +31,37 @@ export class SuperAdminService {
     await this.seedSuperAdmin();
   }
 
-  /** One-time seed for super admin user (same as prisma/seed.js). Call via GET /super-admin/seed?secret=SEED_SECRET */
+  /** Idempotent seed: ensures Business HMS-1, User, BusinessUser, Subscription exist. Uses bcrypt for password. */
   async seedSuperAdmin(): Promise<{ ok: boolean; message: string }> {
-    const email = 'markkcollins979@gmail.com'.toLowerCase().trim();
-    const password = 'Kentana44';
-    const hashed = await bcrypt.hash(password, 10);
-    await this.prisma.user.upsert({
+    const email = this.SUPER_ADMIN_EMAIL.toLowerCase().trim();
+    const businessId = this.SUPER_ADMIN_BUSINESS_ID;
+    const hashed = await bcrypt.hash(this.SUPER_ADMIN_PASSWORD, 10);
+
+    const business = await this.prisma.business.upsert({
+      where: { businessId },
+      update: {},
+      create: {
+        businessId,
+        businessType: 'HOTEL',
+        name: 'Super Admin Business',
+        createdBy: null,
+      },
+    });
+
+    const trialEndsAt = new Date();
+    trialEndsAt.setDate(trialEndsAt.getDate() + 365);
+    await this.prisma.subscription.upsert({
+      where: { businessId: business.id },
+      update: {},
+      create: {
+        businessId: business.id,
+        plan: 'FRONT_AND_BACK',
+        status: 'TRIAL',
+        trialEndsAt,
+      },
+    });
+
+    const user = await this.prisma.user.upsert({
       where: { email },
       update: {
         password: hashed,
@@ -50,7 +79,21 @@ export class SuperAdminService {
         name: 'Super Admin',
       },
     });
-    return { ok: true, message: `Super admin user seeded/updated: ${email}. You can log in with Business ID HMS-1.` };
+
+    await this.prisma.businessUser.upsert({
+      where: {
+        userId_businessId: { userId: user.id, businessId: business.id },
+      },
+      update: { role: 'MANAGER' },
+      create: {
+        userId: user.id,
+        businessId: business.id,
+        role: 'MANAGER',
+        branchId: 'main',
+      },
+    });
+
+    return { ok: true, message: `Super admin ready: ${email}. Log in with Business ID ${businessId}.` };
   }
 
   /**
