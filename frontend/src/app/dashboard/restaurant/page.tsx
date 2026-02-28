@@ -42,11 +42,6 @@ export default function RestaurantPage() {
   const [dateTo, setDateTo] = useState('');
   const [filterWorkerId, setFilterWorkerId] = useState('');
   const [filterPayment, setFilterPayment] = useState('');
-  const [appliedPeriod, setAppliedPeriod] = useState<'today' | 'week' | 'month' | 'bydate'>('today');
-  const [appliedFrom, setAppliedFrom] = useState('');
-  const [appliedTo, setAppliedTo] = useState('');
-  const [appliedWorkerId, setAppliedWorkerId] = useState('');
-  const [appliedPayment, setAppliedPayment] = useState('');
   const [workers, setWorkers] = useState<StaffWorker[]>([]);
   const [showAddItem, setShowAddItem] = useState(false);
   const [addingItem, setAddingItem] = useState(false);
@@ -141,11 +136,11 @@ export default function RestaurantPage() {
     if (!token) return;
     if (!append) setHistoryLoading(true);
     const params = buildHistoryParams({
-      period: appliedPeriod,
-      from: appliedFrom,
-      to: appliedTo,
-      workerId: appliedWorkerId,
-      paymentMethod: appliedPayment,
+      period: historyPeriod,
+      from: dateFrom,
+      to: dateTo,
+      workerId: filterWorkerId,
+      paymentMethod: filterPayment,
       since,
       limit: HISTORY_LIMIT,
       offset: 0,
@@ -175,27 +170,12 @@ export default function RestaurantPage() {
       });
   }
 
-  function applyFilters() {
-    setAppliedPeriod(historyPeriod);
-    setAppliedFrom(dateFrom);
-    setAppliedTo(dateTo);
-    setAppliedWorkerId(filterWorkerId);
-    setAppliedPayment(filterPayment);
-    setHistory([]);
-    setHistoryHasMore(true);
-  }
-
   function resetFilters() {
     setHistoryPeriod('today');
     setDateFrom('');
     setDateTo('');
     setFilterWorkerId('');
     setFilterPayment('');
-    setAppliedPeriod('today');
-    setAppliedFrom('');
-    setAppliedTo('');
-    setAppliedWorkerId('');
-    setAppliedPayment('');
     setHistory([]);
     setHistoryHasMore(true);
   }
@@ -204,11 +184,11 @@ export default function RestaurantPage() {
     if (!token || historyLoadingMore || !historyHasMore) return;
     setHistoryLoadingMore(true);
     const params = buildHistoryParams({
-      period: appliedPeriod,
-      from: appliedFrom,
-      to: appliedTo,
-      workerId: appliedWorkerId,
-      paymentMethod: appliedPayment,
+      period: historyPeriod,
+      from: dateFrom,
+      to: dateTo,
+      workerId: filterWorkerId,
+      paymentMethod: filterPayment,
       limit: HISTORY_LIMIT,
       offset: history.length,
     });
@@ -226,12 +206,12 @@ export default function RestaurantPage() {
     if (!token) return;
     loadHistory(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, appliedPeriod, appliedFrom, appliedTo, appliedWorkerId, appliedPayment]);
+  }, [token, historyPeriod, dateFrom, dateTo, filterWorkerId, filterPayment]);
 
   // Smart polling: every 20s, fetch new orders only (when viewing Today)
   useEffect(() => {
     if (!token || history.length === 0) return;
-    const canPoll = appliedPeriod === 'today' && !appliedFrom && !appliedTo;
+    const canPoll = historyPeriod === 'today' && !dateFrom && !dateTo;
     if (!canPoll) return;
     const interval = setInterval(() => {
       if (document.visibilityState !== 'visible') return;
@@ -240,7 +220,7 @@ export default function RestaurantPage() {
     }, 20000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, appliedPeriod, appliedFrom, appliedTo, history.length]);
+  }, [token, historyPeriod, dateFrom, dateTo, history.length]);
 
   useEffect(() => {
     if (!token || !isAdmin) return;
@@ -507,29 +487,26 @@ export default function RestaurantPage() {
                 </select>
               </>
             )}
-            <button onClick={applyFilters} className="px-3 py-1.5 bg-teal-600 text-white rounded text-sm hover:bg-teal-700">
-              {t('common.apply')}
-            </button>
             <button onClick={resetFilters} className="px-3 py-1.5 border border-slate-300 rounded text-sm hover:bg-slate-50">
               {t('common.reset')}
             </button>
           </div>
-          {(appliedPeriod !== 'today' || appliedFrom || appliedTo || appliedWorkerId || appliedPayment) && (
+          {(historyPeriod !== 'today' || dateFrom || dateTo || filterWorkerId || filterPayment) && (
             <div className="flex flex-wrap items-center gap-1.5 text-xs">
               <span className="text-slate-500">{t('common.search')}:</span>
-              {appliedPeriod === 'today' && <span className="px-2 py-0.5 bg-teal-50 text-teal-800 rounded">{t('overview.today')}</span>}
-              {appliedPeriod === 'week' && <span className="px-2 py-0.5 bg-teal-50 text-teal-800 rounded">{t('overview.thisWeek')}</span>}
-              {appliedPeriod === 'month' && <span className="px-2 py-0.5 bg-teal-50 text-teal-800 rounded">{t('overview.thisMonth')}</span>}
-              {appliedPeriod === 'bydate' && appliedFrom && appliedTo && (
-                <span className="px-2 py-0.5 bg-teal-50 text-teal-800 rounded">{appliedFrom} → {appliedTo}</span>
+              {historyPeriod === 'today' && <span className="px-2 py-0.5 bg-teal-50 text-teal-800 rounded">{t('overview.today')}</span>}
+              {historyPeriod === 'week' && <span className="px-2 py-0.5 bg-teal-50 text-teal-800 rounded">{t('overview.thisWeek')}</span>}
+              {historyPeriod === 'month' && <span className="px-2 py-0.5 bg-teal-50 text-teal-800 rounded">{t('overview.thisMonth')}</span>}
+              {historyPeriod === 'bydate' && dateFrom && dateTo && (
+                <span className="px-2 py-0.5 bg-teal-50 text-teal-800 rounded">{dateFrom} → {dateTo}</span>
               )}
-              {appliedWorkerId && (
+              {filterWorkerId && (
                 <span className="px-2 py-0.5 bg-teal-50 text-teal-800 rounded">
-                  {workers.find((w) => w.id === appliedWorkerId)?.fullName || appliedWorkerId}
+                  {workers.find((w) => w.id === filterWorkerId)?.fullName || filterWorkerId}
                 </span>
               )}
-              {appliedPayment && (
-                <span className="px-2 py-0.5 bg-teal-50 text-teal-800 rounded">{formatPayment(appliedPayment, t)}</span>
+              {filterPayment && (
+                <span className="px-2 py-0.5 bg-teal-50 text-teal-800 rounded">{formatPayment(filterPayment, t)}</span>
               )}
             </div>
           )}

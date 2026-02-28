@@ -76,19 +76,11 @@ export default function BarPage() {
   const [ordersFrom, setOrdersFrom] = useState('');
   const [ordersTo, setOrdersTo] = useState('');
   const [ordersWorkerId, setOrdersWorkerId] = useState('');
-  const [appliedOrdersPeriod, setAppliedOrdersPeriod] = useState<'today' | 'week' | 'month' | 'bydate'>('today');
-  const [appliedOrdersFrom, setAppliedOrdersFrom] = useState('');
-  const [appliedOrdersTo, setAppliedOrdersTo] = useState('');
-  const [appliedOrdersWorkerId, setAppliedOrdersWorkerId] = useState('');
   const [barWorkers, setBarWorkers] = useState<{ id: string; fullName: string }[]>([]);
   const [restockPeriod, setRestockPeriod] = useState<'today' | 'week' | 'month' | 'bydate'>('today');
   const [restockFrom, setRestockFrom] = useState('');
   const [restockTo, setRestockTo] = useState('');
   const [restockWorkerId, setRestockWorkerId] = useState('');
-  const [appliedRestockPeriod, setAppliedRestockPeriod] = useState<'today' | 'week' | 'month' | 'bydate'>('today');
-  const [appliedRestockFrom, setAppliedRestockFrom] = useState('');
-  const [appliedRestockTo, setAppliedRestockTo] = useState('');
-  const [appliedRestockWorkerId, setAppliedRestockWorkerId] = useState('');
   const [autoTick, setAutoTick] = useState(0);
 
   // Lock body scroll when a true modal is open (restock / add item)
@@ -164,33 +156,33 @@ export default function BarPage() {
     if (!token || !isAdmin) return;
     setAdminOrdersLoading(true);
     const params = new URLSearchParams();
-    params.set('period', appliedOrdersPeriod);
-    if (appliedOrdersPeriod === 'bydate' && appliedOrdersFrom && appliedOrdersTo) {
-      params.set('from', appliedOrdersFrom);
-      params.set('to', appliedOrdersTo);
+    params.set('period', ordersPeriod);
+    if (ordersPeriod === 'bydate' && ordersFrom && ordersTo) {
+      params.set('from', ordersFrom);
+      params.set('to', ordersTo);
     }
-    if (appliedOrdersWorkerId) params.set('workerId', appliedOrdersWorkerId);
+    if (ordersWorkerId) params.set('workerId', ordersWorkerId);
     params.set('limit', '30');
     api<AdminOrder[]>(`/bar/orders?${params}`, { token })
       .then(setAdminOrders)
       .catch(() => setAdminOrders([]))
       .finally(() => setAdminOrdersLoading(false));
-  }, [token, isAdmin, appliedOrdersPeriod, appliedOrdersFrom, appliedOrdersTo, appliedOrdersWorkerId, autoTick]);
+  }, [token, isAdmin, ordersPeriod, ordersFrom, ordersTo, ordersWorkerId, autoTick]);
 
   useEffect(() => {
     if (!token || !isAdmin) return;
     const params = new URLSearchParams();
-    params.set('period', appliedRestockPeriod);
-    if (appliedRestockPeriod === 'bydate' && appliedRestockFrom && appliedRestockTo) {
-      params.set('from', appliedRestockFrom);
-      params.set('to', appliedRestockTo);
+    params.set('period', restockPeriod);
+    if (restockPeriod === 'bydate' && restockFrom && restockTo) {
+      params.set('from', restockFrom);
+      params.set('to', restockTo);
     }
-    if (appliedRestockWorkerId) params.set('workerId', appliedRestockWorkerId);
+    if (restockWorkerId) params.set('workerId', restockWorkerId);
     params.set('limit', '50');
     api<Restock[]>(`/bar/restocks?${params}`, { token })
       .then(setRestocks)
       .catch(() => setRestocks([]));
-  }, [token, isAdmin, appliedRestockPeriod, appliedRestockFrom, appliedRestockTo, appliedRestockWorkerId, autoTick]);
+  }, [token, isAdmin, restockPeriod, restockFrom, restockTo, restockWorkerId, autoTick]);
 
   async function togglePermission(next: boolean) {
     if (!token) return;
@@ -357,12 +349,12 @@ export default function BarPage() {
       setItems(refreshed);
       if (isAdmin) {
         const params = new URLSearchParams();
-        params.set('period', appliedRestockPeriod);
-        if (appliedRestockPeriod === 'bydate' && appliedRestockFrom && appliedRestockTo) {
-          params.set('from', appliedRestockFrom);
-          params.set('to', appliedRestockTo);
+        params.set('period', restockPeriod);
+        if (restockPeriod === 'bydate' && restockFrom && restockTo) {
+          params.set('from', restockFrom);
+          params.set('to', restockTo);
         }
-        if (appliedRestockWorkerId) params.set('workerId', appliedRestockWorkerId);
+        if (restockWorkerId) params.set('workerId', restockWorkerId);
         params.set('limit', '50');
         const rs = await api<Restock[]>(`/bar/restocks?${params}`, { token });
         setRestocks(rs);
@@ -748,25 +740,10 @@ export default function BarPage() {
               </select>
               <button
                 onClick={() => {
-                  setAppliedOrdersPeriod(ordersPeriod);
-                  setAppliedOrdersFrom(ordersFrom);
-                  setAppliedOrdersTo(ordersTo);
-                  setAppliedOrdersWorkerId(ordersWorkerId);
-                }}
-                className="px-3 py-1.5 bg-teal-600 text-white rounded text-sm hover:bg-teal-700"
-              >
-                {t('common.apply')}
-              </button>
-              <button
-                onClick={() => {
                   setOrdersPeriod('today');
                   setOrdersFrom('');
                   setOrdersTo('');
                   setOrdersWorkerId('');
-                  setAppliedOrdersPeriod('today');
-                  setAppliedOrdersFrom('');
-                  setAppliedOrdersTo('');
-                  setAppliedOrdersWorkerId('');
                 }}
                 className="px-3 py-1.5 border border-slate-300 rounded text-sm hover:bg-slate-50"
               >
@@ -893,25 +870,10 @@ export default function BarPage() {
               </select>
               <button
                 onClick={() => {
-                  setAppliedRestockPeriod(restockPeriod);
-                  setAppliedRestockFrom(restockFrom);
-                  setAppliedRestockTo(restockTo);
-                  setAppliedRestockWorkerId(restockWorkerId);
-                }}
-                className="px-3 py-1.5 bg-teal-600 text-white rounded text-sm hover:bg-teal-700"
-              >
-                {t('common.apply')}
-              </button>
-              <button
-                onClick={() => {
                   setRestockPeriod('today');
                   setRestockFrom('');
                   setRestockTo('');
                   setRestockWorkerId('');
-                  setAppliedRestockPeriod('today');
-                  setAppliedRestockFrom('');
-                  setAppliedRestockTo('');
-                  setAppliedRestockWorkerId('');
                 }}
                 className="px-3 py-1.5 border border-slate-300 rounded text-sm hover:bg-slate-50"
               >
