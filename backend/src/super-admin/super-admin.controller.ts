@@ -37,12 +37,21 @@ export class SuperAdminController {
 
   @Post('businesses')
   @UseGuards(JwtAuthGuard, SuperAdminGuard)
-  async registerBusiness(@Body() body: { name: string; businessType?: string; location?: string; phone?: string }) {
+  async registerBusiness(@Body() body: {
+    name: string;
+    businessType?: string;
+    location?: string;
+    phone?: string;
+    email: string;
+    oneTimePassword: string;
+  }) {
     return this.sa.registerBusiness({
       name: body.name,
       businessType: body.businessType || 'HOTEL',
       location: body.location,
       phone: body.phone,
+      email: body.email,
+      oneTimePassword: body.oneTimePassword,
     });
   }
 

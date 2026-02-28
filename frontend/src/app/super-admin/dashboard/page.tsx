@@ -37,6 +37,8 @@ export default function SuperAdminDashboardPage() {
   const [registerType, setRegisterType] = useState('HOTEL');
   const [registerLocation, setRegisterLocation] = useState('');
   const [registerPhone, setRegisterPhone] = useState('');
+  const [registerEmail, setRegisterEmail] = useState('');
+  const [registerPassword, setRegisterPassword] = useState('');
   const [registerSaving, setRegisterSaving] = useState(false);
   const [registerMessage, setRegisterMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
@@ -60,26 +62,36 @@ export default function SuperAdminDashboardPage() {
   }, [token]);
 
   async function submitRegister() {
-    if (!token || !registerName.trim()) return;
+    if (!token || !registerName.trim() || !registerEmail.trim() || !registerPassword.trim()) return;
+    if (registerPassword.length < 6) {
+      setRegisterMessage({ type: 'err', text: 'One-time password must be at least 6 characters' });
+      return;
+    }
     setRegisterSaving(true);
     setRegisterMessage(null);
     try {
-      const res = await api<{ success: boolean; message: string; business: { businessId: string; name: string } }>(
+      const res = await api<{ success: boolean; message: string; business: { businessId: string; name: string; email: string } }>(
         '/super-admin/businesses',
         { token, method: 'POST', body: JSON.stringify({
           name: registerName.trim(),
           businessType: registerType,
           location: registerLocation.trim() || undefined,
           phone: registerPhone.trim() || undefined,
+          email: registerEmail.trim(),
+          oneTimePassword: registerPassword,
         }) }
       );
-      setRegisterMessage({ type: 'ok', text: `Registered. Business ID: ${res.business.businessId}. Share this with the client to sign up.` });
+      setRegisterMessage({
+        type: 'ok',
+        text: `Registered. Share with client: Business ID ${res.business.businessId}, email ${res.business.email}, one-time password. They will set a new password on first login.`,
+      });
       setRegisterName('');
       setRegisterLocation('');
       setRegisterPhone('');
+      setRegisterEmail('');
+      setRegisterPassword('');
       setRegisterType('HOTEL');
       loadBusinesses();
-      setShowRegister(false);
     } catch (e: any) {
       setRegisterMessage({ type: 'err', text: e?.message || 'Failed to register' });
     } finally {
@@ -149,6 +161,27 @@ export default function SuperAdminDashboardPage() {
                   <option value="BAR">Bar</option>
                   <option value="RESTAURANT">Restaurant</option>
                 </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs text-slate-500 mb-1">Manager email *</label>
+                <input
+                  type="email"
+                  value={registerEmail}
+                  onChange={(e) => setRegisterEmail(e.target.value)}
+                  className="w-full border rounded px-3 py-2 text-sm"
+                  placeholder="manager@example.com"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">One-time password * (min 6 chars)</label>
+                <input
+                  type="password"
+                  value={registerPassword}
+                  onChange={(e) => setRegisterPassword(e.target.value)}
+                  className="w-full border rounded px-3 py-2 text-sm"
+                  placeholder="Client uses this to log in first time"
+                  minLength={6}
+                />
               </div>
               <div>
                 <label className="block text-xs text-slate-500 mb-1">Location</label>

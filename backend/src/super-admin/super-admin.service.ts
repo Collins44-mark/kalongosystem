@@ -123,48 +123,89 @@ export class SuperAdminService {
     };
   }
 
-  /** Register a new business (no user yet – they sign up with the returned businessId). 14-day trial. */
-  async registerBusiness(data: { name: string; businessType: string; location?: string; phone?: string }) {
+  /** Register a new business with manager user and one-time password. User must change password on first login. 14-day trial. */
+  async registerBusiness(data: {
+    name: string;
+    businessType?: string;
+    location?: string;
+    phone?: string;
+    email: string;
+    oneTimePassword: string;
+  }) {
     const name = (data.name || '').trim();
     const businessType = (data.businessType || 'HOTEL').trim() || 'HOTEL';
+    const email = (data.email || '').toLowerCase().trim();
+    const oneTimePassword = (data.oneTimePassword || '').trim();
+
     if (!name) throw new BadRequestException('Business name is required');
+    if (!email || !email.includes('@')) throw new BadRequestException('Valid email is required');
+    if (oneTimePassword.length < 6) throw new BadRequestException('One-time password must be at least 6 characters');
+
+    const existingUser = await this.prisma.user.findUnique({ where: { email } });
+    if (existingUser) throw new BadRequestException('Email already registered. Use a different email.');
 
     let businessId = generateBusinessId();
     while (await this.prisma.business.findUnique({ where: { businessId } })) {
       businessId = generateBusinessId();
     }
 
+    const hashed = await bcrypt.hash(oneTimePassword, 10);
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + 14);
 
-    const business = await this.prisma.business.create({
-      data: {
-        businessId,
-        businessType,
-        name,
-        location: data.location?.trim() || null,
-        phone: data.phone?.trim() || null,
-        createdBy: null,
-      },
-    });
+    const [user, business] = await this.prisma.$transaction(async (tx) => {
+      const u = await tx.user.create({
+        data: {
+          email,
+          password: hashed,
+          language: 'en',
+          forcePasswordChange: true,
+        },
+        select: { id: true, email: true },
+      });
 
-    await this.prisma.subscription.create({
-      data: {
-        businessId: business.id,
-        plan: 'FRONT_AND_BACK',
-        status: 'TRIAL',
-        trialEndsAt,
-      },
+      const b = await tx.business.create({
+        data: {
+          businessId,
+          businessType,
+          name,
+          location: data.location?.trim() || null,
+          phone: data.phone?.trim() || null,
+          createdBy: u.id,
+        },
+      });
+
+      await tx.businessUser.create({
+        data: {
+          userId: u.id,
+          businessId: b.id,
+          role: 'MANAGER',
+          branchId: 'main',
+          createdBy: u.id,
+        },
+      });
+
+      await tx.subscription.create({
+        data: {
+          businessId: b.id,
+          plan: 'FRONT_AND_BACK',
+          status: 'TRIAL',
+          trialEndsAt,
+        },
+      });
+
+      return [u, b] as const;
     });
 
     return {
       success: true,
-      message: 'Business registered. 14-day trial started. Share the Business ID with the client to sign up.',
+      message: 'Business registered. Client logs in with Business ID, email, and one-time password, then sets a new password.',
       business: {
         id: business.id,
         businessId: business.businessId,
         name: business.name,
         businessType: business.businessType,
+        email: user.email,
         trialEndsAt: trialEndsAt.toISOString(),
       },
     };
