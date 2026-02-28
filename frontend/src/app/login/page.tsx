@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/store/auth';
+import { useSuperAdminAuth, type SuperAdminUser } from '@/store/superAdminAuth';
 import { api } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n/context';
 import { defaultDashboardRoute } from '@/lib/homeRoute';
@@ -16,6 +17,7 @@ export default function LoginPage() {
   const setAuthWithWorker = useAuth((s) => s.setAuthWithWorker);
   const setPendingWorkerSelection = useAuth((s) => s.setPendingWorkerSelection);
   const pendingWorkerSelection = useAuth((s) => s.pendingWorkerSelection);
+  const setSuperAdminAuth = useSuperAdminAuth((s) => s.setAuth);
   const { t } = useTranslation();
   const [businessId, setBusinessId] = useState('');
   const [email, setEmail] = useState('');
@@ -35,6 +37,19 @@ export default function LoginPage() {
       const bid = businessId.trim().toUpperCase();
       const em = email.trim();
       const body = { businessId: bid, email: em, password };
+
+      // Super-admin: Business ID HMS-1 uses super-admin login and redirects to super-admin dashboard
+      if (bid === 'HMS-1') {
+        const saRes = await api<{ accessToken: string; user: unknown }>('/super-admin/login', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        });
+        if (saRes?.accessToken && saRes?.user) {
+          setSuperAdminAuth(saRes.accessToken, saRes.user as SuperAdminUser);
+          router.replace('/super-admin/dashboard');
+          return;
+        }
+      }
 
       const res = await api<{
         accessToken?: string;

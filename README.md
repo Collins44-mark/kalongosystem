@@ -106,7 +106,7 @@ If you can’t use Render Shell (e.g. on free tier):
    ```
    https://YOUR-BACKEND.onrender.com/super-admin/seed?secret=mySecretSeed123
    ```
-4. You should see: `{"ok":true,"message":"Super admin user seeded/updated: ..."}`. You can then log in at `/super-admin` with Business ID **HMS-1**, email **markkcollins979@gmail.com**, password **Kentana44**.
+4. You should see: `{"ok":true,"message":"Super admin user seeded/updated: ..."}`. You can then log in at `/super-admin` or `/login` with Business ID **HMS-1**, email **markkcollins979@gmail.com**, password **Super@44**.
 5. (Optional) Remove `SEED_SECRET` from Environment after seeding.
 
 ### Delete user by email (fix "Email already registered" / can't log in)

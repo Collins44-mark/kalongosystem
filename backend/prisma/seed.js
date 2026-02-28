@@ -1,4 +1,12 @@
 /* eslint-disable no-console */
+require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
+
+// Render internal host not resolvable locally - use external host
+let dbUrl = process.env.DATABASE_URL || '';
+if (dbUrl.includes('@dpg-') && dbUrl.includes('-a/')) {
+  process.env.DATABASE_URL = dbUrl.replace(/@(dpg-[a-z0-9]+-a)\//, '@$1.oregon-postgres.render.com/');
+}
+
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 
