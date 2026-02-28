@@ -120,33 +120,36 @@ export class HotelService {
     }));
   }
 
-  // Rooms
+  // Rooms - room number unique per category; same number allowed in different categories
   async createRoom(
     businessId: string,
     branchId: string,
     data: { categoryId: string; roomNumber: string; roomName?: string },
     createdBy: string,
   ) {
-    try {
-      const room = await this.prisma.room.create({
-        data: {
-          businessId,
-          branchId,
-          categoryId: data.categoryId,
-          roomNumber: data.roomNumber,
-          roomName: data.roomName,
-          status: 'VACANT',
-          createdBy,
-        },
-      });
-      return room;
-    } catch (e: any) {
-      // Prisma unique constraint error
-      if (e?.code === 'P2002') {
-        throw new ConflictException('Room already exists. Please use a different room number.');
-      }
-      throw e;
+    const existing = await this.prisma.room.findFirst({
+      where: {
+        businessId,
+        branchId,
+        categoryId: data.categoryId,
+        roomNumber: data.roomNumber.trim(),
+      },
+    });
+    if (existing) {
+      throw new ConflictException('Room already exists in this category. Please use a different room number.');
     }
+    const room = await this.prisma.room.create({
+      data: {
+        businessId,
+        branchId,
+        categoryId: data.categoryId,
+        roomNumber: data.roomNumber.trim(),
+        roomName: data.roomName?.trim(),
+        status: 'VACANT',
+        createdBy,
+      },
+    });
+    return room;
   }
 
   async getRooms(businessId: string, branchId?: string) {
@@ -179,22 +182,31 @@ export class HotelService {
       where: { id: roomId, businessId },
     });
     if (!room) throw new NotFoundException('Room not found');
+    const categoryId = data.categoryId ?? room.categoryId;
+    const roomNumber = (data.roomNumber ?? room.roomNumber).toString().trim();
+    if (data.roomNumber !== undefined || data.categoryId !== undefined) {
+      const existing = await this.prisma.room.findFirst({
+        where: {
+          businessId,
+          branchId: room.branchId,
+          categoryId,
+          roomNumber,
+          id: { not: roomId },
+        },
+      });
+      if (existing) {
+        throw new ConflictException('Room already exists in this category. Please use a different room number.');
+      }
+    }
     const updateData: Record<string, unknown> = {};
-    if (data.roomNumber !== undefined) updateData.roomNumber = data.roomNumber;
+    if (data.roomNumber !== undefined) updateData.roomNumber = roomNumber;
     if (data.roomName !== undefined) updateData.roomName = data.roomName;
     if (data.categoryId !== undefined) updateData.categoryId = data.categoryId;
-    try {
-      return await this.prisma.room.update({
-        where: { id: roomId },
-        data: updateData,
-        include: { category: true },
-      });
-    } catch (e: any) {
-      if (e?.code === 'P2002') {
-        throw new ConflictException('Room number already exists. Please use a different room number.');
-      }
-      throw e;
-    }
+    return this.prisma.room.update({
+      where: { id: roomId },
+      data: updateData,
+      include: { category: true },
+    });
   }
 
   async deleteRoom(businessId: string, roomId: string) {

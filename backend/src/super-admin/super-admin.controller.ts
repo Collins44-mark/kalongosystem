@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { SuperAdminService } from './super-admin.service';
 import { SuperAdminGuard } from './super-admin.guard';
@@ -71,6 +71,12 @@ export class SuperAdminController {
   @UseGuards(JwtAuthGuard, SuperAdminGuard)
   async suspend(@Param('id') id: string, @Body('suspended') suspended: boolean) {
     return this.sa.setBusinessSuspended(id, !!suspended);
+  }
+
+  @Delete('businesses/:id')
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  async deleteBusiness(@Param('id') id: string) {
+    return this.sa.deleteBusiness(id);
   }
 
   @Patch('businesses/:id')

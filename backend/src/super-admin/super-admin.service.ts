@@ -292,6 +292,14 @@ export class SuperAdminService {
     return { success: true, status: suspended ? 'SUSPENDED' : 'ACTIVE' };
   }
 
+  /** Delete a business and all related data. Users remain but are unlinked. */
+  async deleteBusiness(businessDbId: string) {
+    const b = await this.prisma.business.findUnique({ where: { id: businessDbId } });
+    if (!b) throw new NotFoundException('Business not found');
+    await this.prisma.business.delete({ where: { id: businessDbId } });
+    return { success: true, message: `Business ${b.name} (${b.businessId}) deleted.` };
+  }
+
   /** Update business type (dashboard module access changes immediately for that tenant). */
   async updateBusinessType(businessDbId: string, businessType: string) {
     const allowed = ['HOTEL', 'LODGE', 'BAR', 'RESTAURANT'];

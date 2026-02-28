@@ -213,7 +213,7 @@ model Room {
   bookings Booking[]
   cleaningLogs RoomCleaningLog[]
 
-  @@unique([businessId, branchId, roomNumber])
+  @@unique([businessId, branchId, categoryId, roomNumber])
   @@map("rooms")
 }
 

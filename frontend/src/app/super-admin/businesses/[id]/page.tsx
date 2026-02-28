@@ -123,6 +123,17 @@ export default function SuperAdminBusinessDetailPage() {
     load();
   }
 
+  async function deleteBusiness() {
+    if (!token || !data) return;
+    if (!window.confirm(`Permanently delete "${data.business.name}" (${data.business.businessId})? All data will be removed.`)) return;
+    try {
+      await api(`/super-admin/businesses/${data.business.id}`, { token, method: 'DELETE' });
+      router.replace('/super-admin/dashboard');
+    } catch (e: unknown) {
+      window.alert((e as Error)?.message ?? 'Failed to delete business');
+    }
+  }
+
   async function resetPassword(businessUserId: string) {
     if (!token) return;
     const res = await api<{ temporaryPassword: string }>(`/super-admin/business-users/${businessUserId}/reset-password`, {
@@ -165,13 +176,22 @@ export default function SuperAdminBusinessDetailPage() {
             <h1 className="text-xl font-semibold">Business Detail</h1>
           </div>
           {data && (
-            <button
-              type="button"
-              onClick={toggleSuspend}
-              className={`px-3 py-2 rounded text-sm ${data.business.status === 'SUSPENDED' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}
-            >
-              {data.business.status === 'SUSPENDED' ? 'Activate business' : 'Suspend business'}
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={toggleSuspend}
+                className={`px-3 py-2 rounded text-sm ${data.business.status === 'SUSPENDED' ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-amber-600 text-white hover:bg-amber-700'}`}
+              >
+                {data.business.status === 'SUSPENDED' ? 'Activate business' : 'Suspend business'}
+              </button>
+              <button
+                type="button"
+                onClick={deleteBusiness}
+                className="px-3 py-2 rounded text-sm bg-red-600 text-white hover:bg-red-700"
+              >
+                Delete business
+              </button>
+            </div>
           )}
         </div>
 
