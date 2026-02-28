@@ -158,6 +158,14 @@ export default function DashboardLayout({
     }
   }, [_hasHydrated, token, user, router]);
 
+  // Super-admin (HMS-1) must use /super-admin dashboard, not normal business dashboard
+  useEffect(() => {
+    if (_hasHydrated && token && user?.businessId === 'HMS-1') {
+      logout();
+      router.replace('/super-admin');
+    }
+  }, [_hasHydrated, token, user?.businessId, logout, router]);
+
   useEffect(() => {
     fetchMe();
     // eslint-disable-next-line react-hooks/exhaustive-deps

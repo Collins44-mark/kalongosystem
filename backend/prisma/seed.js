@@ -20,29 +20,11 @@ async function main() {
   const email = SUPER_ADMIN_EMAIL.toLowerCase().trim();
   const hashed = await bcrypt.hash(SUPER_ADMIN_PASSWORD, 10);
 
-  const business = await prisma.business.upsert({
-    where: { businessId: SUPER_ADMIN_BUSINESS_ID },
-    update: {},
-    create: {
-      businessId: SUPER_ADMIN_BUSINESS_ID,
-      businessType: 'HOTEL',
-      name: 'Super Admin Business',
-      createdBy: null,
-    },
-  });
-
-  const trialEndsAt = new Date();
-  trialEndsAt.setDate(trialEndsAt.getDate() + 365);
-  await prisma.subscription.upsert({
-    where: { businessId: business.id },
-    update: {},
-    create: {
-      businessId: business.id,
-      plan: 'FRONT_AND_BACK',
-      status: 'TRIAL',
-      trialEndsAt,
-    },
-  });
+  // Remove "Super Admin Business" (HMS-1) so super-admin only uses /super-admin dashboard
+  const existing = await prisma.business.findUnique({ where: { businessId: SUPER_ADMIN_BUSINESS_ID } });
+  if (existing) {
+    await prisma.business.delete({ where: { id: existing.id } });
+  }
 
   const user = await prisma.user.upsert({
     where: { email },
@@ -63,20 +45,7 @@ async function main() {
     },
   });
 
-  await prisma.businessUser.upsert({
-    where: {
-      userId_businessId: { userId: user.id, businessId: business.id },
-    },
-    update: { role: 'MANAGER' },
-    create: {
-      userId: user.id,
-      businessId: business.id,
-      role: 'MANAGER',
-      branchId: 'main',
-    },
-  });
-
-  console.log('Super admin seeded:', email, '| Business ID:', SUPER_ADMIN_BUSINESS_ID);
+  console.log('Super admin seeded:', email, '| Log in at /login or /super-admin with Business ID:', SUPER_ADMIN_BUSINESS_ID);
 }
 
 main()

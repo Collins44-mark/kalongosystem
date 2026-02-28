@@ -31,37 +31,19 @@ export class SuperAdminService {
     await this.seedSuperAdmin();
   }
 
-  /** Idempotent seed: ensures Business HMS-1, User, BusinessUser, Subscription exist. Uses bcrypt for password. */
+  /** Idempotent seed: ensures super-admin User exists (no Business HMS-1). Log in at /super-admin or /login with HMS-1. */
   async seedSuperAdmin(): Promise<{ ok: boolean; message: string }> {
     const email = this.SUPER_ADMIN_EMAIL.toLowerCase().trim();
     const businessId = this.SUPER_ADMIN_BUSINESS_ID;
     const hashed = await bcrypt.hash(this.SUPER_ADMIN_PASSWORD, 10);
 
-    const business = await this.prisma.business.upsert({
-      where: { businessId },
-      update: {},
-      create: {
-        businessId,
-        businessType: 'HOTEL',
-        name: 'Super Admin Business',
-        createdBy: null,
-      },
-    });
+    // Remove "Super Admin Business" so super-admin only uses /super-admin dashboard
+    const existingBiz = await this.prisma.business.findUnique({ where: { businessId } });
+    if (existingBiz) {
+      await this.prisma.business.delete({ where: { id: existingBiz.id } });
+    }
 
-    const trialEndsAt = new Date();
-    trialEndsAt.setDate(trialEndsAt.getDate() + 365);
-    await this.prisma.subscription.upsert({
-      where: { businessId: business.id },
-      update: {},
-      create: {
-        businessId: business.id,
-        plan: 'FRONT_AND_BACK',
-        status: 'TRIAL',
-        trialEndsAt,
-      },
-    });
-
-    const user = await this.prisma.user.upsert({
+    await this.prisma.user.upsert({
       where: { email },
       update: {
         password: hashed,
@@ -80,20 +62,7 @@ export class SuperAdminService {
       },
     });
 
-    await this.prisma.businessUser.upsert({
-      where: {
-        userId_businessId: { userId: user.id, businessId: business.id },
-      },
-      update: { role: 'MANAGER' },
-      create: {
-        userId: user.id,
-        businessId: business.id,
-        role: 'MANAGER',
-        branchId: 'main',
-      },
-    });
-
-    return { ok: true, message: `Super admin ready: ${email}. Log in with Business ID ${businessId}.` };
+    return { ok: true, message: `Super admin ready: ${email}. Log in at /login or /super-admin with Business ID ${businessId}.` };
   }
 
   /**
